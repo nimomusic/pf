@@ -1,0 +1,6 @@
+{
+  "name": "Plymaster Factory",
+  "description": "유튜브 플레이리스트 기획 및 제작 자동화 스튜디오. 테마별 SOP 기반 트랙 기획, 가사, 스타일 프롬프트 및 유튜브 업로드 패키지(제목, 설명, 썸네일 프롬프트) 원스톱 생성 솔루션",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
