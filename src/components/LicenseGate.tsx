@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { KeyRound, Sparkles, FileSpreadsheet, ArrowRight, ShieldCheck, AlertCircle, AlertTriangle } from 'lucide-react';
+import { KeyRound, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 import { verifyLicenseKey } from '../services/api';
 import { LanguageSelector } from './LanguageSelector';
 import { getTranslation } from '../i18n/translations';
@@ -7,7 +7,7 @@ import { getTranslation } from '../i18n/translations';
 interface LicenseGateProps {
   onSuccess: (licenseData: { licenseKey: string; tier?: string; userName?: string; isAdmin: boolean }) => void;
   onExpired: (dueDate?: string, licenseKey?: string) => void;
-  onOpenGoogleSheetGuide: () => void;
+  onOpenGoogleSheetGuide?: () => void;
   sheetUrl: string;
   currentLang: string;
   onSelectLang: (lang: string) => void;
@@ -16,7 +16,6 @@ interface LicenseGateProps {
 export const LicenseGate: React.FC<LicenseGateProps> = ({
   onSuccess,
   onExpired,
-  onOpenGoogleSheetGuide,
   sheetUrl,
   currentLang,
   onSelectLang
@@ -57,11 +56,6 @@ export const LicenseGate: React.FC<LicenseGateProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleQuickKey = (key: string) => {
-    setLicenseKey(key);
-    setErrorMessage(null);
   };
 
   return (
@@ -136,51 +130,6 @@ export const LicenseGate: React.FC<LicenseGateProps> = ({
               )}
             </button>
           </form>
-
-          {/* Quick Demo Key Helper */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <div className="text-xs text-slate-500 mb-2 font-semibold">
-              {t.quickTestKeys}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickKey('PLYMASTER-VIP')}
-                className="px-2.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-mono text-xs font-bold border border-purple-200 transition-colors cursor-pointer text-left"
-              >
-                <div className="text-[10px] text-purple-500">관리자 모드</div>
-                <div className="truncate">PLYMASTER-VIP</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickKey('DEMO-USER')}
-                className="px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-mono text-xs font-bold border border-slate-200 transition-colors cursor-pointer text-left"
-              >
-                <div className="text-[10px] text-slate-500">일반 회원 모드</div>
-                <div className="truncate">DEMO-USER</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickKey('EXPIRED-USER')}
-                className="px-2.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-mono text-xs font-bold border border-rose-200 transition-colors cursor-pointer text-left"
-              >
-                <div className="text-[10px] text-rose-500">만료 결제 팝업</div>
-                <div className="truncate">EXPIRED-USER</div>
-              </button>
-            </div>
-          </div>
-
-          {/* Google Sheets Guide Link */}
-          <div className="mt-5 text-center">
-            <button
-              type="button"
-              onClick={onOpenGoogleSheetGuide}
-              className="inline-flex items-center gap-1.5 text-xs text-emerald-700 hover:text-emerald-800 font-semibold underline decoration-emerald-400 underline-offset-4 cursor-pointer"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>{t.googleSheetGuideLink}</span>
-            </button>
-          </div>
         </div>
 
         {/* Footer info */}

@@ -243,6 +243,66 @@ app.post('/api/verify-license', async (req: Request, res: Response) => {
     : DEFAULT_APPS_SCRIPT_URL;
 
   try {
+    // 1. Try Google Apps Script doPost(e)
+    try {
+      const postResponse = await fetch(targetSheetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uuid: cleanKey,
+          deviceId: req.body.deviceId || 'web-browser-user'
+        }),
+        redirect: 'follow'
+      });
+
+      if (postResponse.ok) {
+        const postText = await postResponse.text();
+        try {
+          const postJson = JSON.parse(postText);
+          if (postJson && postJson.result) {
+            if (postJson.result === 'success') {
+              const isAdmin = upperKey.includes('ADMIN') || upperKey.includes('VIP');
+              res.json({
+                valid: true,
+                isExpired: false,
+                licenseKey: cleanKey,
+                tier: isAdmin ? '관리자 (VIP)' : '정품 인증 회원',
+                userName: '정품 사용자',
+                isAdmin,
+                dueDate: '인증 활성',
+                message: postJson.msg || '팩토리 인증 성공'
+              });
+              return;
+            } else if (postJson.result === 'fail') {
+              const msg = postJson.msg || '';
+              if (msg.includes('만료') || msg.toLowerCase().includes('expired')) {
+                res.status(403).json({
+                  valid: false,
+                  isExpired: true,
+                  licenseKey: cleanKey,
+                  dueDate: '기한 만료',
+                  paymentUrl: 'https://litt.ly/plymaster',
+                  message: msg || '라이센스 기간이 만료되었습니다. 결제 후 이용해 주세요.'
+                });
+                return;
+              }
+              res.status(401).json({
+                valid: false,
+                isExpired: false,
+                message: msg || '인증에 실패했습니다.'
+              });
+              return;
+            }
+          }
+        } catch {
+          // not JSON, fallback to GET
+        }
+      }
+    } catch (postErr) {
+      // ignore and fallback
+    }
+
+    // 2. Fallback: GET request
     const response = await fetch(targetSheetUrl, {
       headers: { 'Accept': 'application/json, text/plain, */*' }
     });

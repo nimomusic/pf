@@ -54,7 +54,20 @@ export async function resetThemesToDefault(): Promise<Theme[]> {
   return data.themes || [];
 }
 
-export async function verifyLicenseKey(licenseKey: string, sheetUrl?: string): Promise<{
+export function getOrCreateDeviceId(): string {
+  try {
+    let id = localStorage.getItem('plymaster_device_id');
+    if (!id) {
+      id = 'dev_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
+      localStorage.setItem('plymaster_device_id', id);
+    }
+    return id;
+  } catch {
+    return 'web_client';
+  }
+}
+
+export async function verifyLicenseKey(licenseKey: string, sheetUrl?: string, customDeviceId?: string): Promise<{
   valid: boolean;
   licenseKey: string;
   tier?: string;
@@ -65,10 +78,11 @@ export async function verifyLicenseKey(licenseKey: string, sheetUrl?: string): P
   paymentUrl?: string;
   message?: string;
 }> {
+  const deviceId = customDeviceId || getOrCreateDeviceId();
   const res = await fetch('/api/verify-license', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ licenseKey, sheetUrl })
+    body: JSON.stringify({ licenseKey, sheetUrl, deviceId })
   });
   const data = await res.json();
   return data;
