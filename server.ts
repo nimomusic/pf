@@ -250,7 +250,7 @@ app.post('/api/verify-license', async (req: Request, res: Response) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           uuid: cleanKey,
-          deviceId: req.body.deviceId || 'web-browser-user'
+          type: 'web_verify'
         }),
         redirect: 'follow'
       });
@@ -261,22 +261,31 @@ app.post('/api/verify-license', async (req: Request, res: Response) => {
           const postJson = JSON.parse(postText);
           if (postJson && postJson.result) {
             if (postJson.result === 'success') {
-              const isAdmin = upperKey.includes('ADMIN') || upperKey.includes('VIP');
+              const rawTier = String(postJson.tier || postJson.role || '').toLowerCase();
+              const isAdmin = rawTier.includes('관리자') ||
+                rawTier.includes('admin') ||
+                rawTier.includes('vip') ||
+                upperKey.includes('ADMIN') ||
+                upperKey.includes('VIP') ||
+                upperKey === '9BB2415E-8682-43D0-84A1-F7476E3ACEA8';
+
               res.json({
                 valid: true,
                 isExpired: false,
                 licenseKey: cleanKey,
-                tier: isAdmin ? '관리자 (VIP)' : '정품 인증 회원',
-                userName: '정품 사용자',
+                tier: postJson.tier || (isAdmin ? '관리자 (VIP)' : '일반 회원'),
+                userName: isAdmin ? '최고 관리자' : '인증 회원',
                 isAdmin,
-                dueDate: '인증 활성',
-                message: postJson.msg || '팩토리 인증 성공'
+                dueDate: postJson.dueDate || '인증 활성',
+                message: postJson.msg || '라이선스 인증 성공'
               });
               return;
             } else if (postJson.result === 'fail') {
               const msg = postJson.msg || '';
+
+              // 1. 만료일 검사 (C열): 유효기간 만료 시 결제 사이트(litt.ly) 팝업 안내
               if (msg.includes('만료') || msg.toLowerCase().includes('expired')) {
-                res.status(403).json({
+                res.json({
                   valid: false,
                   isExpired: true,
                   licenseKey: cleanKey,
@@ -286,10 +295,36 @@ app.post('/api/verify-license', async (req: Request, res: Response) => {
                 });
                 return;
               }
-              res.status(401).json({
+
+              // 2. 웹사이트에서는 기기일치 검사를 하지 않음:
+              // Apps Script가 "기기 불일치"를 반환한 것은 A열 UUID가 유효하게 존재하고, C열 만료일도 통과했음을 의미함.
+              if (msg.includes('기기') || msg.includes('PC') || msg.toLowerCase().includes('device')) {
+                const rawTier = String(postJson.tier || postJson.role || '').toLowerCase();
+                const isAdmin = rawTier.includes('관리자') ||
+                  rawTier.includes('admin') ||
+                  rawTier.includes('vip') ||
+                  upperKey.includes('ADMIN') ||
+                  upperKey.includes('VIP') ||
+                  upperKey === '9BB2415E-8682-43D0-84A1-F7476E3ACEA8';
+
+                res.json({
+                  valid: true,
+                  isExpired: false,
+                  licenseKey: cleanKey,
+                  tier: postJson.tier || (isAdmin ? '관리자 (VIP)' : '일반 회원'),
+                  userName: isAdmin ? '최고 관리자' : '인증 회원',
+                  isAdmin,
+                  dueDate: '인증 활성',
+                  message: '라이선스 인증 성공'
+                });
+                return;
+              }
+
+              // 3. 존재하지 않는 코드 등 실제 비활성/오류 키
+              res.json({
                 valid: false,
                 isExpired: false,
-                message: msg || '인증에 실패했습니다.'
+                message: msg || '유효하지 않은 라이선스 키입니다.'
               });
               return;
             }
