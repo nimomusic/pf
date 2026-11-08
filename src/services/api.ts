@@ -32,10 +32,16 @@ export async function fetchThemes(): Promise<Theme[]> {
       try {
         const data = JSON.parse(text);
         if (data && Array.isArray(data.themes)) {
-          // Merge local and server themes by id, local taking priority
+          // Merge local and server themes by id, ensuring fuller SOP content is preserved
           const idMap = new Map<string, Theme>();
-          data.themes.forEach((t: Theme) => idMap.set(t.id, t));
           localThemes.forEach((t: Theme) => idMap.set(t.id, t));
+          data.themes.forEach((t: Theme) => {
+            const existing = idMap.get(t.id);
+            // If server theme is new OR has more complete SOP (e.g. not truncated)
+            if (!existing || (t.sop && t.sop.length > (existing.sop || '').length)) {
+              idMap.set(t.id, t);
+            }
+          });
           const merged = Array.from(idMap.values());
           saveLocalThemes(merged);
           return merged;
@@ -424,6 +430,13 @@ export async function generatePlaylist(params: {
       try {
         const data = JSON.parse(text);
         if (data && data.success && data.result) {
+          if (Array.isArray(data.result.tracks)) {
+            const isEng = parseClientSopSpecs(params.theme).isEnglishOnly;
+            data.result.tracks = data.result.tracks.map((tr: any) => ({
+              ...tr,
+              title: cleanTitleSingleLanguage(tr.title, isEng)
+            }));
+          }
           return data;
         }
       } catch {
@@ -440,7 +453,12 @@ export async function generatePlaylist(params: {
 
 function parseClientSopSpecs(theme: Theme) {
   const combined = `${theme.name || ''} ${theme.category || ''} ${theme.sop || ''}`.toLowerCase();
-  const isEnglishOnly =
+  const rawSop = theme.sop || '';
+
+  const engCharCount = (rawSop.match(/[a-zA-Z]/g) || []).length;
+  const korCharCount = (rawSop.match(/[\uAC00-\uD7AF]/g) || []).length;
+
+  const isEnglishExplicit = 
     combined.includes('100% english') ||
     combined.includes('in 100% english') ||
     combined.includes('all lyrics must be written in english') ||
@@ -450,7 +468,11 @@ function parseClientSopSpecs(theme: Theme) {
     combined.includes('영어로 작성') ||
     combined.includes('영어 가사') ||
     combined.includes('영문 가사') ||
-    ((theme.sop || '').match(/[a-zA-Z]/g) || []).length > Math.max(1, ((theme.sop || '').match(/[\uAC00-\uD7AF]/g) || []).length) * 3;
+    combined.includes('100% 영문') ||
+    combined.includes('written in english');
+
+  // If explicit keyword OR if SOP text is primarily English (more English letters than Korean)
+  const isEnglishOnly = isEnglishExplicit || (engCharCount > 25 && engCharCount > korCharCount);
 
   const isCinematic =
     combined.includes('film') ||
@@ -460,7 +482,45 @@ function parseClientSopSpecs(theme: Theme) {
     combined.includes('ballad') ||
     combined.includes('soundtrack');
 
-  return { isEnglishOnly, isCinematic };
+  return { isEnglishOnly, isCinematic, engCharCount, korCharCount };
+}
+
+// Helper: Ensure track title contains ONLY the target language (no bilingual parentheses)
+function cleanTitleSingleLanguage(title: string, isEnglishTarget: boolean): string {
+  if (!title) return '';
+  let clean = title.trim();
+  clean = clean.replace(/^["'`]|["'`]$/g, '').trim();
+
+  // If title has parentheses e.g. "한국어 (English)" or "English (Korean)"
+  const parenMatch = clean.match(/^([^(]+)\s*\(([^)]+)\)$/);
+  if (parenMatch) {
+    const part1 = parenMatch[1].trim();
+    const part2 = parenMatch[2].trim();
+    const part1HasKor = /[\uAC00-\uD7AF]/.test(part1);
+    const part2HasKor = /[\uAC00-\uD7AF]/.test(part2);
+    const part1HasEng = /[a-zA-Z]/.test(part1);
+    const part2HasEng = /[a-zA-Z]/.test(part2);
+
+    if (isEnglishTarget) {
+      if (part2HasEng && !part2HasKor) return part2;
+      if (part1HasEng && !part1HasKor) return part1;
+    } else {
+      if (part1HasKor && !part1HasEng) return part1;
+      if (part2HasKor && !part2HasEng) return part2;
+    }
+  }
+
+  // Strip remaining unwanted brackets in the non-target language
+  if (isEnglishTarget) {
+    clean = clean.replace(/\([\uAC00-\uD7AF\s]+\)/g, '').trim();
+    if (/[\uAC00-\uD7AF]/.test(clean)) {
+      clean = clean.replace(/[\uAC00-\uD7AF]/g, '').trim();
+      if (!clean) clean = 'Fragments on the 35mm Reel';
+    }
+  } else {
+    clean = clean.replace(/\([a-zA-Z0-9\s-]+\)/g, '').trim();
+  }
+  return clean;
 }
 
 function generateClientSopPlaylist(
@@ -478,7 +538,7 @@ function generateClientSopPlaylist(
     vocal === 'none' ? 'instrumental, no vocals' : 'expressive emotional vocal harmonies';
 
   const tracks: any[] = [];
-  const effectiveCount = Math.min(Math.max(trackCount || 3, 1), 10);
+  const effectiveCount = Math.min(Math.max(trackCount || 1, 1), 10);
 
   let templates: Array<{ title: string; mood: string; style: string; lyrics: string }> = [];
 
@@ -486,27 +546,27 @@ function generateClientSopPlaylist(
     // 100% English Cinematic Ballad Track Templates strictly mirroring the user's SOP
     templates = [
       {
-        title: 'The Reel Before the Ending',
+        title: 'Fragments on the 35mm Reel',
         mood: 'Cinematic opening monologue, subtle piano build into an explosive emotional chorus',
-        style: `cinematic emotional OST ballad, felt upright piano intro, soaring lush orchestra strings, ${vocalTag}, building crescendo, poignant bridge, 74 bpm, film soundtrack aesthetic, emotional dynamic range`,
+        style: `cinematic emotional OST ballad, felt upright piano intro, soaring lush orchestra strings, ${vocalTag}, building crescendo, rising tension line, heartfelt emotional bridge, 74 bpm, film soundtrack aesthetic, dynamic vocal range`,
         lyrics: `[Intro]\n(Solitary felt piano arpeggios, atmospheric ambient room tone)\n(Delicate cello breath fades in from the shadows)\n\n[Verse 1]\nFlickering dust in the projector's light\nAn empty seat waiting in the quiet night\nI trace the silhouette you left in the frame\nA ghost in the shadows answering my name\n(Supporting voice: answering in the rain)\n\n[Pre-Chorus]\nAnd the spool spins faster as the tension begins to rise\nEvery frame holding secrets that were hidden in your eyes\nThe music swells, the silence breaks apart\nI hear the countdown beating in my heart\n\n[Chorus]\nYou were the movie I could never let end\nThe broken line of dialogue I couldn't mend\nWhen the violins soar and the floodgates break wide\nI'll pour out every tear that I tried to hide\nThrough the final scene where the spotlights fall\nI'd play our story back, I'd surrender it all!\n(Supporting voice: Surrender it all)\n\n[Verse 2]\nRain on the windowpane, scripted and cold\nThe bitter truth that nobody ever told\nI watch your hand slip from mine on the screen\nTrapped in the borders of what could have been\n(Supporting voice: Could have been)\n\n[Pre-Chorus]\nNow the cellos are crying on a rising chord\nTelling the story that we couldn't afford\nThe lights go dim, the curtain starts to part\nI feel the final thunder tearing through my heart\n\n[Chorus]\nYou were the movie I could never let end\nThe broken line of dialogue I couldn't mend\nWhen the violins soar and the floodgates break wide\nI'll pour out every tear that I tried to hide\nThrough the final scene where the spotlights fall\nI'd play our story back, I'd surrender it all!\n(Supporting voice: Surrender it all)\n\n[Bridge]\n(Full dramatic orchestral strings soar with raw vulnerability)\n(Lead female vocal belt rising into high register)\nCut the reel, turn the dark into light\nYou can't burn the memory from the night!\nNo director can rewrite the way that we bled\nEvery word that was spoken, every word left unsaid!\n\n[Chorus]\nYou were the movie I could never let end\nThe broken line of dialogue I couldn't mend\nWhen the violins soar and the floodgates break wide\nI'll pour out every tear that I tried to hide\nThrough the final scene where the spotlights fall\nI'd play our story back, I'd surrender it all!\n(Supporting voice: Even as the credits fall)\n\n[Outro]\n(Gentle piano chords slowly dissolving into silence)\nFade to black, my love.\n(Solo cello note fading to silence)\n[End]`
       },
       {
         title: 'When the Screen Goes Dark',
         mood: 'Heart-wrenching melodic climax, passionate vocal storytelling with rising orchestral tension',
-        style: `grand cinematic movie ballad, grand acoustic piano, lush string ensemble, ${vocalTag}, powerful dynamic chorus, rich cinematic soundscape, 76 bpm`,
+        style: `grand cinematic movie ballad, grand acoustic piano, lush string ensemble, ${vocalTag}, rising tension line, powerful dynamic chorus, rich cinematic soundscape, 76 bpm`,
         lyrics: `[Intro]\n(Gentle piano chime and deep sub-bass pulse)\n\n[Verse 1]\nThe theatre is empty, the applause died away\nLeaving only the shadows of words we couldn't say\nI stand in the aisle where we whispered goodnight\nStill searching for you in the fading stage light\n\n[Pre-Chorus]\nAnd the cue in the script comes around once again\nA rising crescendo of beauty and pain\nI reach for the ending before we depart\nFeeling the tremor ignite in my heart\n\n[Chorus]\nWhen the screen goes dark and the credits roll by\nI still see your reflection against the night sky\nEvery promise we shattered, every teardrop we cried\nLives forever inside where the melodies hide\nI will sing in the dark till the morning breaks free\nYou will always remain the whole story to me\n(Supporting voice: The whole story to me)\n\n[Verse 2]\nA photograph folded inside of my coat\nA tear-stained reminder of letters you wrote\nThey say time is a healer, but time is a thief\nStealing the colors of love and belief\n\n[Bridge]\n(Orchestral French horns and sweeping violin arpeggios)\nLet the soundtrack play on, let the symphony weep\nThere are promises only the music can keep!\n\n[Chorus]\nWhen the screen goes dark and the credits roll by\nI still see your reflection against the night sky\nEvery promise we shattered, every teardrop we cried\nLives forever inside where the melodies hide\nI will sing in the dark till the morning breaks free\nYou will always remain the whole story to me\n\n[Outro]\n(Tender piano resolution)\nThe curtain falls, but you remain.\n[End]`
       },
       {
         title: 'Monologue in the Rain',
         mood: 'Intimate acoustic melancholy evolving into an orchestral catharsis',
-        style: `intimate emotional film ballad, delicate acoustic piano, soft strings, ${vocalTag}, dramatic build, 72 bpm, poignant film soundtrack`,
+        style: `intimate emotional film ballad, delicate acoustic piano, soft strings, ${vocalTag}, rising tension line, dramatic build, 72 bpm, poignant film soundtrack`,
         lyrics: `[Intro]\n(Soft rain sound effect with lone acoustic piano)\n\n[Verse 1]\nStreetlights reflecting on puddles of grey\nWatching the city just wash you away\nI practice the lines that I wanted to speak\nWhile water and teardrops run down on my cheek\n\n[Pre-Chorus]\nThe wind starts to whistle, the tempo turns fast\nNothing is heavier than loving the past\nThe tension is breaking the roof of my soul\nLosing the rhythm, releasing control\n\n[Chorus]\nLet the rain wash the monologue clean from my mind\nLeaving all of the sorrow and silence behind\nI gave you my heart in the very first scene\nAnd I kept every promise that lived in between\nEven here in the storm where nobody can see\nThis song is the confession I whisper to me\n\n[Bridge]\n(Grand orchestral crescendo with thunderous timpani)\nWash away the regret, wash away the despair!\nI still feel your ghost in the cold midnight air!\n\n[Chorus]\nLet the rain wash the monologue clean from my mind\nLeaving all of the sorrow and silence behind\nI gave you my heart in the very first scene\nAnd I kept every promise that lived in between\n\n[Outro]\n(Acoustic piano dying down with soft rain)\nJust rain on the glass.\n[End]`
       },
       {
         title: 'Echoes on the Cutting Room Floor',
         mood: 'Atmospheric and deeply poetic ballad with soaring vocal climaxes',
-        style: `atmospheric cinematic ballad, felt piano, ${vocalTag}, soaring string swell, 70 bpm, heart-touching dynamics`,
+        style: `atmospheric cinematic ballad, felt piano, ${vocalTag}, soaring string swell, rising tension line, 70 bpm, heart-touching dynamics`,
         lyrics: `[Intro]\n(Atmospheric ambient pad with high piano ostinato)\n\n[Verse 1]\nAll of the scenes that they never will show\nThe laughter we shared that nobody will know\nDiscarded and left on the cutting room floor\nLocked on the other side of an old door\n\n[Pre-Chorus]\nEvery discarded scrap holds a whisper of truth\nThe reckless devotion of yesterday's youth\nThe strings start to gather, the melody cries\nWatching our universe fall from the skies\n\n[Chorus]\nThese are the echoes they couldn't edit away\nThe words that will outlive the end of the day\nIf our picture is broken and buried in dust\nI will sing of the love that was stronger than trust!\n(Supporting voice: Stronger than trust)\n\n[Outro]\n(Single piano note ringing into quiet reverb)\nNever forgotten.\n[End]`
       },
       {
@@ -517,18 +577,25 @@ function generateClientSopPlaylist(
       }
     ];
   } else if (specs.isCinematic) {
+    // Korean Cinematic Ballad (when SOP is Korean) - Single Korean Title Only!
     templates = [
       {
-        title: '오래된 필름 속의 너 (Fragments on the 35mm Reel)',
+        title: '오래된 필름 속의 너',
         mood: '영화 도입부의 아련한 독백과 서서히 벅차오르는 감정선',
         style: `cinematic emotional OST ballad, felt upright piano intro, soaring lush orchestra strings, ${vocalTag}, building crescendo, heartfelt bridge, 74 bpm, Korean drama film soundtrack aesthetic`,
-        lyrics: `[Intro]\n(Gentle, melancholic piano notes echo like dust in an old projector light)\n\n[Verse 1]\n빛바랜 영사실 창가 너머로\n조용히 흩어지는 기억의 파편들\n너의 목소리가 귓가에 스칠 때면\n멈춰선 시간도 숨을 죽여\n\n[Pre-Chorus]\n잊혀질 줄 알았던 그날의 대사들이\n가슴 깊은 곳에서 하나둘 떠올라\n어둠 속에 홀로 앉아 널 기다리던 밤\n\n[Chorus]\n너는 내게 가장 눈부신 영화였어\n끝나지 않을 이야기처럼 타오르던 순간\n수많은 장면 속에 널 안아줄 수 있다면\n마지막 씬에서도 난 너의 손을 놓지 않을게\n\n[Outro]\n(Lush strings soft fade)`
+        lyrics: `[Intro]\n(빛바랜 영사실의 먼지처럼 울려 퍼지는 아련한 피아노 선율)\n\n[Verse 1]\n빛바랜 영사실 창가 너머로\n조용히 흩어지는 기억의 파편들\n너의 목소리가 귓가에 스칠 때면\n멈춰선 시간도 숨을 죽여\n(Supporting voice: 숨을 죽여)\n\n[Pre-Chorus]\n잊혀질 줄 알았던 그날의 대사들이\n가슴 깊은 곳에서 하나둘 떠올라\n어둠 속에 홀로 앉아 널 기다리던 밤\n\n[Chorus]\n너는 내게 가장 눈부신 영화였어\n끝나지 않을 이야기처럼 타오르던 순간\n수많은 장면 속에 널 안아줄 수 있다면\n마지막 씬에서도 난 너의 손을 놓지 않을게!\n\n[Outro]\n(부드러운 오케스트라 스트링 페이드아웃)\n[End]`
+      },
+      {
+        title: '스크린이 암전될 때',
+        mood: '엔딩 크레딧이 올라갈 때의 짙은 여운과 애절한 현악 사운드',
+        style: `dramatic cinematic ballad, emotional acoustic piano, sweeping orchestra, ${vocalTag}, heartfelt climax, 76 bpm`,
+        lyrics: `[Intro]\n(잔잔한 피아노와 첼로의 독주)\n\n[Verse 1]\n텅 빈 극장에 홀로 남아\n지워지지 않는 네 이름을 되뇌어\n\n[Chorus]\n스크린이 암전되고 불이 켜져도\n내 마음속 너의 장면은 영원히 상영돼\n\n[Outro]\n(피아노 아르페지오 페이드)`
       }
     ];
   } else {
     templates = [
       {
-        title: `${theme.name} - Track 1`,
+        title: specs.isEnglishOnly ? 'Whispers in the Silence' : `${theme.name} - 1번 트랙`,
         mood: 'SOP에 정의된 무드와 아티스트 정체성을 반영한 사운드',
         style: `${theme.category || 'music'}, expressive melodic arrangement, ${vocalTag}, 90 bpm, faithful to SOP`,
         lyrics: `[Intro]\n(Melodic theme opening)\n\n[Verse 1]\nMoving through the quiet light of dawn\nA melody that keeps on holding on\n\n[Chorus]\nDeep inside where music learns to soar\nThis is the song we have been waiting for\n\n[Outro]\n(Fade out)`
@@ -538,9 +605,13 @@ function generateClientSopPlaylist(
 
   for (let i = 0; i < effectiveCount; i++) {
     const tmpl = templates[i % templates.length];
+    const rawTitle = effectiveCount > templates.length && i >= templates.length
+      ? `${tmpl.title} Part ${Math.floor(i / templates.length) + 1}`
+      : tmpl.title;
+
     tracks.push({
       trackNumber: i + 1,
-      title: effectiveCount > templates.length && i >= templates.length ? `${tmpl.title} (Part ${Math.floor(i / templates.length) + 1})` : tmpl.title,
+      title: cleanTitleSingleLanguage(rawTitle, specs.isEnglishOnly),
       mood: tmpl.mood,
       stylePrompt: tmpl.style,
       fullLyrics: tmpl.lyrics

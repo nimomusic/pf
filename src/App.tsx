@@ -53,9 +53,9 @@ export default function App() {
   const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
   const themeDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Track Count & Vocal Settings
-  const [trackCount, setTrackCount] = useState<number>(3);
-  const [vocal, setVocal] = useState<VocalType>('female');
+  // Track Count & Vocal Settings - Default track count is 1, default vocal is random
+  const [trackCount, setTrackCount] = useState<number>(1);
+  const [vocal, setVocal] = useState<VocalType>('random');
 
   // AI Provider & Model State
   const [provider, setProvider] = useState<ProviderType>('gpt');
@@ -77,12 +77,18 @@ export default function App() {
   const [resultData, setResultData] = useState<PlaylistResult | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Check stored license on initial load
+  // Check stored license on initial load (using sessionStorage so new browser sessions require re-entering the key)
   useEffect(() => {
-    const savedKey = localStorage.getItem('plymaster_license_key');
-    const savedTier = localStorage.getItem('plymaster_license_tier');
-    const savedUser = localStorage.getItem('plymaster_license_user');
-    const savedIsAdmin = localStorage.getItem('plymaster_license_is_admin') === 'true';
+    // Clear legacy permanent localStorage keys
+    localStorage.removeItem('plymaster_license_key');
+    localStorage.removeItem('plymaster_license_tier');
+    localStorage.removeItem('plymaster_license_user');
+    localStorage.removeItem('plymaster_license_is_admin');
+
+    const savedKey = sessionStorage.getItem('plymaster_license_key');
+    const savedTier = sessionStorage.getItem('plymaster_license_tier');
+    const savedUser = sessionStorage.getItem('plymaster_license_user');
+    const savedIsAdmin = sessionStorage.getItem('plymaster_license_is_admin') === 'true';
 
     if (savedKey) {
       setLicenseInfo({
@@ -141,17 +147,26 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handlers for License
+  // Handlers for License (session-scoped for security)
   const handleLicenseSuccess = (info: { licenseKey: string; tier?: string; userName?: string; isAdmin: boolean }) => {
-    localStorage.setItem('plymaster_license_key', info.licenseKey);
-    if (info.tier) localStorage.setItem('plymaster_license_tier', info.tier);
-    if (info.userName) localStorage.setItem('plymaster_license_user', info.userName);
-    localStorage.setItem('plymaster_license_is_admin', String(info.isAdmin));
+    sessionStorage.setItem('plymaster_license_key', info.licenseKey);
+    if (info.tier) sessionStorage.setItem('plymaster_license_tier', info.tier);
+    if (info.userName) sessionStorage.setItem('plymaster_license_user', info.userName);
+    sessionStorage.setItem('plymaster_license_is_admin', String(info.isAdmin));
+    // Also remove from permanent localStorage
+    localStorage.removeItem('plymaster_license_key');
+    localStorage.removeItem('plymaster_license_tier');
+    localStorage.removeItem('plymaster_license_user');
+    localStorage.removeItem('plymaster_license_is_admin');
     setLicenseInfo(info);
     setIsAuthenticated(true);
   };
 
   const handleLogout = () => {
+    sessionStorage.removeItem('plymaster_license_key');
+    sessionStorage.removeItem('plymaster_license_tier');
+    sessionStorage.removeItem('plymaster_license_user');
+    sessionStorage.removeItem('plymaster_license_is_admin');
     localStorage.removeItem('plymaster_license_key');
     localStorage.removeItem('plymaster_license_tier');
     localStorage.removeItem('plymaster_license_user');
