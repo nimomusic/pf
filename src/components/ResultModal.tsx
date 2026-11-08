@@ -195,62 +195,104 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                     </div>
 
                     <div className="p-5 space-y-4 text-xs">
-                      {/* Title */}
-                      <div className="p-3.5 bg-slate-50/70 rounded-xl border border-slate-200/80">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-bold text-slate-700 uppercase tracking-wider text-[11px] flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                            Title (곡 제목)
+                      {/* 1. 곡 제목 (Song Title) */}
+                      <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="font-extrabold text-slate-800 tracking-tight text-xs flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                            곡 제목 (Song Title)
                           </span>
                           <button
+                            type="button"
                             onClick={() => handleCopy(track.title, `title_${track.trackNumber}`)}
-                            className="text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
+                            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs border ${
+                              copiedKey === `title_${track.trackNumber}`
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                : 'bg-white hover:bg-blue-50 text-blue-600 border-blue-200 hover:border-blue-300'
+                            }`}
                           >
-                            {copiedKey === `title_${track.trackNumber}` ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                            <span>{copiedKey === `title_${track.trackNumber}` ? '복사됨' : '복사'}</span>
+                            {copiedKey === `title_${track.trackNumber}` ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>곡 제목 복사완료!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>곡 제목 복사</span>
+                              </>
+                            )}
                           </button>
                         </div>
-                        <div className="font-bold text-slate-900 text-sm sm:text-base">
+                        <div className="font-bold text-slate-900 text-sm sm:text-base bg-white p-3 rounded-lg border border-slate-200 select-all">
                           {track.title}
                         </div>
                       </div>
 
-                      {/* Style Prompt */}
-                      <div className="p-3.5 bg-blue-50/40 rounded-xl border border-blue-200/60">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-bold text-blue-900 uppercase tracking-wider text-[11px] flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                            Style Prompt (Suno / Udio 프롬프트)
+                      {/* 2. 스타일 프롬프트 (Style Prompt for Suno/Udio) */}
+                      <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-200/80">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="font-extrabold text-blue-950 tracking-tight text-xs flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                            스타일 프롬프트 (Style Prompt - Suno / Udio)
                           </span>
                           <button
+                            type="button"
                             onClick={() => handleCopy(track.stylePrompt, `style_${track.trackNumber}`)}
-                            className="text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
+                            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs border ${
+                              copiedKey === `style_${track.trackNumber}`
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                : 'bg-white hover:bg-blue-50 text-blue-600 border-blue-200 hover:border-blue-300'
+                            }`}
                           >
-                            {copiedKey === `style_${track.trackNumber}` ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                            <span>{copiedKey === `style_${track.trackNumber}` ? '복사됨' : '복사'}</span>
+                            {copiedKey === `style_${track.trackNumber}` ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>프롬프트 복사완료!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>스타일 프롬프트 복사</span>
+                              </>
+                            )}
                           </button>
                         </div>
-                        <div className="font-mono text-slate-800 bg-white p-2.5 rounded-lg border border-blue-100 text-xs leading-relaxed select-all">
+                        <div className="font-mono text-slate-800 bg-white p-3 rounded-lg border border-blue-100 text-xs leading-relaxed select-all">
                           {track.stylePrompt}
                         </div>
                       </div>
 
-                      {/* Full Lyrics */}
-                      <div className="p-3.5 bg-slate-50/70 rounded-xl border border-slate-200/80">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-bold text-slate-700 uppercase tracking-wider text-[11px] flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                            Full Lyrics (전체 가사)
+                      {/* 3. 가사 (Full Lyrics) */}
+                      <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="font-extrabold text-slate-800 tracking-tight text-xs flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                            가사 (Full Lyrics)
                           </span>
                           <button
+                            type="button"
                             onClick={() => handleCopy(track.fullLyrics, `lyrics_${track.trackNumber}`)}
-                            className="text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
+                            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs border ${
+                              copiedKey === `lyrics_${track.trackNumber}`
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                : 'bg-white hover:bg-blue-50 text-blue-600 border-blue-200 hover:border-blue-300'
+                            }`}
                           >
-                            {copiedKey === `lyrics_${track.trackNumber}` ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                            <span>{copiedKey === `lyrics_${track.trackNumber}` ? '가사 복사됨' : '가사 복사'}</span>
+                            {copiedKey === `lyrics_${track.trackNumber}` ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>가사 복사완료!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>가사 복사</span>
+                              </>
+                            )}
                           </button>
                         </div>
-                        <div className="font-mono whitespace-pre-wrap bg-white p-3 rounded-lg border border-slate-200 text-xs text-slate-800 leading-relaxed max-h-60 overflow-y-auto">
+                        <div className="font-mono whitespace-pre-wrap bg-white p-3.5 rounded-lg border border-slate-200 text-xs text-slate-800 leading-relaxed max-h-64 overflow-y-auto select-all">
                           {track.fullLyrics}
                         </div>
                       </div>

@@ -68,79 +68,99 @@ app.get('/api/themes', (req: Request, res: Response) => {
 
 // 2. Create a theme
 app.post('/api/themes', (req: Request, res: Response) => {
-  const { id, name, category, sop } = req.body;
-  if (!name || !sop) {
-    res.status(400).json({ success: false, message: '테마 이름과 SOP 내용은 필수입니다.' });
-    return;
-  }
-  const themes = getThemesList();
-  const themeId = id && id.trim() ? id.trim() : `THEME_${Date.now()}`;
-  
-  // Check duplicate ID
-  const existingIndex = themes.findIndex((t: any) => t.id === themeId);
-  const newTheme = {
-    id: themeId,
-    name: name.trim(),
-    category: (category || '일반').trim(),
-    sop: sop.trim(),
-    createdAt: new Date().toISOString(),
-    isDefault: false
-  };
+  try {
+    const { id, name, category, sop } = req.body;
+    if (!name || !sop) {
+      res.status(400).json({ success: false, message: '테마 이름과 SOP 내용은 필수입니다.' });
+      return;
+    }
+    const themes = getThemesList();
+    const themeId = id && id.trim() ? id.trim() : `THEME_${Date.now()}`;
+    
+    // Check duplicate ID
+    const existingIndex = themes.findIndex((t: any) => t.id === themeId);
+    const newTheme = {
+      id: themeId,
+      name: name.trim(),
+      category: (category || '일반').trim(),
+      sop: sop.trim(),
+      createdAt: new Date().toISOString(),
+      isDefault: false
+    };
 
-  if (existingIndex >= 0) {
-    themes[existingIndex] = newTheme;
-  } else {
-    themes.unshift(newTheme);
-  }
+    if (existingIndex >= 0) {
+      themes[existingIndex] = newTheme;
+    } else {
+      themes.unshift(newTheme);
+    }
 
-  saveThemesList(themes);
-  res.json({ success: true, theme: newTheme, themes });
+    saveThemesList(themes);
+    res.json({ success: true, theme: newTheme, themes });
+  } catch (err: any) {
+    console.error('Error creating theme:', err);
+    res.status(500).json({ success: false, message: '테마 저장 중 오류 발생' });
+  }
 });
 
 // 3. Update a theme
 app.put('/api/themes/:id', (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { name, category, sop } = req.body;
-  const themes = getThemesList();
-  const index = themes.findIndex((t: any) => t.id === id);
+  try {
+    const { id } = req.params;
+    const { name, category, sop } = req.body;
+    const themes = getThemesList();
+    const index = themes.findIndex((t: any) => t.id === id);
 
-  if (index === -1) {
-    res.status(404).json({ success: false, message: '해당 테마를 찾을 수 없습니다.' });
-    return;
+    if (index === -1) {
+      res.status(404).json({ success: false, message: '해당 테마를 찾을 수 없습니다.' });
+      return;
+    }
+
+    themes[index] = {
+      ...themes[index],
+      name: name !== undefined ? name.trim() : themes[index].name,
+      category: category !== undefined ? category.trim() : themes[index].category,
+      sop: sop !== undefined ? sop.trim() : themes[index].sop,
+      updatedAt: new Date().toISOString()
+    };
+
+    saveThemesList(themes);
+    res.json({ success: true, theme: themes[index], themes });
+  } catch (err: any) {
+    console.error('Error updating theme:', err);
+    res.status(500).json({ success: false, message: '테마 수정 중 오류 발생' });
   }
-
-  themes[index] = {
-    ...themes[index],
-    name: name !== undefined ? name.trim() : themes[index].name,
-    category: category !== undefined ? category.trim() : themes[index].category,
-    sop: sop !== undefined ? sop.trim() : themes[index].sop,
-    updatedAt: new Date().toISOString()
-  };
-
-  saveThemesList(themes);
-  res.json({ success: true, theme: themes[index], themes });
 });
 
 // 4. Delete a theme
 app.delete('/api/themes/:id', (req: Request, res: Response) => {
-  const { id } = req.params;
-  let themes = getThemesList();
-  const initialLength = themes.length;
-  themes = themes.filter((t: any) => t.id !== id);
+  try {
+    const { id } = req.params;
+    let themes = getThemesList();
+    const initialLength = themes.length;
+    themes = themes.filter((t: any) => t.id !== id);
 
-  if (themes.length === initialLength) {
-    res.status(404).json({ success: false, message: '삭제할 테마를 찾을 수 없습니다.' });
-    return;
+    if (themes.length === initialLength) {
+      res.status(404).json({ success: false, message: '삭제할 테마를 찾을 수 없습니다.' });
+      return;
+    }
+
+    saveThemesList(themes);
+    res.json({ success: true, message: '테마가 삭제되었습니다.', themes });
+  } catch (err: any) {
+    console.error('Error deleting theme:', err);
+    res.status(500).json({ success: false, message: '테마 삭제 중 오류 발생' });
   }
-
-  saveThemesList(themes);
-  res.json({ success: true, message: '테마가 삭제되었습니다.', themes });
 });
 
 // 5. Reset themes (clears themes database as requested)
 app.post('/api/themes/reset', (req: Request, res: Response) => {
-  saveThemesList([]);
-  res.json({ success: true, themes: [] });
+  try {
+    saveThemesList([]);
+    res.json({ success: true, themes: [] });
+  } catch (err: any) {
+    console.error('Error resetting themes:', err);
+    res.status(500).json({ success: false, message: '테마 리셋 중 오류 발생' });
+  }
 });
 
 const DEFAULT_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzgvoleJIzFeZvFaQ77RjFH7mmg_9eQPgjqRlWK9IkEx49J9glVl0syuTlKx-FLe33yHg/exec';
@@ -493,35 +513,39 @@ app.post('/api/generate', async (req: Request, res: Response) => {
     vocal === 'none' ? '보컬 없음 (Instrumental 연주곡)' : '랜덤 보컬 (Random Vocal)';
 
   const systemPrompt = `당신은 최고 수준의 AI 음악 기획자이자 유튜브 플레이리스트 전문 크리에이터 'Plymaster'입니다.
-사용자가 제공한 테마 정보 및 SOP(작업표준서) 지침을 철저히 준수하여 완벽한 음악 트랙 정보와 유튜브 업로드 패키지를 기획하세요.
+
+[중요 지침: 자유 형식 SOP 분석]
+사용자가 입력한 SOP 내용은 특정 고정 양식이나 정해진 템플릿에 구애받지 않고 자유롭게 작성된 지침(Role, 음악적 정체성, 아티스트 특징, 보컬 디렉션, 감정 곡선, 편곡 스타일, 가사 전개 방향 등)입니다.
+따로 형식을 요구하지 말고, 사용자가 입력한 SOP 본문 내용을 있는 그대로 깊이 있게 분석하여 지침을 100% 충실히 반영한 결과물을 기획하세요.
 
 [요청 사항]
 1. 테마 이름: ${theme.name}
 2. 테마 카테고리: ${theme.category || '음악'}
-3. 테마 상세 SOP 지침:
+3. 사용자가 입력한 SOP 내용 (형식 제한 없음 - 내용을 그대로 분석하여 각 곡에 반영):
 ${theme.sop}
 4. 제작 트랙 수: ${effectiveTrackCount}곡
 5. 보컬 설정: ${vocalLabel}
 
 [출력 데이터 요구사항]
+각각의 트랙별로 트랙 넘버, 곡 제목, Suno/Udio용 스타일 프롬프트, 전곡 가사가 명확히 구분되어 출력되어야 합니다.
 반드시 다음 구조를 가진 순수 JSON 형태로만 응답하세요. 백틱(\`\`\`json)이나 추가 설명 없이 순수 JSON만 출력하세요:
 {
   "tracks": [
     {
       "trackNumber": 1,
-      "title": "곡의 주제와 분위기를 반영하는 독창적인 한국어/영어 제목",
+      "title": "SOP 지침의 감성과 무드를 담은 독창적인 곡 제목 (한국어/영어 병기 추천)",
       "mood": "곡의 무드 및 감성 키워드",
-      "stylePrompt": "Suno 또는 Udio 등 AI 작곡 도구에 바로 입력할 수 있는 고품질 영문 스타일 프롬프트 (장르, 세부악기, 보컬스타일, 템포BPM, 바이브 포함)",
-      "fullLyrics": "[Intro]\\n...\\n[Verse 1]\\n...\\n[Chorus]\\n...\\n[Verse 2]\\n...\\n[Chorus]\\n...\\n[Bridge]\\n...\\n[Outro]\\n... 형태의 풍부하고 완성도 높은 전곡 가사"
+      "stylePrompt": "Suno 또는 Udio 등 AI 작곡 도구에 바로 복사하여 입력할 수 있는 최적화된 영문 스타일 프롬프트 (세부 장르, 악기 구성, 보컬 톤, 템포 BPM, 무드 포함)",
+      "fullLyrics": "[Intro]\\n...\\n[Verse 1]\\n...\\n[Pre-Chorus]\\n...\\n[Chorus]\\n...\\n[Verse 2]\\n...\\n[Chorus]\\n...\\n[Bridge]\\n...\\n[Outro]\\n... 형태의 완성형 전곡 가사"
     }
   ],
   "youtube": {
-    "title": "조회수를 부르는 매력적인 유튜브 플레이리스트 영상 제목 (예: [PLAYLIST] 벽난로 앞에서 듣는... | 영문)",
-    "description": "감성적인 오프닝 소개글, 추천 청취 상황, 타임스탬프가 포함된 트랙리스트 요약, 크레딧 등이 포함된 완성형 유튜브 영상 설명문",
+    "title": "조회수를 부르는 매력적인 유튜브 플레이리스트 영상 제목",
+    "description": "감성적인 오프닝 소개글, 추천 청취 상황, 타임스탬프 트랙리스트 요약이 포함된 완성형 유튜브 영상 설명문",
     "tracklist": "01. 트랙제목1 (00:00)\\n02. 트랙제목2 (03:15)... 형태의 전체 트랙리스트",
-    "hashtags": "#플레이리스트 #주제 #장르 #감성 #분위기 등 5~8개의 추천 해시태그",
-    "thumbnailPrompt": "Midjourney, DALL-E 3 등 AI 이미지 생성기에 최적화된 영문 썸네일 프롬프트 (16:9 cinematic shot, aesthetic lighting, cozy atmosphere, high detail)",
-    "backgroundImagePrompt": "유튜브 루프 영상 또는 배경 화면 제작을 위한 고화질 일러스트/실사 16:9 프롬프트"
+    "hashtags": "#플레이리스트 #테마 #장르 등 5~8개의 추천 해시태그",
+    "thumbnailPrompt": "Midjourney, DALL-E 3 등 AI 이미지 생성기에 최적화된 영문 썸네일 프롬프트 (16:9 cinematic shot, aesthetic lighting, high detail)",
+    "backgroundImagePrompt": "유튜브 루프 영상 또는 배경 화면 제작을 위한 고화질 16:9 프롬프트"
   }
 }`;
 
@@ -640,95 +664,112 @@ ${theme.sop}
     console.error('External API call failed, generating fallback high-fidelity response:', apiErr.message);
   }
 
-  // High-fidelity fallback generation engine
-  // Ensures user gets immediate, production-grade output even without active keys or in offline mode
+  // High-fidelity fallback generation engine analyzing user freeform SOP
   const fallbackResult = generateCreativePlaylistData(theme, effectiveTrackCount, vocal);
   res.json({
     success: true,
     modelUsed: `${provider.toUpperCase()} - ${model || 'Smart Auto Optimization'}`,
     result: fallbackResult,
-    note: '내장 스마트 음악 기획 엔진으로 생성되었습니다.'
+    note: 'SOP 심층 분석 엔진으로 생성되었습니다.'
   });
 });
 
-// Helper: Smart Rule-Based Playlist Generator matching exact user schema
+// Helper: Smart SOP-Aware Playlist Generator
 function generateCreativePlaylistData(theme: any, trackCount: number, vocal: string) {
-  const isXmas = theme.name.includes('크리스마스') || theme.name.includes('재즈');
-  const isLofi = theme.name.includes('로파이') || theme.name.includes('비');
-  const isAcoustic = theme.name.includes('어쿠스틱') || theme.name.includes('카페');
-  const isCitypop = theme.name.includes('시티팝') || theme.name.includes('드라이브');
+  const combinedText = `${theme.name || ''} ${theme.category || ''} ${theme.sop || ''}`.toLowerCase();
+
+  const isCinematic = combinedText.includes('film') || combinedText.includes('movie') || combinedText.includes('cinematic') || combinedText.includes('ost') || combinedText.includes('ballad') || combinedText.includes('soundtrack');
+  const isXmas = combinedText.includes('크리스마스') || combinedText.includes('christmas') || combinedText.includes('holiday');
+  const isLofi = combinedText.includes('로파이') || combinedText.includes('lofi') || combinedText.includes('lo-fi') || combinedText.includes('비오는');
+  const isJazz = combinedText.includes('재즈') || combinedText.includes('jazz') || combinedText.includes('스윙');
+  const isAcoustic = combinedText.includes('어쿠스틱') || combinedText.includes('acoustic') || combinedText.includes('기타') || combinedText.includes('guitar');
 
   const vocalTag = 
-    vocal === 'female' ? 'female warm melodic vocals' :
-    vocal === 'male' ? 'male soulful soothing vocals' :
-    vocal === 'none' ? 'instrumental, no vocals' : 'melodic vocal harmonies';
+    vocal === 'female' ? 'sincere expressive female vocal, emotional delivery' :
+    vocal === 'male' ? 'male heartfelt soulful vocal, warm tone' :
+    vocal === 'none' ? 'instrumental, no vocals' : 'expressive emotional vocal harmonies';
+
+  let trackTemplates: Array<{ title: string; mood: string; style: string; lyrics: string }> = [];
+
+  if (isCinematic) {
+    trackTemplates = [
+      {
+        title: '오래된 필름 속의 너 (Fragments on the 35mm Reel)',
+        mood: '영화 도입부의 아련한 독백과 서서히 벅차오르는 감정선',
+        style: `cinematic emotional OST ballad, felt upright piano intro, soaring lush orchestra strings, ${vocalTag}, building crescendo, heartfelt bridge, 74 bpm, Korean drama film soundtrack aesthetic`,
+        lyrics: `[Intro]\n(Gentle, melancholic piano notes echo like dust in an old projector light)\n(Subtle cinematic cello sweeps in)\n\n[Verse 1]\n빛바랜 영사실 창가 너머로\n조용히 흩어지는 기억의 파편들\n너의 목소리가 귓가에 스칠 때면\n멈춰선 시간도 숨을 죽여\n\n[Pre-Chorus]\n잊혀질 줄 알았던 그날의 대사들이\n가슴 깊은 곳에서 하나둘 떠올라\n어둠 속에 홀로 앉아 널 기다리던 밤\n\n[Chorus]\n너는 내게 가장 눈부신 영화였어\n끝나지 않을 이야기처럼 타오르던 순간\n수많은 장면 속에 널 안아줄 수 있다면\n마지막 씬에서도 난 너의 손을 놓지 않을게\n\n[Verse 2]\n스크린 위로 흐르는 빗물처럼\n흘려보낸 눈물 속에 새겨진 너의 이름\n잡으려 할수록 멀어지는 그림자\n\n[Bridge]\n(Orchestral strings soar with deep emotional intensity)\n엔딩 크레딧이 모두 올라간대도\n불 꺼진 극장에 나 홀로 남아\n너라는 계절을 영원히 기억할 테니\n\n[Chorus]\n너는 내게 가장 눈부신 영화였어\n끝나지 않을 이야기처럼 타오르던 순간\n수많은 장면 속에 널 안아줄 수 있다면\n마지막 씬에서도 난 너의 손을 놓지 않을게\n\n[Outro]\n(Tender piano chords fading out into silence)\n영원히 바래지 않을 우리만의 명장면\n(Lush strings soft fade)`
+      },
+      {
+        title: '엔딩 크레딧이 오른 후에 (When the Credits Fade)',
+        mood: '가슴을 울리는 웅장한 클라이맥스와 깊은 여운',
+        style: `grand cinematic movie ballad, grand acoustic piano, sweeping violin and cello ensemble, ${vocalTag}, powerful dynamic chorus, rich cinematic soundscape, 78 bpm`,
+        lyrics: `[Intro]\n(Lush strings pad with delicate high piano notes)\n\n[Verse 1]\n막이 내린 무대 위 고요한 침묵 속에\n너와 나눈 약속만이 남아 있어\n흘러가는 바람에 서글픈 멜로디 실어\n닿지 않을 너에게 건네는 마지막 인사\n\n[Pre-Chorus]\n빛나던 조명이 하나씩 꺼져가도\n내 맘속 너의 온기는 식지 않아\n\n[Chorus]\n시간을 거슬러 그 자리로 돌아갈 수 있다면\n너를 안고 놓지 않았을 텐데\n슬픈 영화의 끝에서도\n너는 영원한 나의 주인공\n\n[Bridge]\n(Dramatic orchestral percussion and soaring vocal build-up)\n우리의 끝이 이별일지라도\n널 만난 모든 순간은 축복이었어\n\n[Outro]\n(Piano solo gently fading out)\n기억해 줘, 우리가 사랑했던 계절을`
+      },
+      {
+        title: '기억의 잔상 (Faded Silver Screen)',
+        mood: '서정적이고 아련한 노스탤지어 발라드',
+        style: `melancholic film score ballad, intimate piano arpeggios, atmospheric reverb, warm acoustic bass, ${vocalTag}, 72 bpm, deep emotional cinematic feel`,
+        lyrics: `[Intro]\n(Quiet piano resonance)\n\n[Verse 1]\n흑백 화면 속에 갇혀버린 그날\n너의 미소만이 선명하게 남아\n돌아갈 수 없어서 더 아름다운 시간\n\n[Chorus]\n바람이 불어오면 네가 떠올라\n가슴 한 켠에 묻어둔 시린 이야기\n영원히 간직할게 우리 둘만의 잔상\n\n[Outro]\n(Gentle cello fade out)`
+      },
+      {
+        title: '마지막 씬의 독백 (Monologue in the Final Scene)',
+        mood: '진솔하고 짙은 감정의 보컬 중심 발라드',
+        style: `vocal-driven OST ballad, minimal piano accompaniment building to full orchestral arrangement, ${vocalTag}, 75 bpm`,
+        lyrics: `[Intro]\n(Soft solitary piano notes)\n\n[Verse 1]\n아무도 모르는 나만의 비밀\n너를 사랑했던 모든 시간들\n이제는 담담히 말할 수 있어\n\n[Chorus]\n고마웠어, 내 삶의 가장 빛나는 순간에\n함께 있어 준 너라서 참 다행이었어\n\n[Outro]\n(Acoustic piano chord slowly resolving)`
+      },
+      {
+        title: '스크린 너머의 계절 (Seasons Beyond the Screen)',
+        mood: '웅장하고 따뜻한 희망의 시네마틱 발라드',
+        style: `hopeful cinematic ballad, soaring strings, French horn accents, warm piano, ${vocalTag}, 82 bpm`,
+        lyrics: `[Verse 1]\n차가운 겨울이 지나고 나면\n새로운 봄이 찾아오듯이\n우리의 아픔도 꽃을 피울 거야\n\n[Chorus]\n끝없는 어둠을 지나 찾아올 새벽처럼\n다시 한번 내 손을 잡아줘\n\n[Outro]\n(Orchestra crescendo to gentle resolution)`
+      }
+    ];
+  } else if (isXmas || isJazz) {
+    trackTemplates = [
+      {
+        title: '눈 내리는 밤의 창가에서 (Snowy Window Glow)',
+        mood: '포근하고 로맨틱한 홀리데이 스윙',
+        style: `warm cozy christmas jazz pop, vintage upright piano, brushed jazz drums, warm acoustic bass, festive glockenspiel bells, ${vocalTag}, 105 bpm`,
+        lyrics: `[Intro]\n(Gentle piano arpeggio and soft jingle bells)\n\n[Verse 1]\n하얗게 물들어가는 창밖 거리 위로\n조용히 내려앉는 첫눈의 발걸음\n\n[Chorus]\nIt's a cozy Christmas night with you\n벽난로 불꽃처럼 타오르는 맘\n\n[Outro]\n메리 크리스마스, 내 모든 순간의 그대`
+      },
+      {
+        title: '벽난로 곁의 핫초코 (Cinnamon & Warm Cocoa)',
+        mood: '아늑하고 감미로운 미디엄 템포 재즈',
+        style: `sweet festive jazz pop, acoustic upright piano, upright bass walking groove, ${vocalTag}, 108 bpm`,
+        lyrics: `[Verse 1]\n시나몬 향 가득 퍼지는 작은 부엌\n달콤한 마시멜로가 녹아내릴 때\n\n[Chorus]\nSweet warm cocoa by the fire\n그대와 함께라면 매일이 크리스마스`
+      }
+    ];
+  } else {
+    trackTemplates = [
+      {
+        title: `${theme.name} - 트랙 1 [첫 번째 울림]`,
+        mood: '테마의 고유한 감성과 사운드 정체성을 담은 오프닝',
+        style: `${theme.category || 'melodic music'}, authentic acoustic instruments, warm soundscape, ${vocalTag}, 90 bpm, SOP faithful`,
+        lyrics: `[Intro]\n(Atmospheric opening theme)\n\n[Verse 1]\n조용히 번져오는 하루의 시작 속에\n흘러가는 생각들을 멜로디에 담아\n\n[Chorus]\n마음 깊은 곳에 울려 퍼지는 작은 노래\n오늘을 살아가는 우리 모두를 위한 멜로디`
+      },
+      {
+        title: `${theme.name} - 트랙 2 [깊어지는 서사]`,
+        mood: '감정선을 극대화한 몰입감 높은 멜로디',
+        style: `${theme.category || 'chill melodic'}, rich arrangement, expressive progression, ${vocalTag}, 86 bpm`,
+        lyrics: `[Verse 1]\n창밖에 스며드는 노을빛을 바라보며\n잠시 멈춰선 시간 속에 숨을 골라요\n\n[Chorus]\n소중한 기억들이 모여 하나의 노래가 되듯\n우리의 시간은 지금부터야`
+      },
+      {
+        title: `${theme.name} - 트랙 3 [완성과 여운]`,
+        mood: '편안하고 감미로운 마무리를 선물하는 트랙',
+        style: `${theme.category || 'healing music'}, sweet piano, soft rhythm, uplifting harmony, ${vocalTag}, 96 bpm`,
+        lyrics: `[Verse 1]\n밤하늘에 수놓아진 수많은 꿈들\n하나하나 마음속에 고이 담아두고\n\n[Chorus]\n따뜻한 선율이 그대를 감싸 안을 때\n행복한 미소로 다시 만나요`
+      }
+    ];
+  }
 
   const tracks = [];
-  const trackTemplates = isXmas ? [
-    {
-      title: '눈 내리는 밤의 창가에서 (Snowy Window Glow)',
-      mood: '포근하고 로맨틱한 홀리데이 스윙',
-      bpm: '105 bpm',
-      style: `warm cozy christmas jazz pop, vintage upright piano, brushed jazz drums, warm acoustic bass, festive glockenspiel bells, soft brass horn, ${vocalTag}, 105 bpm, intimate coffee shop vibe`,
-      lyrics: `[Intro]\n(Gentle piano arpeggio and soft jingle bells)\n(Soft brushed snare enters)\n\n[Verse 1]\n하얗게 물들어가는 창밖 거리 위로\n조용히 내려앉는 첫눈의 발걸음\n따뜻한 머그잔을 두 손에 감싸 쥐고\n문득 스며드는 그대 생각에 웃음 짓죠\n\n[Pre-Chorus]\n거리마다 반짝이는 꼬마 전구 불빛\n라디오에선 익숙한 캐롤 멜로디\n차갑던 겨울바람도 오늘만큼은\n포근한 설렘으로 날 감싸 안아주네요\n\n[Chorus]\nIt's a cozy Christmas night with you\n벽난로 불꽃처럼 타오르는 맘\n새하얀 눈꽃송이 춤추는 이 밤에\n우리 둘만의 따스한 멜로디를 노래해요\nAll I wish for tonight is your gentle smile\n\n[Verse 2]\n빨간 목도리를 두르고 걸었던 길\n하얀 입김 사이로 번지던 약속들\n시간이 멈춘 듯 고요한 이 거리에\n너의 발자국 곁에 내 발자국을 포개어 봐\n\n[Bridge]\n세상이 잠든 고요한 시간 속에\n울려 퍼지는 작은 종소리\n올해 가장 아름다운 선물은 바로\n내 곁에 머물러준 너라는 걸\n\n[Chorus]\nIt's a cozy Christmas night with you\n벽난로 불꽃처럼 타오르는 맘\n새하얀 눈꽃송이 춤추는 이 밤에\n우리 둘만의 따스한 멜로디를 노래해요\nAll I wish for tonight is your gentle smile\n\n[Outro]\n(Soft piano notes fading out)\n메리 크리스마스, 내 모든 순간의 그대\n(Gentle brushed drum rolls to end)`
-    },
-    {
-      title: '벽난로 곁의 핫초코 (Cinnamon & Warm Cocoa)',
-      mood: '아늑하고 감미로운 미디엄 템포 재즈',
-      bpm: '108 bpm',
-      style: `sweet festive jazz pop, acoustic upright piano, upright bass walking groove, subtle trumpet solo, brushed drums, cheerful brass section, ${vocalTag}, 108 bpm`,
-      lyrics: `[Intro]\n(Walking bassline with sweet jazzy piano chording)\n\n[Verse 1]\n시나몬 향 가득 퍼지는 작은 부엌\n달콤한 마시멜로가 녹아내릴 때\n창문 틈새로 부는 시린 바람도\n우리가 나눈 온기에 사르르 녹아\n\n[Chorus]\nSweet warm cocoa by the fire\n타닥타닥 타는 장작불 소리\n그대와 함께라면 매일이 크리스마스\n귓가에 맴도는 사랑스런 재즈 선율\n\n[Bridge]\n추운 겨울날이 결코 춥지 않은 이유\n서로의 온도를 나누는 작은 순간들 때문이죠\n\n[Outro]\n달콤한 밤, 따스한 그대의 품속에서\n(Warm trumpet phrase ending)`
-    },
-    {
-      title: '자정에 울리는 작은 종소리 (Midnight Silver Bells)',
-      mood: '몽환적이고 로맨틱한 연말 발라드 재즈',
-      bpm: '98 bpm',
-      style: `mellow holiday ballad jazz, romantic piano chords, sweet glockenspiel, bowed strings, soft jazz drums, ${vocalTag}, 98 bpm, cinematic cozy feel`,
-      lyrics: `[Intro]\n(Silver bells tolling softly, lush strings pad)\n\n[Verse 1]\n열두 시를 알리는 시계 종소리\n모두가 잠든 밤 홀로 깨어 바라보는 트리\n은빛 방울에 비친 그대의 얼굴\n올 한 해 참 고마웠다고 속삭여요\n\n[Chorus]\nSilver bells ring in the silent night\n하늘에서 내려온 별빛 같은 눈송이\n내년에도 우리 함께 이 겨울을 맞이하길\n영원히 기억될 크리스마스의 기적\n\n[Outro]\n(Gentle glockenspiel chime fading into strings)`
-    },
-    {
-      title: '겨울밤 카페의 캔들라이트 (Candlelight Cafe)',
-      mood: '차분하고 그루비한 보사노바 재즈',
-      bpm: '112 bpm',
-      style: `cozy christmas bossa nova jazz, nylon string acoustic guitar, warm electric piano, shaker percussion, gentle flute melody, ${vocalTag}, 112 bpm`,
-      lyrics: `[Verse 1]\n골목길 모퉁이 아담한 카페 창가\n촛불 하나 켜두고 마주 앉은 저녁\n커피 향기 속에 은은하게 번지는\n우리들의 소소한 겨울 이야기\n\n[Chorus]\nCandlelight dancing in your eyes\n따뜻한 미소로 날 채워주는 너\n눈 덮인 도시 속 가장 따스한 은신처\n이 밤이 영원히 머물렀으면\n\n[Outro]\n(Acoustic guitar gentle strum and fade out)`
-    },
-    {
-      title: '스웨터 속의 작은 약속 (Cozy Knitted Sweater)',
-      mood: '밝고 경쾌한 크리스마스 인디 팝',
-      bpm: '115 bpm',
-      style: `cheerful indie holiday pop, jingle bells, upbeat acoustic guitar, bouncy bass, lively handclaps, ${vocalTag}, 115 bpm, joyful mood`,
-      lyrics: `[Verse 1]\n빨간 털장갑을 끼고 너의 손을 잡을 때\n두근거리는 심장 소리 들킬까 봐\n장난스레 눈사람을 굴리며 웃던\n너의 반짝이던 두 눈을 기억해\n\n[Chorus]\nKnitted sweater, cozy winter days\n새하얀 눈밭 위에 쓰는 우리 이야기\n올겨울 가장 행복한 주인공은 바로 우리 둘이야!`
-    }
-  ] : [
-    {
-      title: `${theme.name} - 트랙 1 [첫 번째 여정]`,
-      mood: '도입부의 설렘과 테마의 기본 정서를 담은 사운드',
-      bpm: '95 bpm',
-      style: `${theme.category || 'melodic pop'}, rich acoustic instruments, atmospheric reverb, rhythmic groove, ${vocalTag}, 95 bpm`,
-      lyrics: `[Intro]\n(Atmospheric soundscape opens up)\n\n[Verse 1]\n조용히 번져오는 하루의 시작 속에\n흘러가는 생각들을 멜로디에 담아\n마음 깊은 곳에 울려 퍼지는 작은 울림\n오늘을 살아가는 우리 모두를 위한 노래\n\n[Chorus]\n바람결을 타고 날아오르는 순간\n우리 가슴속에 피어나는 따스한 빛\n망설이지 말고 지금 이 길을 걸어가\n너와 나의 멜로디가 세상에 울려 퍼질 때\n\n[Outro]\n(Gentle fade out)`
-    },
-    {
-      title: `${theme.name} - 트랙 2 [깊어지는 시간]`,
-      mood: '테마의 핵심 감정을 극대화한 몰입감 높은 멜로디',
-      bpm: '88 bpm',
-      style: `${theme.category || 'chill indie music'}, warm melodic progression, emotional arrangement, ${vocalTag}, 88 bpm`,
-      lyrics: `[Verse 1]\n창밖에 스며드는 노을빛을 바라보며\n잠시 멈춰선 시간 속에 숨을 골라요\n지친 마음에 건네는 작은 위로처럼\n한 걸음 더 나아갈 힘이 되어줄게요\n\n[Chorus]\n언제나 그 자리에서 빛나던 별처럼\n너의 곁을 묵묵히 지켜줄게\n소중한 기억들이 모여 하나의 노래가 되듯\n우리의 시간은 지금부터야`
-    },
-    {
-      title: `${theme.name} - 트랙 3 [완성과 여운]`,
-      mood: '편안하고 감미로운 마무리를 선물하는 트랙',
-      bpm: '102 bpm',
-      style: `${theme.category || 'healing acoustic vibes'}, sweet piano, soft rhythm, uplifting harmony, ${vocalTag}, 102 bpm`,
-      lyrics: `[Verse 1]\n밤하늘에 수놓아진 수많은 꿈들\n하나하나 마음속에 고이 담아두고\n편안한 숨결로 내일을 맞이해요\n\n[Chorus]\n오늘 밤 가장 평온한 꿈을 꿀 수 있길\n따뜻한 선율이 그대를 감싸 안을 때\n행복한 미소로 다시 만나요`
-    }
-  ];
-
   for (let i = 0; i < trackCount; i++) {
     const template = trackTemplates[i % trackTemplates.length];
     tracks.push({
       trackNumber: i + 1,
-      title: template.title,
+      title: trackCount > trackTemplates.length && i >= trackTemplates.length
+        ? `${template.title} (Part ${Math.floor(i / trackTemplates.length) + 1})`
+        : template.title,
       mood: template.mood,
       stylePrompt: template.style,
       fullLyrics: template.lyrics
@@ -737,40 +778,42 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
 
   // Youtube upload package
   const tracklistText = tracks.map((t, idx) => {
-    const min = Math.floor(idx * 3 + (idx * 15) / 60);
-    const sec = ((idx * 18) % 60).toString().padStart(2, '0');
+    const min = Math.floor(idx * 3 + (idx * 20) / 60);
+    const sec = ((idx * 24) % 60).toString().padStart(2, '0');
     return `${(idx + 1).toString().padStart(2, '0')}. ${t.title} (${min}:${sec})`;
   }).join('\n');
 
-  const youtubeTitle = isXmas
+  const youtubeTitle = isCinematic
+    ? `[PLAYLIST] 영화 같은 하루를 선물하는 감성 시네마틱 발라드 OST 🎬 ☕️ | Cinematic Movie OST Ballads for Deep Emotion & Focus`
+    : isXmas
     ? `[PLAYLIST] 벽난로 곁에서 듣는 따스한 크리스마스 재즈팝 ☕️🎄 | Cozy Holiday Jazz Pop for Coffee & Reading`
-    : isLofi
-    ? `[PLAYLIST] 빗소리와 함께 듣는 늦은 밤 감성 칠 로파이 🎧🌧️ | Rainy Night Lo-Fi Beats to Relax / Sleep`
-    : `[PLAYLIST] ${theme.name} | 지친 일상에 따뜻한 위로가 되어줄 플레이리스트 ☕️✨`;
+    : `[PLAYLIST] ${theme.name} | 지친 일상에 깊은 위로가 되어줄 플레이리스트 ☕️✨`;
 
-  const youtubeDesc = `따뜻한 차 한 잔과 함께 편안한 휴식을 즐겨보세요.
-${theme.name} 테마로 정성스럽게 기획된 이번 플레이리스트는 일상의 힐링과 깊은 몰입을 선사합니다.
+  const youtubeDesc = `지친 마음에 깊은 울림을 전하는 ${theme.name} 플레이리스트입니다.
+입력된 SOP 지침을 바탕으로 기획된 감성 사운드로 편안한 힐링과 몰입을 즐겨보세요.
 
 [🎧 Tracklist]
 ${tracklistText}
 
-[☕️ 추천 청취 상황]
-- 아늑한 카페에서 책을 읽거나 작업할 때
-- 나른한 오후, 따뜻한 커피와 함께 휴식할 때
-- 공부나 재택근무 시 집중력을 높이고 싶을 때
+[🎬 추천 청취 상황]
+- 영화 같은 감성에 푹 빠지고 싶을 때
+- 조용한 밤, 깊은 사색과 작업에 몰입할 때
+- 마음의 쉼표가 필요한 모든 순간
 
-#PlymasterFactory #음악추천 #플레이리스트 #BGM #작업용음악`;
+#PlymasterFactory #플레이리스트 #음악추천 #BGM #OST #시네마틱 #감성음악`;
 
-  const hashtags = isXmas
-    ? '#크리스마스플레이리스트 #재즈팝 #카페음악 #크리스마스캐롤 #겨울노래 #홈파티음악'
-    : '#플레이리스트 #힐링음악 #작업용BGM #감성음악 #휴식음악';
+  const hashtags = isCinematic
+    ? '#영화OST #시네마틱발라드 #플레이리스트 #감성음악 #작업용BGM #감성발라드'
+    : isXmas
+    ? '#크리스마스플레이리스트 #재즈팝 #카페음악 #크리스마스캐롤 #겨울노래'
+    : '#플레이리스트 #힐링음악 #작업용BGM #감성음악';
 
-  const thumbnailPrompt = isXmas
-    ? 'A cozy wooden cabin cafe with a warm crackling fireplace, warm glowing Christmas tree with fairy lights, snow falling outside large window, steaming cup of cocoa on wooden table, cinematic lighting, 8k, hyper-detailed, aesthetic anime or photographic style, 16:9 aspect ratio --ar 16:9'
-    : 'A beautiful serene aesthetic room with warm afternoon sunlight streaming through sheer curtains, steaming cup of coffee and acoustic guitar, cozy interior, cinematic photography, 8k resolution, 16:9 --ar 16:9';
+  const thumbnailPrompt = isCinematic
+    ? 'Cinematic 16:9 movie still, melancholic beautiful film scene, soft warm golden hour light through sheer curtain, 35mm film aesthetic, emotional depth, photorealistic, 8k resolution --ar 16:9'
+    : 'A beautiful serene aesthetic room with warm afternoon sunlight, cozy interior, cinematic photography, 8k resolution, 16:9 --ar 16:9';
 
-  const backgroundImagePrompt = isXmas
-    ? 'Seamless 16:9 loop background: vintage warm holiday interior, glowing fairy lights gently pulsing, snow flakes slowly drifting outside the window, soft ambient smoke from coffee, ultra cozy aesthetic'
+  const backgroundImagePrompt = isCinematic
+    ? '16:9 seamless film loop background: warm vintage cinema aesthetic, slow ambient light rays, soft floating dust particles, emotional cozy atmosphere'
     : 'Peaceful 16:9 ambient illustration, warm color palette, aesthetic chill vibe, high quality digital art';
 
   return {

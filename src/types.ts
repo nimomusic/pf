@@ -8,6 +8,7 @@ export interface Theme {
   category: string;
   sop: string;
   createdAt?: string;
+  updatedAt?: string;
   isDefault?: boolean;
 }
 

@@ -242,13 +242,13 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
                 <textarea
                   value={formSop}
                   onChange={(e) => setFormSop(e.target.value)}
-                  placeholder="1. 장르 및 분위기&#10;2. 사운드 및 악기 구성&#10;3. 템포 (BPM)&#10;4. Suno/Udio Style 프롬프트 지침&#10;5. 가사 구성 지침&#10;6. 유튜브 타겟..."
-                  rows={8}
+                  placeholder="특정 양식에 구애받지 않고 자유롭게 입력하세요.&#10;예: # Role, 아티스트 특징, 사운드 정체성, 보컬 디렉션, 편곡 지침, 곡 분위기, 가사 방향성 등 입력된 내용을 그대로 분석하여 각 곡에 반영합니다."
+                  rows={9}
                   className="w-full p-3 text-xs font-mono leading-relaxed rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50"
                   required
                 />
                 <p className="text-[11px] text-slate-500 mt-1">
-                  * 이 SOP 지침은 AI가 트랙 가사, 스타일 프롬프트 및 유튜브 패키지를 기획할 때 절대적인 기준으로 작동합니다.
+                  * 특정 양식 없이 자유롭게 입력된 내용(Role, 아티스트 특징, 보컬 디렉션 등)을 AI가 그대로 분석하여 각 곡별 트랙 넘버, 곡 제목, 스타일 프롬프트, 전곡 가사를 출력합니다.
                 </p>
               </div>
 
