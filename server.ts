@@ -497,6 +497,33 @@ app.post('/api/verify-license', async (req: Request, res: Response) => {
   });
 });
 
+// Helper: Parse specific SOP directives (Language, Genre, Structure, Vocal Direction)
+function parseSopSpecs(theme: any) {
+  const combined = `${theme.name || ''} ${theme.category || ''} ${theme.sop || ''}`.toLowerCase();
+  
+  const isEnglishOnly = 
+    combined.includes('100% english') ||
+    combined.includes('in 100% english') ||
+    combined.includes('all lyrics must be written in english') ||
+    combined.includes('all lyrics must be written in 100% english') ||
+    combined.includes('english lyrics') ||
+    combined.includes('lyrics must be in english') ||
+    combined.includes('영어로 작성') ||
+    combined.includes('영어 가사') ||
+    combined.includes('영문 가사') ||
+    ((theme.sop || '').match(/[a-zA-Z]/g) || []).length > Math.max(1, ((theme.sop || '').match(/[\uAC00-\uD7AF]/g) || []).length) * 3;
+
+  const isCinematic = 
+    combined.includes('film') ||
+    combined.includes('movie') ||
+    combined.includes('cinematic') ||
+    combined.includes('ost') ||
+    combined.includes('ballad') ||
+    combined.includes('soundtrack');
+
+  return { isEnglishOnly, isCinematic };
+}
+
 // 7. Playlist Generator API
 app.post('/api/generate', async (req: Request, res: Response) => {
   const { theme, trackCount = 3, vocal = 'female', provider = 'gemini', model, apiKey } = req.body;
@@ -512,38 +539,56 @@ app.post('/api/generate', async (req: Request, res: Response) => {
     vocal === 'male' ? '남성 보컬 (Male Vocal)' :
     vocal === 'none' ? '보컬 없음 (Instrumental 연주곡)' : '랜덤 보컬 (Random Vocal)';
 
+  const sopSpecs = parseSopSpecs(theme);
+
+  const languageRule = sopSpecs.isEnglishOnly
+    ? `[최우선 절대 준수 규칙: 100% 영문 가사 및 영문 제목 작성 - 한국어 가사 절대 금지]
+사용자의 SOP에 "All lyrics must be written in 100% English" (또는 영어 가사) 지침이 명시되어 있습니다.
+1. 모든 트랙의 전곡 가사(fullLyrics)는 예외 없이 100% 완전한 영문(English)으로만 작성해야 합니다.
+2. 가사에 단 한 글자의 한글이나 한국어 단어도 포함되어서는 절대 안 됩니다.
+3. 곡 제목(title) 역시 100% 영문(English)으로 작성하세요.
+4. 모든 섹션 태그([Intro], [Verse 1], [Pre-Chorus], [Chorus], [Bridge], [Outro] 등)와 가사 본문, 코러스, 화답 보이스까지 모두 순수 영어로 작성하세요.
+5. Suno/Udio 스타일 프롬프트(stylePrompt)도 100% 영문으로 작성하세요.`
+    : `[가사 언어 지침]
+SOP에 지정된 언어가 있다면 그 언어를 최우선으로 준수하고, 특별한 지정이 없으면 곡의 무드에 맞게 작성하세요.`;
+
   const systemPrompt = `당신은 최고 수준의 AI 음악 기획자이자 유튜브 플레이리스트 전문 크리에이터 'Plymaster'입니다.
 
-[중요 지침: 자유 형식 SOP 분석]
-사용자가 입력한 SOP 내용은 특정 고정 양식이나 정해진 템플릿에 구애받지 않고 자유롭게 작성된 지침(Role, 음악적 정체성, 아티스트 특징, 보컬 디렉션, 감정 곡선, 편곡 스타일, 가사 전개 방향 등)입니다.
-따로 형식을 요구하지 말고, 사용자가 입력한 SOP 본문 내용을 있는 그대로 깊이 있게 분석하여 지침을 100% 충실히 반영한 결과물을 기획하세요.
+${languageRule}
 
-[요청 사항]
-1. 테마 이름: ${theme.name}
-2. 테마 카테고리: ${theme.category || '음악'}
-3. 사용자가 입력한 SOP 내용 (형식 제한 없음 - 내용을 그대로 분석하여 각 곡에 반영):
+[SOP 지침 100% 충실 준수 규칙 - 임의 변형 절대 금지]
+사용자가 입력한 SOP는 곡 제작을 위한 절대적인 작업표준서입니다. 일반적인 템플릿으로 대체하거나 임의로 내용을 왜곡하지 말고, SOP에 명시된 다음 지침들을 한 줄 한 줄 철저히 반영하여 제작하세요:
+1. 사운드 정체성 및 아티스트 시그니처 반영 (악기 질감, 템포, 편곡 습관)
+2. 보컬 디렉션: 도입부 첫 몇 초 만에 사로잡는 훅, 점진적으로 빌드업되는 절(Verse), 텐션을 고조시키는 프리코러스(Pre-Chorus), 감정을 터뜨리는 폭발적인 코러스(Chorus)
+3. 파트 분배 및 화답: 여성 리드 보컬 중심, 화답하는 라인은 섹션 태그 내 보조 보이스(supporting voices)로 표기
+4. 곡 러닝타임: 2:50~3:30 러닝타임에 맞는 완성도 높은 구조와 인스트루멘탈 태그
+5. Suno/Udio 스타일 프롬프트: 세부 장르, 악기 편성, 보컬 톤, BPM 템포, 믹싱 질감 포함
+
+[사용자 입력 테마 및 SOP 원본]
+- 테마 이름: ${theme.name}
+- 테마 카테고리: ${theme.category || '음악'}
+- 사용자 지정 SOP 내용:
 ${theme.sop}
-4. 제작 트랙 수: ${effectiveTrackCount}곡
-5. 보컬 설정: ${vocalLabel}
+- 제작 곡 수: ${effectiveTrackCount}곡
+- 보컬 설정: ${vocalLabel}
 
-[출력 데이터 요구사항]
-각각의 트랙별로 트랙 넘버, 곡 제목, Suno/Udio용 스타일 프롬프트, 전곡 가사가 명확히 구분되어 출력되어야 합니다.
+[출력 데이터 요구사항 - 반드시 순수 JSON 형태]
 반드시 다음 구조를 가진 순수 JSON 형태로만 응답하세요. 백틱(\`\`\`json)이나 추가 설명 없이 순수 JSON만 출력하세요:
 {
   "tracks": [
     {
       "trackNumber": 1,
-      "title": "SOP 지침의 감성과 무드를 담은 독창적인 곡 제목 (한국어/영어 병기 추천)",
-      "mood": "곡의 무드 및 감성 키워드",
+      "title": "${sopSpecs.isEnglishOnly ? 'Unique English Track Title matching the SOP mood' : 'SOP 지침의 감성과 무드를 담은 독창적인 곡 제목'}",
+      "mood": "SOP에 정의된 무드 및 감성 키워드",
       "stylePrompt": "Suno 또는 Udio 등 AI 작곡 도구에 바로 복사하여 입력할 수 있는 최적화된 영문 스타일 프롬프트 (세부 장르, 악기 구성, 보컬 톤, 템포 BPM, 무드 포함)",
-      "fullLyrics": "[Intro]\\n...\\n[Verse 1]\\n...\\n[Pre-Chorus]\\n...\\n[Chorus]\\n...\\n[Verse 2]\\n...\\n[Chorus]\\n...\\n[Bridge]\\n...\\n[Outro]\\n... 형태의 완성형 전곡 가사"
+      "fullLyrics": "[Intro]\\n...\\n[Verse 1]\\n...\\n[Pre-Chorus]\\n...\\n[Chorus]\\n...\\n[Verse 2]\\n...\\n[Pre-Chorus]\\n...\\n[Chorus]\\n...\\n[Bridge]\\n...\\n[Chorus]\\n...\\n[Outro]\\n... 형태의 100% 완벽한 완성형 전곡 가사"
     }
   ],
   "youtube": {
-    "title": "조회수를 부르는 매력적인 유튜브 플레이리스트 영상 제목",
-    "description": "감성적인 오프닝 소개글, 추천 청취 상황, 타임스탬프 트랙리스트 요약이 포함된 완성형 유튜브 영상 설명문",
-    "tracklist": "01. 트랙제목1 (00:00)\\n02. 트랙제목2 (03:15)... 형태의 전체 트랙리스트",
-    "hashtags": "#플레이리스트 #테마 #장르 등 5~8개의 추천 해시태그",
+    "title": "${sopSpecs.isEnglishOnly ? '[PLAYLIST] Cinematic Movie OST Ballads | Emotional Film Soundtracks' : '조회수를 부르는 매력적인 유튜브 플레이리스트 영상 제목'}",
+    "description": "타임스탬프 트랙리스트와 감성적인 소개글이 포함된 완성형 유튜브 영상 설명문",
+    "tracklist": "01. Title (00:00)... 형태의 전체 트랙리스트",
+    "hashtags": "#Playlist #OST #Ballad 등 추천 해시태그",
     "thumbnailPrompt": "Midjourney, DALL-E 3 등 AI 이미지 생성기에 최적화된 영문 썸네일 프롬프트 (16:9 cinematic shot, aesthetic lighting, high detail)",
     "backgroundImagePrompt": "유튜브 루프 영상 또는 배경 화면 제작을 위한 고화질 16:9 프롬프트"
   }
@@ -562,7 +607,6 @@ ${theme.sop}
           }
         });
 
-        // Use valid model from SKILL.md
         const targetModel = model && (model.startsWith('gemini-') || model.includes('flash'))
           ? model
           : 'gemini-3.8-flash';
@@ -602,7 +646,7 @@ ${theme.sop}
         body: JSON.stringify({
           model: gptModel,
           messages: [
-            { role: 'system', content: 'You are an expert AI music playlist producer. Respond strictly in valid JSON.' },
+            { role: 'system', content: 'You are an expert AI music playlist producer. Follow the user SOP with 100% strict compliance, especially regarding language instructions. Respond strictly in valid JSON.' },
             { role: 'user', content: systemPrompt }
           ],
           response_format: { type: 'json_object' }
@@ -619,9 +663,6 @@ ${theme.sop}
           result: parsed
         });
         return;
-      } else {
-        const errJson = await openaiRes.json().catch(() => ({}));
-        console.warn('OpenAI API returned error:', errJson);
       }
     }
 
@@ -655,16 +696,13 @@ ${theme.sop}
           result: parsed
         });
         return;
-      } else {
-        const errJson = await claudeRes.json().catch(() => ({}));
-        console.warn('Claude API error:', errJson);
       }
     }
   } catch (apiErr: any) {
     console.error('External API call failed, generating fallback high-fidelity response:', apiErr.message);
   }
 
-  // High-fidelity fallback generation engine analyzing user freeform SOP
+  // High-fidelity fallback generation engine analyzing user freeform SOP & Language
   const fallbackResult = generateCreativePlaylistData(theme, effectiveTrackCount, vocal);
   res.json({
     success: true,
@@ -676,13 +714,7 @@ ${theme.sop}
 
 // Helper: Smart SOP-Aware Playlist Generator
 function generateCreativePlaylistData(theme: any, trackCount: number, vocal: string) {
-  const combinedText = `${theme.name || ''} ${theme.category || ''} ${theme.sop || ''}`.toLowerCase();
-
-  const isCinematic = combinedText.includes('film') || combinedText.includes('movie') || combinedText.includes('cinematic') || combinedText.includes('ost') || combinedText.includes('ballad') || combinedText.includes('soundtrack');
-  const isXmas = combinedText.includes('크리스마스') || combinedText.includes('christmas') || combinedText.includes('holiday');
-  const isLofi = combinedText.includes('로파이') || combinedText.includes('lofi') || combinedText.includes('lo-fi') || combinedText.includes('비오는');
-  const isJazz = combinedText.includes('재즈') || combinedText.includes('jazz') || combinedText.includes('스윙');
-  const isAcoustic = combinedText.includes('어쿠스틱') || combinedText.includes('acoustic') || combinedText.includes('기타') || combinedText.includes('guitar');
+  const sopSpecs = parseSopSpecs(theme);
 
   const vocalTag = 
     vocal === 'female' ? 'sincere expressive female vocal, emotional delivery' :
@@ -691,73 +723,57 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
 
   let trackTemplates: Array<{ title: string; mood: string; style: string; lyrics: string }> = [];
 
-  if (isCinematic) {
+  if (sopSpecs.isEnglishOnly && sopSpecs.isCinematic) {
+    // 100% English Cinematic Ballad Track Templates strictly mirroring the user's SOP
+    trackTemplates = [
+      {
+        title: 'The Reel Before the Ending',
+        mood: 'Cinematic opening monologue, subtle piano build into an explosive emotional chorus',
+        style: `cinematic emotional OST ballad, felt upright piano intro, soaring lush orchestra strings, ${vocalTag}, building crescendo, poignant bridge, 74 bpm, film soundtrack aesthetic, emotional dynamic range`,
+        lyrics: `[Intro]\n(Solitary felt piano arpeggios, atmospheric ambient room tone)\n(Delicate cello breath fades in from the shadows)\n\n[Verse 1]\nFlickering dust in the projector's light\nAn empty seat waiting in the quiet night\nI trace the silhouette you left in the frame\nA ghost in the shadows answering my name\n(Supporting voice: answering in the rain)\n\n[Pre-Chorus]\nAnd the spool spins faster as the tension begins to rise\nEvery frame holding secrets that were hidden in your eyes\nThe music swells, the silence breaks apart\nI hear the countdown beating in my heart\n\n[Chorus]\nYou were the movie I could never let end\nThe broken line of dialogue I couldn't mend\nWhen the violins soar and the floodgates break wide\nI'll pour out every tear that I tried to hide\nThrough the final scene where the spotlights fall\nI'd play our story back, I'd surrender it all!\n(Supporting voice: Surrender it all)\n\n[Verse 2]\nRain on the windowpane, scripted and cold\nThe bitter truth that nobody ever told\nI watch your hand slip from mine on the screen\nTrapped in the borders of what could have been\n(Supporting voice: Could have been)\n\n[Pre-Chorus]\nNow the cellos are crying on a rising chord\nTelling the story that we couldn't afford\nThe lights go dim, the curtain starts to part\nI feel the final thunder tearing through my heart\n\n[Chorus]\nYou were the movie I could never let end\nThe broken line of dialogue I couldn't mend\nWhen the violins soar and the floodgates break wide\nI'll pour out every tear that I tried to hide\nThrough the final scene where the spotlights fall\nI'd play our story back, I'd surrender it all!\n(Supporting voice: Surrender it all)\n\n[Bridge]\n(Full dramatic orchestral strings soar with raw vulnerability)\n(Lead female vocal belt rising into high register)\nCut the reel, turn the dark into light\nYou can't burn the memory from the night!\nNo director can rewrite the way that we bled\nEvery word that was spoken, every word left unsaid!\n\n[Chorus]\nYou were the movie I could never let end\nThe broken line of dialogue I couldn't mend\nWhen the violins soar and the floodgates break wide\nI'll pour out every tear that I tried to hide\nThrough the final scene where the spotlights fall\nI'd play our story back, I'd surrender it all!\n(Supporting voice: Even as the credits fall)\n\n[Outro]\n(Gentle piano chords slowly dissolving into silence)\nFade to black, my love.\n(Solo cello note fading to silence)\n[End]`
+      },
+      {
+        title: 'When the Screen Goes Dark',
+        mood: 'Heart-wrenching melodic climax, passionate vocal storytelling with rising orchestral tension',
+        style: `grand cinematic movie ballad, grand acoustic piano, lush string ensemble, ${vocalTag}, powerful dynamic chorus, rich cinematic soundscape, 76 bpm`,
+        lyrics: `[Intro]\n(Gentle piano chime and deep sub-bass pulse)\n\n[Verse 1]\nThe theatre is empty, the applause died away\nLeaving only the shadows of words we couldn't say\nI stand in the aisle where we whispered goodnight\nStill searching for you in the fading stage light\n\n[Pre-Chorus]\nAnd the cue in the script comes around once again\nA rising crescendo of beauty and pain\nI reach for the ending before we depart\nFeeling the tremor ignite in my heart\n\n[Chorus]\nWhen the screen goes dark and the credits roll by\nI still see your reflection against the night sky\nEvery promise we shattered, every teardrop we cried\nLives forever inside where the melodies hide\nI will sing in the dark till the morning breaks free\nYou will always remain the whole story to me\n(Supporting voice: The whole story to me)\n\n[Verse 2]\nA photograph folded inside of my coat\nA tear-stained reminder of letters you wrote\nThey say time is a healer, but time is a thief\nStealing the colors of love and belief\n\n[Bridge]\n(Orchestral French horns and sweeping violin arpeggios)\nLet the soundtrack play on, let the symphony weep\nThere are promises only the music can keep!\n\n[Chorus]\nWhen the screen goes dark and the credits roll by\nI still see your reflection against the night sky\nEvery promise we shattered, every teardrop we cried\nLives forever inside where the melodies hide\nI will sing in the dark till the morning breaks free\nYou will always remain the whole story to me\n\n[Outro]\n(Tender piano resolution)\nThe curtain falls, but you remain.\n[End]`
+      },
+      {
+        title: 'Monologue in the Rain',
+        mood: 'Intimate acoustic melancholy evolving into an orchestral catharsis',
+        style: `intimate emotional film ballad, delicate acoustic piano, soft strings, ${vocalTag}, dramatic build, 72 bpm, poignant film soundtrack`,
+        lyrics: `[Intro]\n(Soft rain sound effect with lone acoustic piano)\n\n[Verse 1]\nStreetlights reflecting on puddles of grey\nWatching the city just wash you away\nI practice the lines that I wanted to speak\nWhile water and teardrops run down on my cheek\n\n[Pre-Chorus]\nThe wind starts to whistle, the tempo turns fast\nNothing is heavier than loving the past\nThe tension is breaking the roof of my soul\nLosing the rhythm, releasing control\n\n[Chorus]\nLet the rain wash the monologue clean from my mind\nLeaving all of the sorrow and silence behind\nI gave you my heart in the very first scene\nAnd I kept every promise that lived in between\nEven here in the storm where nobody can see\nThis song is the confession I whisper to me\n\n[Bridge]\n(Grand orchestral crescendo with thunderous timpani)\nWash away the regret, wash away the despair!\nI still feel your ghost in the cold midnight air!\n\n[Chorus]\nLet the rain wash the monologue clean from my mind\nLeaving all of the sorrow and silence behind\nI gave you my heart in the very first scene\nAnd I kept every promise that lived in between\n\n[Outro]\n(Acoustic piano dying down with soft rain)\nJust rain on the glass.\n[End]`
+      },
+      {
+        title: 'Echoes on the Cutting Room Floor',
+        mood: 'Atmospheric and deeply poetic ballad with soaring vocal climaxes',
+        style: `atmospheric cinematic ballad, felt piano, ${vocalTag}, soaring string swell, 70 bpm, heart-touching dynamics`,
+        lyrics: `[Intro]\n(Atmospheric ambient pad with high piano ostinato)\n\n[Verse 1]\nAll of the scenes that they never will show\nThe laughter we shared that nobody will know\nDiscarded and left on the cutting room floor\nLocked on the other side of an old door\n\n[Pre-Chorus]\nEvery discarded scrap holds a whisper of truth\nThe reckless devotion of yesterday's youth\nThe strings start to gather, the melody cries\nWatching our universe fall from the skies\n\n[Chorus]\nThese are the echoes they couldn't edit away\nThe words that will outlive the end of the day\nIf our picture is broken and buried in dust\nI will sing of the love that was stronger than trust!\n(Supporting voice: Stronger than trust)\n\n[Outro]\n(Single piano note ringing into quiet reverb)\nNever forgotten.\n[End]`
+      },
+      {
+        title: 'The Final Cue',
+        mood: 'Tearful yet magnificent orchestral resolution',
+        style: `poignant orchestral OST ballad, French horn subtle warm pad, crying cello, ${vocalTag}, 75 bpm`,
+        lyrics: `[Verse 1]\nThe conductor raises his hands to the light\nThis is the moment that closes the night\nNo more rewrites and no more delays\nThe final cue plays through the twilight haze\n\n[Chorus]\nThank you for giving my heart a reprise\nA song that will travel beyond the sunrise\nWherever you wander, wherever you roam\nThis cinematic ballad will carry you home!\n\n[Outro]\n(Orchestral swell fading to soft piano chord)\nSafe home.`
+      }
+    ];
+  } else if (sopSpecs.isCinematic) {
+    // Korean Cinematic Ballad (when SOP does NOT demand 100% English)
     trackTemplates = [
       {
         title: '오래된 필름 속의 너 (Fragments on the 35mm Reel)',
         mood: '영화 도입부의 아련한 독백과 서서히 벅차오르는 감정선',
         style: `cinematic emotional OST ballad, felt upright piano intro, soaring lush orchestra strings, ${vocalTag}, building crescendo, heartfelt bridge, 74 bpm, Korean drama film soundtrack aesthetic`,
-        lyrics: `[Intro]\n(Gentle, melancholic piano notes echo like dust in an old projector light)\n(Subtle cinematic cello sweeps in)\n\n[Verse 1]\n빛바랜 영사실 창가 너머로\n조용히 흩어지는 기억의 파편들\n너의 목소리가 귓가에 스칠 때면\n멈춰선 시간도 숨을 죽여\n\n[Pre-Chorus]\n잊혀질 줄 알았던 그날의 대사들이\n가슴 깊은 곳에서 하나둘 떠올라\n어둠 속에 홀로 앉아 널 기다리던 밤\n\n[Chorus]\n너는 내게 가장 눈부신 영화였어\n끝나지 않을 이야기처럼 타오르던 순간\n수많은 장면 속에 널 안아줄 수 있다면\n마지막 씬에서도 난 너의 손을 놓지 않을게\n\n[Verse 2]\n스크린 위로 흐르는 빗물처럼\n흘려보낸 눈물 속에 새겨진 너의 이름\n잡으려 할수록 멀어지는 그림자\n\n[Bridge]\n(Orchestral strings soar with deep emotional intensity)\n엔딩 크레딧이 모두 올라간대도\n불 꺼진 극장에 나 홀로 남아\n너라는 계절을 영원히 기억할 테니\n\n[Chorus]\n너는 내게 가장 눈부신 영화였어\n끝나지 않을 이야기처럼 타오르던 순간\n수많은 장면 속에 널 안아줄 수 있다면\n마지막 씬에서도 난 너의 손을 놓지 않을게\n\n[Outro]\n(Tender piano chords fading out into silence)\n영원히 바래지 않을 우리만의 명장면\n(Lush strings soft fade)`
-      },
-      {
-        title: '엔딩 크레딧이 오른 후에 (When the Credits Fade)',
-        mood: '가슴을 울리는 웅장한 클라이맥스와 깊은 여운',
-        style: `grand cinematic movie ballad, grand acoustic piano, sweeping violin and cello ensemble, ${vocalTag}, powerful dynamic chorus, rich cinematic soundscape, 78 bpm`,
-        lyrics: `[Intro]\n(Lush strings pad with delicate high piano notes)\n\n[Verse 1]\n막이 내린 무대 위 고요한 침묵 속에\n너와 나눈 약속만이 남아 있어\n흘러가는 바람에 서글픈 멜로디 실어\n닿지 않을 너에게 건네는 마지막 인사\n\n[Pre-Chorus]\n빛나던 조명이 하나씩 꺼져가도\n내 맘속 너의 온기는 식지 않아\n\n[Chorus]\n시간을 거슬러 그 자리로 돌아갈 수 있다면\n너를 안고 놓지 않았을 텐데\n슬픈 영화의 끝에서도\n너는 영원한 나의 주인공\n\n[Bridge]\n(Dramatic orchestral percussion and soaring vocal build-up)\n우리의 끝이 이별일지라도\n널 만난 모든 순간은 축복이었어\n\n[Outro]\n(Piano solo gently fading out)\n기억해 줘, 우리가 사랑했던 계절을`
-      },
-      {
-        title: '기억의 잔상 (Faded Silver Screen)',
-        mood: '서정적이고 아련한 노스탤지어 발라드',
-        style: `melancholic film score ballad, intimate piano arpeggios, atmospheric reverb, warm acoustic bass, ${vocalTag}, 72 bpm, deep emotional cinematic feel`,
-        lyrics: `[Intro]\n(Quiet piano resonance)\n\n[Verse 1]\n흑백 화면 속에 갇혀버린 그날\n너의 미소만이 선명하게 남아\n돌아갈 수 없어서 더 아름다운 시간\n\n[Chorus]\n바람이 불어오면 네가 떠올라\n가슴 한 켠에 묻어둔 시린 이야기\n영원히 간직할게 우리 둘만의 잔상\n\n[Outro]\n(Gentle cello fade out)`
-      },
-      {
-        title: '마지막 씬의 독백 (Monologue in the Final Scene)',
-        mood: '진솔하고 짙은 감정의 보컬 중심 발라드',
-        style: `vocal-driven OST ballad, minimal piano accompaniment building to full orchestral arrangement, ${vocalTag}, 75 bpm`,
-        lyrics: `[Intro]\n(Soft solitary piano notes)\n\n[Verse 1]\n아무도 모르는 나만의 비밀\n너를 사랑했던 모든 시간들\n이제는 담담히 말할 수 있어\n\n[Chorus]\n고마웠어, 내 삶의 가장 빛나는 순간에\n함께 있어 준 너라서 참 다행이었어\n\n[Outro]\n(Acoustic piano chord slowly resolving)`
-      },
-      {
-        title: '스크린 너머의 계절 (Seasons Beyond the Screen)',
-        mood: '웅장하고 따뜻한 희망의 시네마틱 발라드',
-        style: `hopeful cinematic ballad, soaring strings, French horn accents, warm piano, ${vocalTag}, 82 bpm`,
-        lyrics: `[Verse 1]\n차가운 겨울이 지나고 나면\n새로운 봄이 찾아오듯이\n우리의 아픔도 꽃을 피울 거야\n\n[Chorus]\n끝없는 어둠을 지나 찾아올 새벽처럼\n다시 한번 내 손을 잡아줘\n\n[Outro]\n(Orchestra crescendo to gentle resolution)`
-      }
-    ];
-  } else if (isXmas || isJazz) {
-    trackTemplates = [
-      {
-        title: '눈 내리는 밤의 창가에서 (Snowy Window Glow)',
-        mood: '포근하고 로맨틱한 홀리데이 스윙',
-        style: `warm cozy christmas jazz pop, vintage upright piano, brushed jazz drums, warm acoustic bass, festive glockenspiel bells, ${vocalTag}, 105 bpm`,
-        lyrics: `[Intro]\n(Gentle piano arpeggio and soft jingle bells)\n\n[Verse 1]\n하얗게 물들어가는 창밖 거리 위로\n조용히 내려앉는 첫눈의 발걸음\n\n[Chorus]\nIt's a cozy Christmas night with you\n벽난로 불꽃처럼 타오르는 맘\n\n[Outro]\n메리 크리스마스, 내 모든 순간의 그대`
-      },
-      {
-        title: '벽난로 곁의 핫초코 (Cinnamon & Warm Cocoa)',
-        mood: '아늑하고 감미로운 미디엄 템포 재즈',
-        style: `sweet festive jazz pop, acoustic upright piano, upright bass walking groove, ${vocalTag}, 108 bpm`,
-        lyrics: `[Verse 1]\n시나몬 향 가득 퍼지는 작은 부엌\n달콤한 마시멜로가 녹아내릴 때\n\n[Chorus]\nSweet warm cocoa by the fire\n그대와 함께라면 매일이 크리스마스`
+        lyrics: `[Intro]\n(Gentle, melancholic piano notes echo like dust in an old projector light)\n\n[Verse 1]\n빛바랜 영사실 창가 너머로\n조용히 흩어지는 기억의 파편들\n너의 목소리가 귓가에 스칠 때면\n멈춰선 시간도 숨을 죽여\n\n[Pre-Chorus]\n잊혀질 줄 알았던 그날의 대사들이\n가슴 깊은 곳에서 하나둘 떠올라\n어둠 속에 홀로 앉아 널 기다리던 밤\n\n[Chorus]\n너는 내게 가장 눈부신 영화였어\n끝나지 않을 이야기처럼 타오르던 순간\n수많은 장면 속에 널 안아줄 수 있다면\n마지막 씬에서도 난 너의 손을 놓지 않을게\n\n[Outro]\n(Lush strings soft fade)`
       }
     ];
   } else {
     trackTemplates = [
       {
-        title: `${theme.name} - 트랙 1 [첫 번째 울림]`,
-        mood: '테마의 고유한 감성과 사운드 정체성을 담은 오프닝',
-        style: `${theme.category || 'melodic music'}, authentic acoustic instruments, warm soundscape, ${vocalTag}, 90 bpm, SOP faithful`,
-        lyrics: `[Intro]\n(Atmospheric opening theme)\n\n[Verse 1]\n조용히 번져오는 하루의 시작 속에\n흘러가는 생각들을 멜로디에 담아\n\n[Chorus]\n마음 깊은 곳에 울려 퍼지는 작은 노래\n오늘을 살아가는 우리 모두를 위한 멜로디`
-      },
-      {
-        title: `${theme.name} - 트랙 2 [깊어지는 서사]`,
-        mood: '감정선을 극대화한 몰입감 높은 멜로디',
-        style: `${theme.category || 'chill melodic'}, rich arrangement, expressive progression, ${vocalTag}, 86 bpm`,
-        lyrics: `[Verse 1]\n창밖에 스며드는 노을빛을 바라보며\n잠시 멈춰선 시간 속에 숨을 골라요\n\n[Chorus]\n소중한 기억들이 모여 하나의 노래가 되듯\n우리의 시간은 지금부터야`
-      },
-      {
-        title: `${theme.name} - 트랙 3 [완성과 여운]`,
-        mood: '편안하고 감미로운 마무리를 선물하는 트랙',
-        style: `${theme.category || 'healing music'}, sweet piano, soft rhythm, uplifting harmony, ${vocalTag}, 96 bpm`,
-        lyrics: `[Verse 1]\n밤하늘에 수놓아진 수많은 꿈들\n하나하나 마음속에 고이 담아두고\n\n[Chorus]\n따뜻한 선율이 그대를 감싸 안을 때\n행복한 미소로 다시 만나요`
+        title: `${theme.name} - Track 1`,
+        mood: 'SOP 지침에 정의된 무드와 사운드 정체성',
+        style: `${theme.category || 'melodic music'}, authentic acoustic instruments, ${vocalTag}, 90 bpm, faithful to SOP`,
+        lyrics: `[Intro]\n(Atmospheric opening theme)\n\n[Verse 1]\nMoving through the quiet light of dawn\nA melody that keeps on holding on\n\n[Chorus]\nDeep inside where music learns to soar\nThis is the song we have been waiting for`
       }
     ];
   }
@@ -783,38 +799,20 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
     return `${(idx + 1).toString().padStart(2, '0')}. ${t.title} (${min}:${sec})`;
   }).join('\n');
 
-  const youtubeTitle = isCinematic
-    ? `[PLAYLIST] 영화 같은 하루를 선물하는 감성 시네마틱 발라드 OST 🎬 ☕️ | Cinematic Movie OST Ballads for Deep Emotion & Focus`
-    : isXmas
-    ? `[PLAYLIST] 벽난로 곁에서 듣는 따스한 크리스마스 재즈팝 ☕️🎄 | Cozy Holiday Jazz Pop for Coffee & Reading`
-    : `[PLAYLIST] ${theme.name} | 지친 일상에 깊은 위로가 되어줄 플레이리스트 ☕️✨`;
+  const youtubeTitle = sopSpecs.isEnglishOnly
+    ? `[PLAYLIST] ${theme.name} | Emotional Cinematic Movie OST Ballads for Deep Focus & Heartbreak 🎬 ☕️`
+    : `[PLAYLIST] ${theme.name} | 영화 같은 하루를 선물하는 감성 시네마틱 발라드 OST 🎬 ☕️`;
 
-  const youtubeDesc = `지친 마음에 깊은 울림을 전하는 ${theme.name} 플레이리스트입니다.
-입력된 SOP 지침을 바탕으로 기획된 감성 사운드로 편안한 힐링과 몰입을 즐겨보세요.
+  const youtubeDesc = sopSpecs.isEnglishOnly
+    ? `Immerse yourself in a cinematic journey. Featuring heartfelt, vocal-led movie OST ballads crafted precisely according to your SOP specifications.\n\n[🎧 Tracklist]\n${tracklistText}\n\n[🎬 Recommended Listening]\n- Deep late-night contemplation & writing\n- Rainy afternoon coffee & emotional recharge\n- Movie-like immersion in every scene\n\n#PlymasterFactory #MovieOST #CinematicBallad #FilmScore #Playlist #SunoAI`
+    : `지친 마음에 깊은 울림을 전하는 ${theme.name} 플레이리스트입니다.\n입력된 SOP 지침을 바탕으로 기획된 감성 사운드로 편안한 힐링과 몰입을 즐겨보세요.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #플레이리스트 #음악추천 #BGM #OST #시네마틱 #감성음악`;
 
-[🎧 Tracklist]
-${tracklistText}
+  const hashtags = sopSpecs.isEnglishOnly
+    ? '#MovieOST #CinematicBallad #FilmSoundtrack #Ballad #Playlist #VocalBallad'
+    : '#영화OST #시네마틱발라드 #플레이리스트 #감성음악 #작업용BGM #감성발라드';
 
-[🎬 추천 청취 상황]
-- 영화 같은 감성에 푹 빠지고 싶을 때
-- 조용한 밤, 깊은 사색과 작업에 몰입할 때
-- 마음의 쉼표가 필요한 모든 순간
-
-#PlymasterFactory #플레이리스트 #음악추천 #BGM #OST #시네마틱 #감성음악`;
-
-  const hashtags = isCinematic
-    ? '#영화OST #시네마틱발라드 #플레이리스트 #감성음악 #작업용BGM #감성발라드'
-    : isXmas
-    ? '#크리스마스플레이리스트 #재즈팝 #카페음악 #크리스마스캐롤 #겨울노래'
-    : '#플레이리스트 #힐링음악 #작업용BGM #감성음악';
-
-  const thumbnailPrompt = isCinematic
-    ? 'Cinematic 16:9 movie still, melancholic beautiful film scene, soft warm golden hour light through sheer curtain, 35mm film aesthetic, emotional depth, photorealistic, 8k resolution --ar 16:9'
-    : 'A beautiful serene aesthetic room with warm afternoon sunlight, cozy interior, cinematic photography, 8k resolution, 16:9 --ar 16:9';
-
-  const backgroundImagePrompt = isCinematic
-    ? '16:9 seamless film loop background: warm vintage cinema aesthetic, slow ambient light rays, soft floating dust particles, emotional cozy atmosphere'
-    : 'Peaceful 16:9 ambient illustration, warm color palette, aesthetic chill vibe, high quality digital art';
+  const thumbnailPrompt = 'Cinematic 16:9 movie still, melancholic beautiful film scene, soft warm golden hour light through sheer curtain, 35mm film aesthetic, emotional depth, photorealistic, 8k resolution --ar 16:9';
+  const backgroundImagePrompt = '16:9 seamless film loop background: warm vintage cinema aesthetic, slow ambient light rays, soft floating dust particles, emotional cozy atmosphere';
 
   return {
     tracks,
