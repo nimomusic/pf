@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Globe, ChevronDown, Check } from 'lucide-react';
-import { G20_LANGUAGES } from '../i18n/translations';
+import { G10_LANGUAGES } from '../i18n/translations';
 
 interface LanguageSelectorProps {
   currentLang: string;
@@ -11,7 +11,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({ currentLang,
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const selectedOption = G20_LANGUAGES.find((l) => l.code === currentLang) || G20_LANGUAGES[0];
+  const selectedOption = G10_LANGUAGES.find((l) => l.code === currentLang) || G10_LANGUAGES[0];
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -29,7 +29,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({ currentLang,
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-200 shadow-2xs hover:border-slate-300 transition-all cursor-pointer"
-        title="G20 언어 선택 (G20 Language Selector)"
+        title="G10 주요국 언어 선택 (G10 Language Selector)"
       >
         <span className="text-sm">{selectedOption.flag}</span>
         <span className="hidden sm:inline">{selectedOption.name}</span>
@@ -40,11 +40,11 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({ currentLang,
         <div className="absolute right-0 mt-1.5 w-52 sm:w-60 bg-white rounded-2xl border border-slate-200 shadow-xl z-50 max-h-80 overflow-y-auto py-1 animate-in fade-in duration-150">
           <div className="px-3 py-2 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
             <Globe className="w-3.5 h-3.5 text-blue-600" />
-            <span>G20 회원국 언어 선택</span>
+            <span>G10 주요국 언어 선택</span>
           </div>
 
           <div className="py-1">
-            {G20_LANGUAGES.map((lang) => {
+            {G10_LANGUAGES.map((lang) => {
               const isSelected = lang.code === currentLang;
               return (
                 <button

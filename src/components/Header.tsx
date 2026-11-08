@@ -37,11 +37,11 @@ export const Header: React.FC<HeaderProps> = ({
                 : 'bg-blue-50 text-blue-700 border-blue-200'
             }`}>
               <Sparkles className="w-3 h-3 text-current" />
-              {isAdmin ? '관리자 모드 (Admin)' : '스튜디오 에디션'}
+              {isAdmin ? `${t.adminMode} (Admin)` : t.studioEdition}
             </span>
             {licenseInfo && (
               <span className="text-slate-600 font-medium hidden sm:inline-flex items-center gap-1">
-                인증: <strong className={isAdmin ? 'text-purple-700 font-bold' : 'text-emerald-600 font-semibold'}>{licenseInfo.tier || (isAdmin ? '관리자' : '일반')}</strong> ({licenseInfo.userName || '회원'})
+                <strong className={isAdmin ? 'text-purple-700 font-bold' : 'text-emerald-600 font-semibold'}>{licenseInfo.tier || (isAdmin ? '관리자' : '일반')}</strong> ({licenseInfo.userName || '회원'})
               </span>
             )}
           </div>
@@ -52,10 +52,10 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 onClick={onOpenThemeManager}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold border border-purple-200 shadow-xs transition-colors cursor-pointer"
-                title="테마 관리자 (관리자 전용)"
+                title={`${t.themeManager} (Admin)`}
               >
                 <FolderKanban className="w-3.5 h-3.5 text-purple-600" />
-                <span>테마 관리 (Admin)</span>
+                <span>{t.themeManager} (Admin)</span>
               </button>
             )}
 
