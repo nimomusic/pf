@@ -68,14 +68,17 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden sm:inline">{t.modelSettings}</span>
             </button>
 
-            <button
-              onClick={onOpenGoogleSheetGuide}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium border border-emerald-200 shadow-xs transition-colors cursor-pointer"
-              title="구글 스프레드시트 연동 가이드"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="hidden sm:inline">{t.googleSheetSync}</span>
-            </button>
+            {/* Google Sheets Sync Guide: ONLY visible in Admin Mode */}
+            {isAdmin && (
+              <button
+                onClick={onOpenGoogleSheetGuide}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium border border-emerald-200 shadow-xs transition-colors cursor-pointer"
+                title={`${t.googleSheetSync} (Admin)`}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="hidden sm:inline">{t.googleSheetSync}</span>
+              </button>
+            )}
 
             {/* Language Selector Dropdown (G20) */}
             <LanguageSelector currentLang={currentLang} onSelectLang={onSelectLang} />
