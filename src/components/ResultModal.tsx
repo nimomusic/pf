@@ -83,8 +83,13 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                   {data.modelUsed}
                 </span>
               </div>
-              <p className="text-xs text-slate-600 font-medium">
-                선택 테마: <strong className="text-blue-900">{data.themeName}</strong>
+              <p className="text-xs text-slate-600 font-medium flex items-center gap-2">
+                <span>선택 테마: <strong className="text-blue-900">{data.themeName}</strong></span>
+                {data.modelUsed.includes('시뮬레이션') && (
+                  <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded">
+                    로컬 시뮬레이션 모드
+                  </span>
+                )}
               </p>
             </div>
           </div>

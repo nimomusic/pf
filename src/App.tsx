@@ -75,6 +75,7 @@ export default function App() {
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [statusMessage, setStatusMessage] = useState<string>('대기 중...');
   const [resultData, setResultData] = useState<PlaylistResult | null>(null);
+  const [apiErrorMessage, setApiErrorMessage] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Check stored license on initial load (using sessionStorage so new browser sessions require re-entering the key)
@@ -210,7 +211,7 @@ export default function App() {
   };
 
   // Start Generation
-  const handleStart = async () => {
+  const handleStart = async (isSimulation = false) => {
     if (!selectedTheme) {
       alert('테마를 먼저 선택해 주세요.');
       return;
@@ -218,11 +219,16 @@ export default function App() {
 
     if (isRunning) return;
 
+    setApiErrorMessage(null);
     setIsRunning(true);
     setProgressPercent(5);
     setStepIndex(0);
     setCurrentStep('plan');
-    setStatusMessage(`01 PLAN: '${selectedTheme.name}' 테마 SOP 분석 및 기획 수립 중...`);
+    setStatusMessage(
+      isSimulation
+        ? `01 PLAN: '${selectedTheme.name}' 테마 SOP 분석 및 시뮬레이션 기획 수립 중...`
+        : `01 PLAN: '${selectedTheme.name}' 테마 SOP 분석 및 ${provider.toUpperCase()} AI 기획 수립 중...`
+    );
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -245,6 +251,7 @@ export default function App() {
         provider,
         model: isAutoModel ? PROVIDER_AUTO_MODELS[provider] : model,
         apiKey: apiKeys[provider],
+        mode: isSimulation ? 'simulation' : 'api',
         signal: abortController.signal
       });
 
@@ -295,7 +302,9 @@ export default function App() {
         setStatusMessage('작업이 사용자에 의해 중지되었습니다.');
       } else {
         console.error('Generation error:', err);
-        setStatusMessage(`오류 발생: ${err.message || '요청 처리에 실패했습니다.'}`);
+        const errorMsg = err.message || '요청 처리에 실패했습니다.';
+        setStatusMessage(`오류 발생: ${errorMsg}`);
+        setApiErrorMessage(errorMsg);
       }
       setIsRunning(false);
     }
@@ -637,11 +646,47 @@ export default function App() {
               </div>
             </div>
 
+            {/* API Error Notification Card */}
+            {apiErrorMessage && (
+              <div className="mt-4 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 animate-in fade-in duration-200">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex-1 text-xs">
+                    <strong className="font-bold text-rose-900 block mb-1">AI 모델 연동 오류 안내</strong>
+                    <p className="whitespace-pre-wrap text-rose-700 leading-relaxed mb-3">{apiErrorMessage}</p>
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-rose-200/80">
+                      <button
+                        type="button"
+                        onClick={() => setShowModelSettings(true)}
+                        className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors cursor-pointer shadow-2xs"
+                      >
+                        API 키 및 모델 설정 열기
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleStart(true)}
+                        className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs border border-slate-300 transition-colors cursor-pointer shadow-2xs"
+                      >
+                        시뮬레이션 모드로 테스트 생성 (SOP 기반)
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setApiErrorMessage(null)}
+                    className="p-1 text-rose-400 hover:text-rose-700 cursor-pointer"
+                  >
+                    <XIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Bottom Controls: 시작 & 중지 버튼 */}
-            <div className="pt-8 border-t border-slate-100 mt-6 flex items-center gap-3">
+            <div className="pt-6 border-t border-slate-100 mt-6 flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleStart}
+                onClick={() => handleStart(false)}
                 disabled={isRunning}
                 className="flex-1 py-3.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold text-base shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
               >

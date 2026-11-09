@@ -24,7 +24,6 @@ function saveLocalThemes(themes: Theme[]): void {
 }
 
 export async function fetchThemes(): Promise<Theme[]> {
-  const localThemes = getLocalThemes();
   try {
     const res = await fetch('/api/themes');
     if (res.ok) {
@@ -32,28 +31,15 @@ export async function fetchThemes(): Promise<Theme[]> {
       try {
         const data = JSON.parse(text);
         if (data && Array.isArray(data.themes)) {
-          // Merge local and server themes by id, ensuring fuller SOP content is preserved
-          const idMap = new Map<string, Theme>();
-          localThemes.forEach((t: Theme) => idMap.set(t.id, t));
-          data.themes.forEach((t: Theme) => {
-            const existing = idMap.get(t.id);
-            // If server theme is new OR has more complete SOP (e.g. not truncated)
-            if (!existing || (t.sop && t.sop.length > (existing.sop || '').length)) {
-              idMap.set(t.id, t);
-            }
-          });
-          const merged = Array.from(idMap.values());
-          saveLocalThemes(merged);
-          return merged;
+          saveLocalThemes(data.themes);
+          return data.themes;
         }
-      } catch {
-        // Response was not JSON (e.g. Vercel serverless error / HTML)
-      }
+      } catch {}
     }
   } catch (err) {
-    console.warn('Backend fetchThemes failed, using local storage:', err);
+    console.warn('Backend fetchThemes failed, falling back to local storage cache:', err);
   }
-  return localThemes;
+  return getLocalThemes();
 }
 
 export async function createTheme(themeData: { id?: string; name: string; category?: string; sop: string }): Promise<Theme> {
@@ -402,53 +388,55 @@ export async function generatePlaylist(params: {
   provider: ProviderType;
   model: string;
   apiKey?: string;
+  mode?: 'api' | 'simulation';
   signal?: AbortSignal;
 }): Promise<{
   modelUsed: string;
+  isRealAi?: boolean;
+  isSimulation?: boolean;
   result: {
     tracks: any[];
     youtube: any;
   };
+  note?: string;
 }> {
-  try {
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        theme: params.theme,
-        trackCount: params.trackCount,
-        vocal: params.vocal,
-        provider: params.provider,
-        model: params.model,
-        apiKey: params.apiKey
-      }),
-      signal: params.signal
-    });
+  const res = await fetch('/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      theme: params.theme,
+      trackCount: params.trackCount,
+      vocal: params.vocal,
+      provider: params.provider,
+      model: params.model,
+      apiKey: params.apiKey,
+      mode: params.mode
+    }),
+    signal: params.signal
+  });
 
-    if (res.ok) {
-      const text = await res.text();
-      try {
-        const data = JSON.parse(text);
-        if (data && data.success && data.result) {
-          if (Array.isArray(data.result.tracks)) {
-            const isEng = parseClientSopSpecs(params.theme).isEnglishOnly;
-            data.result.tracks = data.result.tracks.map((tr: any) => ({
-              ...tr,
-              title: cleanTitleSingleLanguage(tr.title, isEng)
-            }));
-          }
-          return data;
-        }
-      } catch {
-        // Non-JSON response, fallback to client-side SOP generation
-      }
-    }
-  } catch (err) {
-    console.warn('Backend /api/generate failed, activating client SOP analyzer:', err);
+  const text = await res.text();
+  let data: any = null;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`서버 응답 오류 (HTTP ${res.status}): JSON 형식이 아닙니다.`);
   }
 
-  // Client-Side SOP Analysis & Generation Fallback
-  return generateClientSopPlaylist(params.theme, params.trackCount, params.vocal, params.provider, params.model);
+  if (!res.ok || !data || !data.success) {
+    const errorMsg = data?.message || `AI 생성 실패 (HTTP ${res.status})`;
+    throw new Error(errorMsg);
+  }
+
+  if (data.result && Array.isArray(data.result.tracks)) {
+    const isEng = parseClientSopSpecs(params.theme).isEnglishOnly;
+    data.result.tracks = data.result.tracks.map((tr: any) => ({
+      ...tr,
+      title: cleanTitleSingleLanguage(tr.title, isEng)
+    }));
+  }
+
+  return data;
 }
 
 function parseClientSopSpecs(theme: Theme) {
@@ -575,10 +563,10 @@ function generateClientSopPlaylist(
         lyrics: `[Intro]\n(Rhythmic felt piano pulse evoking an antique film projector)\n(Soft string swell in D minor)\n\n[Verse 1]\nTen thousand frames running past in the glow\nEvery second a memory I didn't want to let go\nYour laughter caught in thirty-five millimeter grain\nA silent rewind through the laughter and pain\n(Supporting voice: rewind through the pain)\n\n[Pre-Chorus]\nThe soundtrack is rising, the strings climb higher\nFeeding the embers of a fading desire\nThe tempo is tightening, the final cue nears\nWash away the doubts and the unspoken fears\n\n[Chorus]\nBefore the closing reel burns into white\nI'll sing your name through the hollow of night!\nEvery vow that we whispered when the camera was rolling\nEvery bell of goodbye that was quietly tolling\nIf the ending is written and carved into stone\nI will still love you like the screen was our home!\n(Supporting voice: The screen was our home)\n\n[Verse 2]\nWe skipped all the rehearsals, we jumped to the scene\nWhere lovers pretend they don't know what it means\nTo let go of hands when the director cries cut\nLeaving the doors to yesterday shut\n\n[Bridge]\n(Thunderous orchestral crescendo, soaring French horns and timpani)\nDon't let the music stop! Don't let the shadows freeze!\nListen to the promise carried on the evening breeze!\n\n[Chorus]\nBefore the closing reel burns into white\nI'll sing your name through the hollow of night!\nEvery vow that we whispered when the camera was rolling\nEvery bell of goodbye that was quietly tolling\nIf the ending is written and carved into stone\nI will still love you like the screen was our home!\n\n[Outro]\n(Felt piano chords gently slowing down)\nAnd scene.\n[End]`
       },
       {
-        title: 'Monologue in the Rain',
-        mood: 'Intimate acoustic melancholy evolving into an orchestral catharsis',
-        style: `intimate emotional film ballad, delicate acoustic piano, soft strings, ${vocalTag}, rising tension line, dramatic build, 72 bpm, poignant film soundtrack`,
-        lyrics: `[Intro]\n(Soft rain sound effect with lone acoustic piano)\n\n[Verse 1]\nStreetlights reflecting on puddles of grey\nWatching the city just wash you away\nI practice the lines that I wanted to speak\nWhile water and teardrops run down on my cheek\n\n[Pre-Chorus]\nThe wind starts to whistle, the tempo turns fast\nNothing is heavier than loving the past\nThe tension is breaking the roof of my soul\nLosing the rhythm, releasing control\n\n[Chorus]\nLet the rain wash the monologue clean from my mind\nLeaving all of the sorrow and silence behind\nI gave you my heart in the very first scene\nAnd I kept every promise that lived in between\nEven here in the storm where nobody can see\nThis song is the confession I whisper to me\n(Supporting voice: Whisper to me)\n\n[Bridge]\n(Grand orchestral crescendo with thunderous timpani)\nWash away the regret, wash away the despair!\nI still feel your ghost in the cold midnight air!\n\n[Chorus]\nLet the rain wash the monologue clean from my mind\nLeaving all of the sorrow and silence behind\nI gave you my heart in the very first scene\nAnd I kept every promise that lived in between\n\n[Outro]\n(Acoustic piano dying down with soft rain)\nJust rain on the glass.\n[End]`
+        title: 'Crescendo in the Dark',
+        mood: 'Sincere vocal-led female performance, felt upright piano build into soaring lush strings',
+        style: `cinematic emotional OST ballad, felt upright piano intro, soaring lush orchestra strings, ${vocalTag}, building crescendo, rising tension line, heartfelt emotional bridge, 74 bpm, film soundtrack aesthetic, dynamic vocal range`,
+        lyrics: `[Intro]\n(Felt upright piano chords with subtle room reverb)\n(Soft cello swell rising gently)\n\n[Verse 1]\nThe camera pans across an empty floor\nAnother memory standing at the door\nI hear your footsteps in the silent room\nA lingering melody piercing the gloom\n(Supporting voice: piercing the gloom)\n\n[Pre-Chorus]\nAnd the strings begin to climb with every breath\nA rising tension conquering life and death\nThe clock is counting down the final take\nThis is the promise that I'll never break\n\n[Chorus]\nWhen the orchestra swells and the spotlights fall\nI will sing of the love that survived it all!\nThrough every broken scene and dialogue unsaid\nThrough every tear the silver screen has bled\nI gave you my heart in the very first frame\nAnd even in the dark, I'll call your name!\n(Supporting voice: Call your name)\n\n[Bridge]\n(Massive orchestral crescendo, sweeping violins and french horns)\nDon't let the reel burn! Don't let the curtains close!\nBloom like the emotion nobody knows!\n\n[Chorus]\nWhen the orchestra swells and the spotlights fall\nI will sing of the love that survived it all!\nThrough every broken scene and dialogue unsaid\nThrough every tear the silver screen has bled\nI gave you my heart in the very first frame\nAnd even in the dark, I'll call your name!\n\n[Outro]\n(Felt upright piano chords fading gently to silence)\nFade to black.\n[End]`
       },
       {
         title: 'Between the Golden Frames',

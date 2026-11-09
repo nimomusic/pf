@@ -572,7 +572,7 @@ function cleanTitleSingleLanguage(title: string, isEnglishTarget: boolean): stri
 
 // 7. Playlist Generator API
 app.post('/api/generate', async (req: Request, res: Response) => {
-  const { theme, trackCount = 1, vocal = 'random', provider = 'gemini', model, apiKey } = req.body;
+  const { theme, trackCount = 1, vocal = 'random', provider = 'gemini', model, apiKey, mode } = req.body;
 
   if (!theme || !theme.name) {
     res.status(400).json({ success: false, message: '테마 정보가 필요합니다.' });
@@ -586,6 +586,52 @@ app.post('/api/generate', async (req: Request, res: Response) => {
     vocal === 'none' ? '보컬 없음 (Instrumental 연주곡)' : '랜덤 보컬 (Random Vocal)';
 
   const sopSpecs = parseSopSpecs(theme);
+
+  // 1. Explicit Simulation Mode (Offline testing without API key)
+  if (mode === 'simulation') {
+    const simResult = generateCreativePlaylistData(theme, effectiveTrackCount, vocal);
+    res.json({
+      success: true,
+      modelUsed: '로컬 SOP 시뮬레이션 엔진 (오프라인 모드)',
+      isSimulation: true,
+      result: simResult,
+      note: '로컬 SOP 규칙 기반 시뮬레이션 모드로 생성되었습니다. 실제 AI가 SOP를 100% 반영하여 작사하도록 하려면 상단에 유효한 OpenAI 또는 Gemini API 키를 입력해 주세요.'
+    });
+    return;
+  }
+
+  const cleanKey = (apiKey || '').trim();
+
+  // 2. Validate API Key for the chosen provider
+  if (provider === 'gpt') {
+    if (!cleanKey) {
+      res.status(400).json({
+        success: false,
+        errorType: 'MISSING_API_KEY',
+        message: 'OpenAI(GPT) API 키가 입력되지 않았습니다. 상단 API Key 입력창에 sk-... 형태의 OpenAI API 키를 입력해 주세요. (또는 테스트를 원하시면 시뮬레이션 모드로 생성해 보세요.)'
+      });
+      return;
+    }
+  } else if (provider === 'gemini') {
+    const effectiveGeminiKey = cleanKey || process.env.GEMINI_API_KEY;
+    if (!effectiveGeminiKey) {
+      res.status(400).json({
+        success: false,
+        errorType: 'MISSING_API_KEY',
+        message: 'Google Gemini API 키가 입력되지 않았습니다. 상단 API Key 입력창에 Gemini API 키(AIza...)를 입력해 주세요.'
+      });
+      return;
+    }
+  } else if (provider === 'claude') {
+    if (!cleanKey) {
+      res.status(400).json({
+        success: false,
+        errorType: 'MISSING_API_KEY',
+        message: 'Anthropic(Claude) API 키가 입력되지 않았습니다. 상단 API Key 입력창에 sk-ant-... 형태의 Claude API 키를 입력해 주세요.'
+      });
+      return;
+    }
+  }
 
   const languageRule = sopSpecs.isEnglishOnly
     ? `[최우선 절대 준수 규칙: 100% 영문 가사 및 영문 제목 작성 - 한국어 가사 절대 금지]
@@ -605,12 +651,11 @@ ${languageRule}
 [곡 제목 언어 표기 규칙 - 원곡 단일 언어 원칙 (절대 준수)]
 - 곡 제목(title)은 반드시 "원곡의 언어"로만 단일 표기해야 합니다.
 - 한국어와 영어를 병기하거나, 괄호 ( ) 안에 다른 언어로 번역/부제를 넣는 것을 엄격히 금지합니다.
-  (예: 영문 곡인 경우 'Fragments on the 35mm Reel'로만 단일 표기. '오래된 필름 속의 너 (Fragments on the 35mm Reel)' 같은 한글+영문 병기 절대 금지!)
-  (예: 한국어 곡인 경우 '오래된 필름 속의 너'로만 단일 표기. 영문 병기 절대 금지!)
+- 기성 템플릿을 복사하지 말고, 사용자의 SOP와 테마 콘셉트에 맞게 매번 완전히 새로운 독창적인 제목을 창작하세요.
 
-[SOP 지침 100% 충실 준수 규칙 - 임의 변형 절대 금지]
-사용자가 입력한 SOP는 곡 제작을 위한 절대적인 작업표준서입니다. 일반적인 템플릿으로 대체하거나 임의로 내용을 왜곡하지 말고, SOP에 명시된 다음 지침들을 한 줄 한 줄 철저히 반영하여 제작하세요:
-1. 사운드 정체성 및 아티스트 시그니처 반영 (악기 질감, 템포, 편곡 습관)
+[SOP 지침 100% 충실 준수 규칙 - 최우선 작업표준서]
+사용자가 입력한 아래 SOP 내용은 곡 제작을 위한 절대적인 작업표준서입니다. 일반적인 템플릿으로 대체하거나 임의로 내용을 왜곡하지 말고, SOP에 명시된 모든 세부 지침들을 한 줄 한 줄 철저히 반영하여 제작하세요:
+1. 사운드 정체성 및 아티스트 시그니처 반영 (악기 질감, 템포, 편곡 습관, 훅 구조)
 2. 보컬 디렉션: 도입부 첫 몇 초 만에 사로잡는 훅, 점진적으로 빌드업되는 절(Verse), 텐션을 고조시키는 프리코러스(Pre-Chorus), 감정을 터뜨리는 폭발적인 코러스(Chorus)
 3. 파트 분배 및 화답: 여성 리드 보컬 중심, 화답하는 라인은 섹션 태그 내 보조 보이스(supporting voices)로 표기
 4. 곡 러닝타임: 2:50~3:30 러닝타임에 맞는 완성도 높은 구조와 인스트루멘탈 태그
@@ -630,14 +675,14 @@ ${theme.sop}
   "tracks": [
     {
       "trackNumber": 1,
-      "title": "${sopSpecs.isEnglishOnly ? 'Fragments on the 35mm Reel' : '오래된 필름 속의 너'}",
+      "title": "테마와 SOP 콘셉트에 맞추어 독창적으로 창작된 단일 언어 곡 제목",
       "mood": "SOP에 정의된 무드 및 감성 키워드",
       "stylePrompt": "Suno 또는 Udio 등 AI 작곡 도구에 바로 복사하여 입력할 수 있는 최적화된 영문 스타일 프롬프트 (세부 장르, 악기 구성, 보컬 톤, 템포 BPM, 무드 포함)",
-      "fullLyrics": "[Intro]\\n...\\n[Verse 1]\\n...\\n[Pre-Chorus]\\n...\\n[Chorus]\\n...\\n[Verse 2]\\n...\\n[Pre-Chorus]\\n...\\n[Chorus]\\n...\\n[Bridge]\\n...\\n[Chorus]\\n...\\n[Outro]\\n... 형태의 100% 완벽한 완성형 전곡 가사"
+      "fullLyrics": "[Intro]\\n...\\n[Verse 1]\\n...\\n[Pre-Chorus]\\n...\\n[Chorus]\\n...\\n[Verse 2]\\n...\\n[Pre-Chorus]\\n...\\n[Chorus]\\n...\\n[Bridge]\\n...\\n[Chorus]\\n...\\n[Outro]\\n... 형태의 SOP 지침을 100% 충실히 준수한 완성형 전곡 가사"
     }
   ],
   "youtube": {
-    "title": "${sopSpecs.isEnglishOnly ? '[PLAYLIST] Cinematic Movie OST Ballads | Emotional Film Soundtracks' : '조회수를 부르는 매력적인 유튜브 플레이리스트 영상 제목'}",
+    "title": "조회수를 부르는 매력적인 유튜브 플레이리스트 영상 제목",
     "description": "타임스탬프 트랙리스트와 감성적인 소개글이 포함된 완성형 유튜브 영상 설명문",
     "tracklist": "01. Title (00:00)... 형태의 전체 트랙리스트",
     "hashtags": "#Playlist #OST #Ballad 등 추천 해시태그",
@@ -646,23 +691,23 @@ ${theme.sop}
   }
 }`;
 
-  // Try calling the AI Model
+  // 3. Provider execution
   try {
-    // 1. Google Gemini
+    // 3-1. Google Gemini
     if (provider === 'gemini') {
-      const geminiKey = apiKey || process.env.GEMINI_API_KEY;
-      if (geminiKey) {
-        const ai = new GoogleGenAI({
-          apiKey: geminiKey,
-          httpOptions: {
-            headers: { 'User-Agent': 'aistudio-build' }
-          }
-        });
+      const geminiKey = cleanKey || process.env.GEMINI_API_KEY;
+      const ai = new GoogleGenAI({
+        apiKey: geminiKey,
+        httpOptions: {
+          headers: { 'User-Agent': 'aistudio-build' }
+        }
+      });
 
-        const targetModel = model && (model.startsWith('gemini-') || model.includes('flash'))
-          ? model
-          : 'gemini-3.8-flash';
+      const targetModel = model && (model.startsWith('gemini-') || model.includes('flash'))
+        ? model
+        : 'gemini-3.8-flash';
 
+      try {
         const geminiResponse = await ai.models.generateContent({
           model: targetModel,
           contents: systemPrompt,
@@ -672,29 +717,36 @@ ${theme.sop}
         });
 
         const rawText = geminiResponse.text?.trim() || '';
-        try {
-          const parsed = JSON.parse(rawText.replace(/^```json/i, '').replace(/```$/i, '').trim());
-          if (parsed && Array.isArray(parsed.tracks)) {
-            parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
-              ...tr,
-              trackNumber: tr.trackNumber || (idx + 1),
-              title: cleanTitleSingleLanguage(tr.title, sopSpecs.isEnglishOnly)
-            }));
-          }
-          res.json({
-            success: true,
-            modelUsed: `Gemini - ${targetModel}`,
-            result: parsed
-          });
-          return;
-        } catch (parseErr) {
-          console.warn('Gemini JSON parse failed, falling back to smart extractor', parseErr);
+        const cleaned = rawText.replace(/^```json/i, '').replace(/```$/i, '').trim();
+        const parsed = JSON.parse(cleaned);
+        if (parsed && Array.isArray(parsed.tracks)) {
+          parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
+            ...tr,
+            trackNumber: tr.trackNumber || (idx + 1),
+            title: cleanTitleSingleLanguage(tr.title, sopSpecs.isEnglishOnly)
+          }));
         }
+        res.json({
+          success: true,
+          modelUsed: `Gemini - ${targetModel}`,
+          isRealAi: true,
+          result: parsed,
+          note: 'Google Gemini 실시간 API 연동으로 SOP를 분석하여 완성되었습니다.'
+        });
+        return;
+      } catch (geminiErr: any) {
+        console.error('Gemini API Error:', geminiErr);
+        res.status(400).json({
+          success: false,
+          errorType: 'GEMINI_API_ERROR',
+          message: `Google Gemini API 호출 실패: ${geminiErr.message || '요청 처리 중 오류가 발생했습니다. Gemini API 키를 확인해 주세요.'}`
+        });
+        return;
       }
     }
 
-    // 2. OpenAI GPT
-    if (provider === 'gpt' && apiKey) {
+    // 3-2. OpenAI GPT
+    if (provider === 'gpt') {
       let gptModel = (model || 'gpt-4o-mini').trim();
       // Normalize experimental / non-existent OpenAI model names (e.g. gpt-5.4-mini)
       if (gptModel.includes('5.') || gptModel.includes('5-') || gptModel === 'gpt-5') {
@@ -706,12 +758,12 @@ ${theme.sop}
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey.trim()}`
+            'Authorization': `Bearer ${cleanKey}`
           },
           body: JSON.stringify({
             model: gptModel,
             messages: [
-              { role: 'system', content: 'You are an expert AI music playlist producer. Follow the user SOP with 100% strict compliance, especially regarding language instructions. Output single-language titles only without translation parentheses. Generate completely original, dynamic and unique lyrics and titles on every single request. Respond strictly in valid JSON.' },
+              { role: 'system', content: 'You are an expert AI music producer and playlist creator. Follow the user SOP with 100% strict compliance, especially regarding language, musical structure, vocal direction, and style prompt. Never output translation parentheses. Generate completely original, dynamic, and unique lyrics and titles on every request. Respond strictly in valid JSON.' },
               { role: 'user', content: `${systemPrompt}\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
             ],
             response_format: { type: 'json_object' }
@@ -726,12 +778,12 @@ ${theme.sop}
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey.trim()}`
+              'Authorization': `Bearer ${cleanKey}`
             },
             body: JSON.stringify({
               model: 'gpt-4o-mini',
               messages: [
-                { role: 'system', content: 'You are an expert AI music playlist producer. Follow the user SOP with 100% strict compliance, especially regarding language instructions. Output single-language titles only without translation parentheses. Generate completely original, dynamic and unique lyrics and titles on every single request. Respond strictly in valid JSON.' },
+                { role: 'system', content: 'You are an expert AI music producer and playlist creator. Follow the user SOP with 100% strict compliance, especially regarding language, musical structure, vocal direction, and style prompt. Never output translation parentheses. Generate completely original, dynamic, and unique lyrics and titles on every request. Respond strictly in valid JSON.' },
                 { role: 'user', content: `${systemPrompt}\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
               ],
               response_format: { type: 'json_object' }
@@ -739,53 +791,102 @@ ${theme.sop}
           });
         }
 
-        if (openaiRes.ok) {
-          const gptData = await openaiRes.json();
-          const content = gptData.choices?.[0]?.message?.content || '{}';
-          const parsed = JSON.parse(content);
-          if (parsed && Array.isArray(parsed.tracks)) {
-            parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
-              ...tr,
-              trackNumber: tr.trackNumber || (idx + 1),
-              title: cleanTitleSingleLanguage(tr.title, sopSpecs.isEnglishOnly)
-            }));
+        if (!openaiRes.ok) {
+          const errDetail = await openaiRes.text();
+          let parsedErrMsg = '';
+          try {
+            const errObj = JSON.parse(errDetail);
+            parsedErrMsg = errObj.error?.message || errDetail;
+          } catch {
+            parsedErrMsg = errDetail;
           }
-          res.json({
-            success: true,
-            modelUsed: `GPT - ${gptModel}`,
-            result: parsed,
-            note: 'OpenAI API 실시간 연동 생성 완료'
+
+          let friendlyMsg = `OpenAI API 오류 (${openaiRes.status})`;
+          if (openaiRes.status === 401) {
+            friendlyMsg = `OpenAI API 인증 실패 (401 Unauthorized): 입력하신 API 키가 올바르지 않거나 만료되었습니다. 상단 입력창에 유효한 OpenAI API 키(sk-...)를 입력해 주세요. (${parsedErrMsg})`;
+          } else if (openaiRes.status === 429) {
+            friendlyMsg = `OpenAI API 사용량 초과 (429 Insufficient Quota): OpenAI 계정에 잔여 크레딧이 부족하거나 호출 한도를 초과했습니다. OpenAI 계정(https://platform.openai.com/account/billing)의 크레딧 잔액을 확인해 주세요. (${parsedErrMsg})`;
+          } else if (openaiRes.status === 404) {
+            friendlyMsg = `OpenAI 모델 오류 (404): '${gptModel}' 모델을 찾을 수 없습니다. (${parsedErrMsg})`;
+          } else {
+            friendlyMsg = `OpenAI API 호출 실패 (${openaiRes.status}): ${parsedErrMsg}`;
+          }
+
+          res.status(400).json({
+            success: false,
+            errorType: 'OPENAI_API_ERROR',
+            status: openaiRes.status,
+            message: friendlyMsg
           });
           return;
-        } else {
-          const errDetail = await openaiRes.text();
-          console.warn(`OpenAI API failed (Status ${openaiRes.status}):`, errDetail);
         }
+
+        const gptData = await openaiRes.json();
+        const content = gptData.choices?.[0]?.message?.content || '{}';
+        const parsed = JSON.parse(content);
+        if (parsed && Array.isArray(parsed.tracks)) {
+          parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
+            ...tr,
+            trackNumber: tr.trackNumber || (idx + 1),
+            title: cleanTitleSingleLanguage(tr.title, sopSpecs.isEnglishOnly)
+          }));
+        }
+        res.json({
+          success: true,
+          modelUsed: `GPT - ${gptModel}`,
+          isRealAi: true,
+          result: parsed,
+          note: 'OpenAI API 실시간 연동 생성 완료 (SOP 100% 충실 반영)'
+        });
+        return;
       } catch (gptErr: any) {
-        console.warn('OpenAI network or fetch error:', gptErr.message);
+        res.status(400).json({
+          success: false,
+          errorType: 'OPENAI_NETWORK_ERROR',
+          message: `OpenAI 네트워크 통신 오류: ${gptErr.message}`
+        });
+        return;
       }
     }
 
-    // 3. Anthropic Claude
-    if (provider === 'claude' && apiKey) {
+    // 3-3. Anthropic Claude
+    if (provider === 'claude') {
       const claudeModel = model || 'claude-3-5-haiku-20241022';
-      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey.trim(),
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
-          model: claudeModel,
-          max_tokens: 4096,
-          messages: [
-            { role: 'user', content: `${systemPrompt}\n\n반드시 JSON 형식으로만 응답하세요.\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
-          ]
-        })
-      });
+      try {
+        const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': cleanKey,
+            'anthropic-version': '2023-06-01'
+          },
+          body: JSON.stringify({
+            model: claudeModel,
+            max_tokens: 4096,
+            messages: [
+              { role: 'user', content: `${systemPrompt}\n\n반드시 JSON 형식으로만 응답하세요.\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
+            ]
+          })
+        });
 
-      if (claudeRes.ok) {
+        if (!claudeRes.ok) {
+          const errDetail = await claudeRes.text();
+          let parsedErrMsg = '';
+          try {
+            const errObj = JSON.parse(errDetail);
+            parsedErrMsg = errObj.error?.message || errDetail;
+          } catch {
+            parsedErrMsg = errDetail;
+          }
+          res.status(400).json({
+            success: false,
+            errorType: 'CLAUDE_API_ERROR',
+            status: claudeRes.status,
+            message: `Anthropic Claude API 오류 (${claudeRes.status}): ${parsedErrMsg}`
+          });
+          return;
+        }
+
         const claudeData = await claudeRes.json();
         const textBlock = claudeData.content?.[0]?.text || '';
         const cleaned = textBlock.replace(/^```json/i, '').replace(/```$/i, '').trim();
@@ -800,24 +901,28 @@ ${theme.sop}
         res.json({
           success: true,
           modelUsed: `Claude - ${claudeModel}`,
+          isRealAi: true,
           result: parsed,
-          note: 'Anthropic Claude 실시간 연동 생성 완료'
+          note: 'Anthropic Claude 실시간 연동 생성 완료 (SOP 100% 충실 반영)'
+        });
+        return;
+      } catch (claudeErr: any) {
+        res.status(400).json({
+          success: false,
+          errorType: 'CLAUDE_NETWORK_ERROR',
+          message: `Claude 네트워크 통신 오류: ${claudeErr.message}`
         });
         return;
       }
     }
   } catch (apiErr: any) {
-    console.error('External API call failed, generating dynamic SOP response:', apiErr.message);
+    console.error('Unhandled API Error:', apiErr);
+    res.status(500).json({
+      success: false,
+      message: `서버 API 처리 중 오류 발생: ${apiErr.message}`
+    });
+    return;
   }
-
-  // Dynamic procedural SOP engine generating fresh unique tracks every invocation
-  const fallbackResult = generateCreativePlaylistData(theme, effectiveTrackCount, vocal);
-  res.json({
-    success: true,
-    modelUsed: `${provider.toUpperCase()} - ${model || 'SOP Dynamic Intelligence Engine'}`,
-    result: fallbackResult,
-    note: 'SOP 심층 분석 및 실시간 다이내믹 엔진으로 매회 새롭게 생성되었습니다.'
-  });
 });
 
 let lastServerTrackOffset = -1;
@@ -864,10 +969,10 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
         lyrics: `[Intro]\n(Rhythmic felt piano pulse evoking an antique film projector)\n(Soft string swell in D minor)\n\n[Verse 1]\nTen thousand frames running past in the glow\nEvery second a memory I didn't want to let go\nYour laughter caught in thirty-five millimeter grain\nA silent rewind through the laughter and pain\n(Supporting voice: rewind through the pain)\n\n[Pre-Chorus]\nThe soundtrack is rising, the strings climb higher\nFeeding the embers of a fading desire\nThe tempo is tightening, the final cue nears\nWash away the doubts and the unspoken fears\n\n[Chorus]\nBefore the closing reel burns into white\nI'll sing your name through the hollow of night!\nEvery vow that we whispered when the camera was rolling\nEvery bell of goodbye that was quietly tolling\nIf the ending is written and carved into stone\nI will still love you like the screen was our home!\n(Supporting voice: The screen was our home)\n\n[Verse 2]\nWe skipped all the rehearsals, we jumped to the scene\nWhere lovers pretend they don't know what it means\nTo let go of hands when the director cries cut\nLeaving the doors to yesterday shut\n\n[Bridge]\n(Thunderous orchestral crescendo, soaring French horns and timpani)\nDon't let the music stop! Don't let the shadows freeze!\nListen to the promise carried on the evening breeze!\n\n[Chorus]\nBefore the closing reel burns into white\nI'll sing your name through the hollow of night!\nEvery vow that we whispered when the camera was rolling\nEvery bell of goodbye that was quietly tolling\nIf the ending is written and carved into stone\nI will still love you like the screen was our home!\n\n[Outro]\n(Felt piano chords gently slowing down)\nAnd scene.\n[End]`
       },
       {
-        title: 'Monologue in the Rain',
-        mood: 'Intimate acoustic melancholy evolving into an orchestral catharsis',
-        style: `intimate emotional film ballad, delicate acoustic piano, soft strings, ${vocalTag}, rising tension line, dramatic build, 72 bpm, poignant film soundtrack`,
-        lyrics: `[Intro]\n(Soft rain sound effect with lone acoustic piano)\n\n[Verse 1]\nStreetlights reflecting on puddles of grey\nWatching the city just wash you away\nI practice the lines that I wanted to speak\nWhile water and teardrops run down on my cheek\n\n[Pre-Chorus]\nThe wind starts to whistle, the tempo turns fast\nNothing is heavier than loving the past\nThe tension is breaking the roof of my soul\nLosing the rhythm, releasing control\n\n[Chorus]\nLet the rain wash the monologue clean from my mind\nLeaving all of the sorrow and silence behind\nI gave you my heart in the very first scene\nAnd I kept every promise that lived in between\nEven here in the storm where nobody can see\nThis song is the confession I whisper to me\n(Supporting voice: Whisper to me)\n\n[Bridge]\n(Grand orchestral crescendo with thunderous timpani)\nWash away the regret, wash away the despair!\nI still feel your ghost in the cold midnight air!\n\n[Chorus]\nLet the rain wash the monologue clean from my mind\nLeaving all of the sorrow and silence behind\nI gave you my heart in the very first scene\nAnd I kept every promise that lived in between\n\n[Outro]\n(Acoustic piano dying down with soft rain)\nJust rain on the glass.\n[End]`
+        title: 'Crescendo in the Dark',
+        mood: 'Sincere vocal-led female performance, felt upright piano build into soaring lush strings',
+        style: `cinematic emotional OST ballad, felt upright piano intro, soaring lush orchestra strings, ${vocalTag}, building crescendo, rising tension line, heartfelt emotional bridge, 74 bpm, film soundtrack aesthetic, dynamic vocal range`,
+        lyrics: `[Intro]\n(Felt upright piano chords with subtle room reverb)\n(Soft cello swell rising gently)\n\n[Verse 1]\nThe camera pans across an empty floor\nAnother memory standing at the door\nI hear your footsteps in the silent room\nA lingering melody piercing the gloom\n(Supporting voice: piercing the gloom)\n\n[Pre-Chorus]\nAnd the strings begin to climb with every breath\nA rising tension conquering life and death\nThe clock is counting down the final take\nThis is the promise that I'll never break\n\n[Chorus]\nWhen the orchestra swells and the spotlights fall\nI will sing of the love that survived it all!\nThrough every broken scene and dialogue unsaid\nThrough every tear the silver screen has bled\nI gave you my heart in the very first frame\nAnd even in the dark, I'll call your name!\n(Supporting voice: Call your name)\n\n[Bridge]\n(Massive orchestral crescendo, sweeping violins and french horns)\nDon't let the reel burn! Don't let the curtains close!\nBloom like the emotion nobody knows!\n\n[Chorus]\nWhen the orchestra swells and the spotlights fall\nI will sing of the love that survived it all!\nThrough every broken scene and dialogue unsaid\nThrough every tear the silver screen has bled\nI gave you my heart in the very first frame\nAnd even in the dark, I'll call your name!\n\n[Outro]\n(Felt upright piano chords fading gently to silence)\nFade to black.\n[End]`
       },
       {
         title: 'Between the Golden Frames',
