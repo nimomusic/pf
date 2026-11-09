@@ -845,7 +845,13 @@ export default function App() {
         themes={themes}
         currentThemeId={selectedTheme?.id || ''}
         onSelectTheme={(th) => setSelectedTheme(th)}
-        onThemesUpdated={(updated) => setThemes(updated)}
+        onThemesUpdated={(updated) => {
+          setThemes(updated);
+          if (selectedTheme) {
+            const matching = updated.find((t) => t.id === selectedTheme.id);
+            if (matching) setSelectedTheme(matching);
+          }
+        }}
       />
 
       <ResultModal
