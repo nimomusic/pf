@@ -420,7 +420,15 @@ export async function generatePlaylist(params: {
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error(`서버 응답 오류 (HTTP ${res.status}): JSON 형식이 아닙니다.`);
+    const cleanText = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    const snippet = cleanText.slice(0, 150);
+    if (res.status === 504 || res.status === 502 || snippet.toLowerCase().includes('gateway') || snippet.toLowerCase().includes('timeout')) {
+      throw new Error(`서버 응답 시간 초과 (HTTP ${res.status}): AI 생성 처리 시간이 초과되었습니다. 모델 설정을 더 빠른 모델(Gemini Flash-Lite 등)로 변경하시거나 잠시 후 다시 시도해 주세요.`);
+    }
+    if (res.status === 500) {
+      throw new Error(`서버 응답 오류 (HTTP 500): ${snippet || '서버 내부 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'}`);
+    }
+    throw new Error(`서버 응답 오류 (HTTP ${res.status}): ${snippet || '유효하지 않은 응답'}`);
   }
 
   if (!res.ok || !data || !data.success) {

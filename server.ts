@@ -570,81 +570,108 @@ function cleanTitleSingleLanguage(title: string, isEnglishTarget: boolean): stri
   return clean;
 }
 
+// Helper to extract JSON safely from AI output
+function extractJsonFromText(rawText: string): any {
+  if (!rawText) throw new Error('AI 응답이 비어 있습니다.');
+  let text = rawText.trim();
+  text = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+  try {
+    return JSON.parse(text);
+  } catch (initialErr) {
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const sliced = text.substring(firstBrace, lastBrace + 1);
+      return JSON.parse(sliced);
+    }
+    throw initialErr;
+  }
+}
+
 // 7. Playlist Generator API
 app.post('/api/generate', async (req: Request, res: Response) => {
-  const { theme, trackCount = 1, vocal = 'random', provider = 'gemini', model, apiKey, mode } = req.body;
+  try {
+    const body = req.body || {};
+    const { theme, trackCount = 1, vocal = 'random', provider = 'gemini', model, apiKey, mode } = body;
 
-  if (!theme || !theme.name) {
-    res.status(400).json({ success: false, message: '테마 정보가 필요합니다.' });
-    return;
-  }
+    if (!theme || !theme.name) {
+      res.status(400).json({ success: false, message: '테마 정보가 필요합니다.' });
+      return;
+    }
 
-  const effectiveTrackCount = Math.min(Math.max(Number(trackCount) || 1, 1), 10);
-  const vocalLabel = 
-    vocal === 'female' ? '여성 보컬 (Female Vocal)' :
-    vocal === 'male' ? '남성 보컬 (Male Vocal)' :
-    vocal === 'none' ? '보컬 없음 (Instrumental 연주곡)' : '랜덤 보컬 (Random Vocal)';
+    const effectiveTrackCount = Math.min(Math.max(Number(trackCount) || 1, 1), 10);
+    const vocalLabel = 
+      vocal === 'female' ? '여성 보컬 (Female Vocal)' :
+      vocal === 'male' ? '남성 보컬 (Male Vocal)' :
+      vocal === 'none' ? '보컬 없음 (Instrumental 연주곡)' : '랜덤 보컬 (Random Vocal)';
 
-  const sopSpecs = parseSopSpecs(theme);
+    const sopSpecs = parseSopSpecs(theme);
 
-  // 1. Explicit Simulation Mode (Offline testing without API key)
-  if (mode === 'simulation') {
-    const simResult = generateCreativePlaylistData(theme, effectiveTrackCount, vocal);
-    res.json({
-      success: true,
-      modelUsed: '로컬 SOP 시뮬레이션 엔진 (오프라인 모드)',
-      isSimulation: true,
-      result: simResult,
-      note: '로컬 SOP 규칙 기반 시뮬레이션 모드로 생성되었습니다. 실제 AI가 SOP를 100% 반영하여 작사하도록 하려면 상단에 유효한 OpenAI 또는 Gemini API 키를 입력해 주세요.'
-    });
-    return;
-  }
-
-  const cleanKey = (apiKey || '').trim();
-
-  // 2. Validate API Key for the chosen provider
-  if (provider === 'gpt') {
-    if (!cleanKey) {
-      res.status(400).json({
-        success: false,
-        errorType: 'MISSING_API_KEY',
-        message: 'OpenAI(GPT) API 키가 입력되지 않았습니다. 상단 API Key 입력창에 sk-... 형태의 OpenAI API 키를 입력해 주세요. (또는 테스트를 원하시면 시뮬레이션 모드로 생성해 보세요.)'
+    // 1. Explicit Simulation Mode (Offline testing without API key)
+    if (mode === 'simulation') {
+      const simResult = generateCreativePlaylistData(theme, effectiveTrackCount, vocal);
+      res.json({
+        success: true,
+        modelUsed: '로컬 SOP 시뮬레이션 엔진 (오프라인 모드)',
+        isSimulation: true,
+        result: simResult,
+        note: '로컬 SOP 규칙 기반 시뮬레이션 모드로 생성되었습니다. 실제 AI가 SOP를 100% 반영하여 작사하도록 하려면 상단에 유효한 OpenAI 또는 Gemini API 키를 입력해 주세요.'
       });
       return;
     }
-  } else if (provider === 'gemini') {
-    const effectiveGeminiKey = cleanKey || process.env.GEMINI_API_KEY;
-    if (!effectiveGeminiKey) {
-      res.status(400).json({
-        success: false,
-        errorType: 'MISSING_API_KEY',
-        message: 'Google Gemini API 키가 입력되지 않았습니다. 상단 API Key 입력창에 Gemini API 키(AIza...)를 입력해 주세요.'
-      });
-      return;
-    }
-  } else if (provider === 'claude') {
-    if (!cleanKey) {
-      res.status(400).json({
-        success: false,
-        errorType: 'MISSING_API_KEY',
-        message: 'Anthropic(Claude) API 키가 입력되지 않았습니다. 상단 API Key 입력창에 sk-ant-... 형태의 Claude API 키를 입력해 주세요.'
-      });
-      return;
-    }
-  }
 
-  const languageRule = sopSpecs.isEnglishOnly
-    ? `[최우선 절대 준수 규칙: 100% 영문 가사 및 영문 제목 작성 - 한국어 가사 절대 금지]
+    const cleanKey = (apiKey || '').trim();
+
+    // 2. Validate API Key for the chosen provider
+    if (provider === 'gpt') {
+      if (!cleanKey) {
+        res.status(400).json({
+          success: false,
+          errorType: 'MISSING_API_KEY',
+          message: 'OpenAI(GPT) API 키가 입력되지 않았습니다. 상단 API Key 입력창에 sk-... 형태의 OpenAI API 키를 입력해 주세요. (또는 테스트를 원하시면 시뮬레이션 모드로 생성해 보세요.)'
+        });
+        return;
+      }
+    } else if (provider === 'gemini') {
+      const effectiveGeminiKey = cleanKey || process.env.GEMINI_API_KEY;
+      if (!effectiveGeminiKey) {
+        res.status(400).json({
+          success: false,
+          errorType: 'MISSING_API_KEY',
+          message: 'Google Gemini API 키가 입력되지 않았습니다. 상단 API Key 입력창에 Gemini API 키(AIza...)를 입력해 주세요.'
+        });
+        return;
+      }
+    } else if (provider === 'claude') {
+      if (!cleanKey) {
+        res.status(400).json({
+          success: false,
+          errorType: 'MISSING_API_KEY',
+          message: 'Anthropic(Claude) API 키가 입력되지 않았습니다. 상단 API Key 입력창에 sk-ant-... 형태의 Claude API 키를 입력해 주세요.'
+        });
+        return;
+      }
+    } else {
+      res.status(400).json({
+        success: false,
+        errorType: 'INVALID_PROVIDER',
+        message: `지원되지 않는 AI 제공자입니다: ${provider}`
+      });
+      return;
+    }
+
+    const languageRule = sopSpecs.isEnglishOnly
+      ? `[최우선 절대 준수 규칙: 100% 영문 가사 및 영문 제목 작성 - 한국어 가사 절대 금지]
 사용자의 SOP에 "All lyrics must be written in 100% English" (또는 영어 가사) 지침이 명시되어 있습니다.
 1. 모든 트랙의 전곡 가사(fullLyrics)는 예외 없이 100% 완전한 영문(English)으로만 작성해야 합니다.
 2. 가사에 단 한 글자의 한글이나 한국어 단어도 포함되어서는 절대 안 됩니다.
 3. 곡 제목(title) 역시 100% 영문(English)으로 단일 표기하세요. 한글 병기나 괄호 번역은 엄격히 금지됩니다.
 4. 모든 섹션 태그([Intro], [Verse 1], [Pre-Chorus], [Chorus], [Bridge], [Outro] 등)와 가사 본문, 코러스, 화답 보이스까지 모두 순수 영어로 작성하세요.
 5. Suno/Udio 스타일 프롬프트(stylePrompt)도 100% 영문으로 작성하세요.`
-    : `[가사 및 제목 언어 지침]
+      : `[가사 및 제목 언어 지침]
 SOP에 지정된 언어가 있다면 그 언어를 최우선으로 준수하고, 제목은 원곡의 단일 언어로만 표기하세요. (한/영 병기 금지)`;
 
-  const systemPrompt = `당신은 최고 수준의 AI 음악 기획자이자 유튜브 플레이리스트 전문 크리에이터 'Plymaster'입니다.
+    const systemPrompt = `당신은 최고 수준의 AI 음악 기획자이자 유튜브 플레이리스트 전문 크리에이터 'Plymaster'입니다.
 
 ${languageRule}
 
@@ -665,7 +692,7 @@ ${languageRule}
 - 테마 이름: ${theme.name}
 - 테마 카테고리: ${theme.category || '음악'}
 - 사용자 지정 SOP 내용:
-${theme.sop}
+${theme.sop || ''}
 - 제작 곡 수: ${effectiveTrackCount}곡
 - 보컬 설정: ${vocalLabel}
 
@@ -691,8 +718,8 @@ ${theme.sop}
   }
 }`;
 
-  // 3. Provider execution
-  try {
+    // 3. Provider execution
+
     // 3-1. Google Gemini
     if (provider === 'gemini') {
       const geminiKey = cleanKey || process.env.GEMINI_API_KEY;
@@ -703,22 +730,51 @@ ${theme.sop}
         }
       });
 
-      const targetModel = model && (model.startsWith('gemini-') || model.includes('flash'))
+      // Prefer fast and stable gemini-3.1-flash-lite as standard default
+      let targetModel = model && (model.startsWith('gemini-') || model.includes('flash'))
         ? model
-        : 'gemini-3.8-flash';
+        : 'gemini-3.1-flash-lite';
 
       try {
-        const geminiResponse = await ai.models.generateContent({
-          model: targetModel,
-          contents: systemPrompt,
-          config: {
-            responseMimeType: 'application/json',
+        // Execute with timeout race (35 seconds max to stay well below Cloud Run proxy limit)
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('AI 응답 대기 시간 초과 (35초)')), 35000)
+        );
+
+        let geminiResponse;
+        try {
+          geminiResponse = await Promise.race([
+            ai.models.generateContent({
+              model: targetModel,
+              contents: systemPrompt,
+              config: {
+                responseMimeType: 'application/json',
+              }
+            }),
+            timeoutPromise
+          ]);
+        } catch (firstErr: any) {
+          // If gemini-3.8-flash or heavy model failed with 503/timeout, fallback to ultra-fast gemini-3.1-flash-lite
+          if (targetModel !== 'gemini-3.1-flash-lite') {
+            console.warn(`Gemini model ${targetModel} failed (${firstErr.message}), falling back to gemini-3.1-flash-lite`);
+            targetModel = 'gemini-3.1-flash-lite';
+            geminiResponse = await Promise.race([
+              ai.models.generateContent({
+                model: targetModel,
+                contents: systemPrompt,
+                config: {
+                  responseMimeType: 'application/json',
+                }
+              }),
+              timeoutPromise
+            ]);
+          } else {
+            throw firstErr;
           }
-        });
+        }
 
         const rawText = geminiResponse.text?.trim() || '';
-        const cleaned = rawText.replace(/^```json/i, '').replace(/```$/i, '').trim();
-        const parsed = JSON.parse(cleaned);
+        const parsed = extractJsonFromText(rawText);
         if (parsed && Array.isArray(parsed.tracks)) {
           parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
             ...tr,
@@ -739,7 +795,7 @@ ${theme.sop}
         res.status(400).json({
           success: false,
           errorType: 'GEMINI_API_ERROR',
-          message: `Google Gemini API 호출 실패: ${geminiErr.message || '요청 처리 중 오류가 발생했습니다. Gemini API 키를 확인해 주세요.'}`
+          message: `Google Gemini API 처리 실패: ${geminiErr.message || '요청 처리 중 오류가 발생했습니다. Gemini API 키를 확인해 주세요.'}`
         });
         return;
       }
@@ -754,34 +810,16 @@ ${theme.sop}
       }
 
       try {
-        let openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${cleanKey}`
-          },
-          body: JSON.stringify({
-            model: gptModel,
-            messages: [
-              { role: 'system', content: 'You are an expert AI music producer and playlist creator. Follow the user SOP with 100% strict compliance, especially regarding language, musical structure, vocal direction, and style prompt. Never output translation parentheses. Generate completely original, dynamic, and unique lyrics and titles on every request. Respond strictly in valid JSON.' },
-              { role: 'user', content: `${systemPrompt}\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
-            ],
-            response_format: { type: 'json_object' }
-          })
-        });
-
-        // If model not found (404), auto-fallback to standard gpt-4o-mini
-        if (!openaiRes.ok && openaiRes.status === 404 && gptModel !== 'gpt-4o-mini') {
-          console.warn(`OpenAI model ${gptModel} not found (404), falling back to gpt-4o-mini`);
-          gptModel = 'gpt-4o-mini';
-          openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        const fetchGpt = async (m: string) => {
+          return await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
+            signal: AbortSignal.timeout(35000),
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${cleanKey}`
             },
             body: JSON.stringify({
-              model: 'gpt-4o-mini',
+              model: m,
               messages: [
                 { role: 'system', content: 'You are an expert AI music producer and playlist creator. Follow the user SOP with 100% strict compliance, especially regarding language, musical structure, vocal direction, and style prompt. Never output translation parentheses. Generate completely original, dynamic, and unique lyrics and titles on every request. Respond strictly in valid JSON.' },
                 { role: 'user', content: `${systemPrompt}\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
@@ -789,6 +827,15 @@ ${theme.sop}
               response_format: { type: 'json_object' }
             })
           });
+        };
+
+        let openaiRes = await fetchGpt(gptModel);
+
+        // If model not found (404), auto-fallback to standard gpt-4o-mini
+        if (!openaiRes.ok && openaiRes.status === 404 && gptModel !== 'gpt-4o-mini') {
+          console.warn(`OpenAI model ${gptModel} not found (404), falling back to gpt-4o-mini`);
+          gptModel = 'gpt-4o-mini';
+          openaiRes = await fetchGpt(gptModel);
         }
 
         if (!openaiRes.ok) {
@@ -823,7 +870,7 @@ ${theme.sop}
 
         const gptData = await openaiRes.json();
         const content = gptData.choices?.[0]?.message?.content || '{}';
-        const parsed = JSON.parse(content);
+        const parsed = extractJsonFromText(content);
         if (parsed && Array.isArray(parsed.tracks)) {
           parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
             ...tr,
@@ -840,10 +887,13 @@ ${theme.sop}
         });
         return;
       } catch (gptErr: any) {
+        const isTimeout = gptErr.name === 'TimeoutError' || (gptErr.message && gptErr.message.includes('timeout'));
         res.status(400).json({
           success: false,
-          errorType: 'OPENAI_NETWORK_ERROR',
-          message: `OpenAI 네트워크 통신 오류: ${gptErr.message}`
+          errorType: 'OPENAI_ERROR',
+          message: isTimeout
+            ? 'OpenAI API 응답 대기 시간이 초과되었습니다 (35초). 네트워크 상태나 모델 선택을 확인해 주세요.'
+            : `OpenAI 통신 오류: ${gptErr.message}`
         });
         return;
       }
@@ -855,6 +905,7 @@ ${theme.sop}
       try {
         const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
+          signal: AbortSignal.timeout(35000),
           headers: {
             'Content-Type': 'application/json',
             'x-api-key': cleanKey,
@@ -889,8 +940,7 @@ ${theme.sop}
 
         const claudeData = await claudeRes.json();
         const textBlock = claudeData.content?.[0]?.text || '';
-        const cleaned = textBlock.replace(/^```json/i, '').replace(/```$/i, '').trim();
-        const parsed = JSON.parse(cleaned);
+        const parsed = extractJsonFromText(textBlock);
         if (parsed && Array.isArray(parsed.tracks)) {
           parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
             ...tr,
@@ -907,19 +957,23 @@ ${theme.sop}
         });
         return;
       } catch (claudeErr: any) {
+        const isTimeout = claudeErr.name === 'TimeoutError' || (claudeErr.message && claudeErr.message.includes('timeout'));
         res.status(400).json({
           success: false,
-          errorType: 'CLAUDE_NETWORK_ERROR',
-          message: `Claude 네트워크 통신 오류: ${claudeErr.message}`
+          errorType: 'CLAUDE_ERROR',
+          message: isTimeout
+            ? 'Anthropic Claude API 응답 대기 시간이 초과되었습니다 (35초).'
+            : `Claude 통신 오류: ${claudeErr.message}`
         });
         return;
       }
     }
-  } catch (apiErr: any) {
-    console.error('Unhandled API Error:', apiErr);
+  } catch (outerErr: any) {
+    console.error('Unhandled Server Error in /api/generate:', outerErr);
     res.status(500).json({
       success: false,
-      message: `서버 API 처리 중 오류 발생: ${apiErr.message}`
+      errorType: 'INTERNAL_SERVER_ERROR',
+      message: `서버 내부 처리 중 오류가 발생했습니다: ${outerErr.message || '알 수 없는 오류'}`
     });
     return;
   }
@@ -1097,6 +1151,19 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
     }
   };
 }
+
+// Error handling middleware for all API routes to ensure pure JSON responses
+app.use('/api', (err: any, req: Request, res: Response, next: any) => {
+  console.error('[API Global Error Handler]', err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  res.status(err.status || 500).json({
+    success: false,
+    errorType: err.name || 'INTERNAL_SERVER_ERROR',
+    message: err.message || '서버 처리 중 오류가 발생했습니다.'
+  });
+});
 
 // Start Server & mount Vite
 async function startServer() {
