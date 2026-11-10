@@ -60,7 +60,7 @@ export default function App() {
   // AI Provider & Model State
   const [provider, setProvider] = useState<ProviderType>('gpt');
   const [isAutoModel, setIsAutoModel] = useState<boolean>(true);
-  const [model, setModel] = useState<string>('gpt-4o-mini');
+  const [model, setModel] = useState<string>('gpt-5.4-mini');
   const [apiKeys, setApiKeys] = useState<Record<ProviderType, string>>({
     gpt: '',
     gemini: '',

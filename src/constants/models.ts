@@ -2,15 +2,15 @@ import { ModelOption, ProviderType } from '../types';
 
 export const OPTIMIZED_MODELS: ModelOption[] = [
   {
-    id: 'gemini-3.1-flash-lite',
-    provider: 'gemini',
-    name: 'Gemini 3.1 Flash Lite',
-    badge: '최소 토큰 · 초고속',
-    description: '구글의 초경량 고효율 최신 모델. 긴 가사와 다량의 트랙 기획 시 API 토큰 비용이 가장 저렴하며 반응 속도가 압도적입니다.',
+    id: 'gpt-5.4-mini',
+    provider: 'gpt',
+    name: 'GPT-5.4 mini',
+    badge: '차세대 스마트 경량',
+    description: 'OpenAI의 차세대 고성능 미니 모델. 최신 음악 트렌드와 복합적인 가사 구조 및 Suno 프롬프트를 초고속으로 정밀 기획합니다.',
     tokenCostTier: 'lowest',
     isRecommended: true,
-    efficiencySummary: '입력/출력 단가 최저, 토큰 대비 가성비 1위',
-    suitability: '다량의 트랙 가사 생성, 일관성 높은 플레이리스트 기획'
+    efficiencySummary: '차세대 지능 탑재, 음악 및 가사 기획 최적화',
+    suitability: '고난도 테마 SOP 정밀 반영, 다국어 및 운율 최적화'
   },
   {
     id: 'gpt-4o-mini',
@@ -22,6 +22,28 @@ export const OPTIMIZED_MODELS: ModelOption[] = [
     isRecommended: true,
     efficiencySummary: '저비용 고효율, JSON 및 포맷팅 정확도 최상',
     suitability: 'Suno 스타일 태그 작성, 유튜브 SEO 키워드 및 타임라인 최적화'
+  },
+  {
+    id: 'gpt-4.1-mini',
+    provider: 'gpt',
+    name: 'GPT-4.1 mini',
+    badge: '정밀 음악 기획',
+    description: '개선된 추론과 높은 지시사항 준수율을 제공하는 경량 모델. 복잡한 섹션 분배와 보컬 디렉션에 최적화되었습니다.',
+    tokenCostTier: 'low',
+    isRecommended: false,
+    efficiencySummary: '높은 SOP 준수율과 빠른 반응 속도',
+    suitability: '세밀한 보컬 질감과 러닝타임 설계'
+  },
+  {
+    id: 'gemini-3.1-flash-lite',
+    provider: 'gemini',
+    name: 'Gemini 3.1 Flash Lite',
+    badge: '최소 토큰 · 초고속',
+    description: '구글의 초경량 고효율 최신 모델. 긴 가사와 다량의 트랙 기획 시 API 토큰 비용이 가장 저렴하며 반응 속도가 압도적입니다.',
+    tokenCostTier: 'lowest',
+    isRecommended: true,
+    efficiencySummary: '입력/출력 단가 최저, 토큰 대비 가성비 1위',
+    suitability: '다량의 트랙 가사 생성, 일관성 높은 플레이리스트 기획'
   },
   {
     id: 'claude-3-5-haiku-20241022',
@@ -101,6 +123,22 @@ export const FULL_MODEL_CATALOG: {
   },
 
   // OpenAI GPT
+  {
+    id: 'gpt-5.4-mini',
+    provider: 'gpt',
+    name: 'GPT-5.4 mini',
+    category: '차세대 스마트 경량',
+    tag: '차세대 스마트',
+    description: 'OpenAI의 차세대 고성능 미니 모델 · 음악 트렌드 및 가사 구조 정밀 기획'
+  },
+  {
+    id: 'gpt-4.1-mini',
+    provider: 'gpt',
+    name: 'GPT-4.1 mini',
+    category: '정밀 음악 기획',
+    tag: '정밀 분석',
+    description: '높은 SOP 준수율과 빠른 반응 속도 · 세밀한 보컬 질감과 러닝타임 설계'
+  },
   {
     id: 'gpt-4o-mini',
     provider: 'gpt',
@@ -195,7 +233,7 @@ export const FULL_MODEL_CATALOG: {
 
 export const PROVIDER_AUTO_MODELS: Record<ProviderType, string> = {
   gemini: 'gemini-3.1-flash-lite',
-  gpt: 'gpt-4o-mini',
+  gpt: 'gpt-5.4-mini',
   claude: 'claude-3-5-haiku-20241022'
 };
 

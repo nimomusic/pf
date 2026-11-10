@@ -1,9 +1,9 @@
 import express, { Request, Response } from 'express';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import seedThemes from './data/themes.json' with { type: 'json' };
 
 dotenv.config();
 
@@ -18,19 +18,20 @@ const DATA_DIR = process.env.VERCEL
 const THEMES_FILE = path.join(DATA_DIR, 'themes.json');
 
 // Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Failed to ensure DATA_DIR:', e);
 }
 
 // On Vercel, copy initial themes if present
 if (process.env.VERCEL && !fs.existsSync(THEMES_FILE)) {
-  const seedFile = path.resolve(process.cwd(), 'data', 'themes.json');
-  if (fs.existsSync(seedFile)) {
-    try {
-      fs.copyFileSync(seedFile, THEMES_FILE);
-    } catch (e) {
-      console.warn('Failed to copy initial themes file to /tmp', e);
-    }
+  try {
+    fs.writeFileSync(THEMES_FILE, JSON.stringify(seedThemes, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('Failed to initialize themes file in /tmp', e);
   }
 }
 
@@ -39,12 +40,21 @@ function getThemesList() {
   try {
     if (fs.existsSync(THEMES_FILE)) {
       const data = fs.readFileSync(THEMES_FILE, 'utf-8');
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
     }
   } catch (err) {
-    console.error('Error reading themes file:', err);
+    console.warn('Error reading themes file from disk, using embedded seed:', err);
   }
-  return [];
+  // Initialize file with seed themes if possible
+  try {
+    if (!fs.existsSync(THEMES_FILE)) {
+      saveThemesList(seedThemes);
+    }
+  } catch {}
+  return seedThemes;
 }
 
 // Helper to save themes
@@ -58,16 +68,16 @@ function saveThemesList(themes: any[]) {
   }
 }
 
-// API Routes
+// API Routes (supports both /api/path and /path for direct Vercel serverless function rewrites)
 
 // 1. Get all themes
-app.get('/api/themes', (req: Request, res: Response) => {
+app.get(['/api/themes', '/themes'], (req: Request, res: Response) => {
   const themes = getThemesList();
   res.json({ success: true, themes });
 });
 
 // 2. Create a theme
-app.post('/api/themes', (req: Request, res: Response) => {
+app.post(['/api/themes', '/themes'], (req: Request, res: Response) => {
   try {
     const { id, name, category, sop } = req.body;
     if (!name || !sop) {
@@ -103,7 +113,7 @@ app.post('/api/themes', (req: Request, res: Response) => {
 });
 
 // 3. Update a theme
-app.put('/api/themes/:id', (req: Request, res: Response) => {
+app.put(['/api/themes/:id', '/themes/:id'], (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { name, category, sop } = req.body;
@@ -132,7 +142,7 @@ app.put('/api/themes/:id', (req: Request, res: Response) => {
 });
 
 // 4. Delete a theme
-app.delete('/api/themes/:id', (req: Request, res: Response) => {
+app.delete(['/api/themes/:id', '/themes/:id'], (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     let themes = getThemesList();
@@ -153,7 +163,7 @@ app.delete('/api/themes/:id', (req: Request, res: Response) => {
 });
 
 // 5. Reset themes (clears themes database as requested)
-app.post('/api/themes/reset', (req: Request, res: Response) => {
+app.post(['/api/themes/reset', '/themes/reset'], (req: Request, res: Response) => {
   try {
     saveThemesList([]);
     res.json({ success: true, themes: [] });
@@ -186,7 +196,7 @@ function checkDueDateExpired(dueDateVal: any): { isExpired: boolean; formattedDa
 
 // 6. License Key Verification endpoint
 // Supports Admin keys, User keys, Due Date Expiration, and dynamic Google Sheets validation
-app.post('/api/verify-license', async (req: Request, res: Response) => {
+app.post(['/api/verify-license', '/verify-license'], async (req: Request, res: Response) => {
   const { licenseKey, sheetUrl } = req.body;
   const cleanKey = (licenseKey || '').trim();
 
@@ -589,7 +599,7 @@ function extractJsonFromText(rawText: string): any {
 }
 
 // 7. Playlist Generator API
-app.post('/api/generate', async (req: Request, res: Response) => {
+app.post(['/api/generate', '/generate'], async (req: Request, res: Response) => {
   try {
     const body = req.body || {};
     const { theme, trackCount = 1, vocal = 'random', provider = 'gemini', model, apiKey, mode } = body;
@@ -803,11 +813,8 @@ ${theme.sop || ''}
 
     // 3-2. OpenAI GPT
     if (provider === 'gpt') {
-      let gptModel = (model || 'gpt-4o-mini').trim();
-      // Normalize experimental / non-existent OpenAI model names (e.g. gpt-5.4-mini)
-      if (gptModel.includes('5.') || gptModel.includes('5-') || gptModel === 'gpt-5') {
-        gptModel = 'gpt-4o-mini';
-      }
+      const requestedModel = (model || 'gpt-5.4-mini').trim();
+      let gptModel = requestedModel;
 
       try {
         const fetchGpt = async (m: string) => {
@@ -831,11 +838,10 @@ ${theme.sop || ''}
 
         let openaiRes = await fetchGpt(gptModel);
 
-        // If model not found (404), auto-fallback to standard gpt-4o-mini
+        // If specific or preview model not found on this API key tier (404), auto-fallback to standard gpt-4o-mini
         if (!openaiRes.ok && openaiRes.status === 404 && gptModel !== 'gpt-4o-mini') {
-          console.warn(`OpenAI model ${gptModel} not found (404), falling back to gpt-4o-mini`);
-          gptModel = 'gpt-4o-mini';
-          openaiRes = await fetchGpt(gptModel);
+          console.warn(`OpenAI model ${gptModel} not available on this endpoint (404), falling back to gpt-4o-mini`);
+          openaiRes = await fetchGpt('gpt-4o-mini');
         }
 
         if (!openaiRes.ok) {
@@ -1167,12 +1173,13 @@ app.use('/api', (err: any, req: Request, res: Response, next: any) => {
 
 // Start Server & mount Vite
 async function startServer() {
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
     app.use(express.static('dist'));
     app.get('*', (req: Request, res: Response) => {
       res.sendFile(path.resolve('dist', 'index.html'));
     });
   } else {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -1185,7 +1192,9 @@ async function startServer() {
   });
 }
 
-if (!process.env.VERCEL) {
+const isMainModule = Boolean(process.argv[1] && (process.argv[1].endsWith('server.ts') || process.argv[1].endsWith('server.js')));
+
+if (isMainModule && !process.env.VERCEL) {
   startServer();
 }
 
