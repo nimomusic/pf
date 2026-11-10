@@ -28,6 +28,13 @@ export interface TrackItem {
   trackNumber: number;
   title: string;
   mood?: string;
+  metaInfo?: {
+    vocal?: string;
+    genre?: string;
+    mood?: string;
+    bpm?: string;
+    targetLength?: string;
+  };
   stylePrompt: string;
   fullLyrics: string;
 }

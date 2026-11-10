@@ -520,6 +520,7 @@ function parseSopSpecs(theme: any) {
     combined.includes('in 100% english') ||
     combined.includes('all lyrics must be written in english') ||
     combined.includes('all lyrics must be written in 100% english') ||
+    combined.includes('write lyrics naturally in english') ||
     combined.includes('english lyrics') ||
     combined.includes('lyrics must be in english') ||
     combined.includes('영어로 작성') ||
@@ -531,20 +532,26 @@ function parseSopSpecs(theme: any) {
   // If explicit keyword OR if SOP text is primarily English (more English letters than Korean)
   const isEnglishOnly = isEnglishExplicit || (engCharCount > 25 && engCharCount > korCharCount);
 
+  const isShellacVintage = 
+    combined.includes('shellac') ||
+    combined.includes('phonograph') ||
+    combined.includes('78 rpm') ||
+    combined.includes('1940') ||
+    combined.includes('vintage pop');
+
   const isCinematic = 
     combined.includes('film') ||
     combined.includes('movie') ||
     combined.includes('cinematic') ||
     combined.includes('ost') ||
-    combined.includes('ballad') ||
     combined.includes('soundtrack');
 
-  return { isEnglishOnly, isCinematic, engCharCount, korCharCount };
+  return { isEnglishOnly, isShellacVintage, isCinematic, engCharCount, korCharCount };
 }
 
 // Helper: Ensure track title contains ONLY the target language (no bilingual parentheses)
-function cleanTitleSingleLanguage(title: string, isEnglishTarget: boolean): string {
-  if (!title) return '';
+function cleanTitleSingleLanguage(title: string, isEnglishTarget: boolean, fallbackTitle = 'Track Title'): string {
+  if (!title) return fallbackTitle;
   let clean = title.trim();
   clean = clean.replace(/^["'`]|["'`]$/g, '').trim();
 
@@ -572,12 +579,12 @@ function cleanTitleSingleLanguage(title: string, isEnglishTarget: boolean): stri
     clean = clean.replace(/\([\uAC00-\uD7AF\s]+\)/g, '').trim();
     if (/[\uAC00-\uD7AF]/.test(clean)) {
       clean = clean.replace(/[\uAC00-\uD7AF]/g, '').trim();
-      if (!clean) clean = 'Fragments on the 35mm Reel';
+      if (!clean) clean = fallbackTitle;
     }
   } else {
     clean = clean.replace(/\([a-zA-Z0-9\s-]+\)/g, '').trim();
   }
-  return clean;
+  return clean || fallbackTitle;
 }
 
 // Helper to extract JSON safely from AI output
@@ -671,60 +678,138 @@ app.post(['/api/generate', '/generate'], async (req: Request, res: Response) => 
     }
 
     const languageRule = sopSpecs.isEnglishOnly
-      ? `[최우선 절대 준수 규칙: 100% 영문 가사 및 영문 제목 작성 - 한국어 가사 절대 금지]
-사용자의 SOP에 "All lyrics must be written in 100% English" (또는 영어 가사) 지침이 명시되어 있습니다.
-1. 모든 트랙의 전곡 가사(fullLyrics)는 예외 없이 100% 완전한 영문(English)으로만 작성해야 합니다.
-2. 가사에 단 한 글자의 한글이나 한국어 단어도 포함되어서는 절대 안 됩니다.
-3. 곡 제목(title) 역시 100% 영문(English)으로 단일 표기하세요. 한글 병기나 괄호 번역은 엄격히 금지됩니다.
-4. 모든 섹션 태그([Intro], [Verse 1], [Pre-Chorus], [Chorus], [Bridge], [Outro] 등)와 가사 본문, 코러스, 화답 보이스까지 모두 순수 영어로 작성하세요.
-5. Suno/Udio 스타일 프롬프트(stylePrompt)도 100% 영문으로 작성하세요.`
-      : `[가사 및 제목 언어 지침]
-SOP에 지정된 언어가 있다면 그 언어를 최우선으로 준수하고, 제목은 원곡의 단일 언어로만 표기하세요. (한/영 병기 금지)`;
+      ? `[CRITICAL MANDATORY LANGUAGE REQUIREMENT: 100% ENGLISH]
+The SOP specifies English lyrics/production (e.g. "All lyrics must be written in 100% English" / "Write lyrics naturally in English").
+- ALL lyrics in fullLyrics MUST be written in 100% pure English. Not a single Korean word or syllable.
+- Track titles (title) MUST be 100% English only. Never include Korean translations or bilingual parentheses like "Song Name (한국어)" or "한국어 (English)".
+- Style prompts (stylePrompt), section tags, and section guides MUST be 100% pure English.`
+      : `[LANGUAGE GUIDELINES]
+Follow the language specified in the SOP. Track titles must be in the single original language without bilingual translations in parentheses.`;
 
-    const systemPrompt = `당신은 최고 수준의 AI 음악 기획자이자 유튜브 플레이리스트 전문 크리에이터 'Plymaster'입니다.
+    const systemPrompt = `You are "Plymaster", a world-class AI executive music producer and Suno/Udio prompt engineer.
 
 ${languageRule}
 
-[곡 제목 언어 표기 규칙 - 원곡 단일 언어 원칙 (절대 준수)]
-- 곡 제목(title)은 반드시 "원곡의 언어"로만 단일 표기해야 합니다.
-- 한국어와 영어를 병기하거나, 괄호 ( ) 안에 다른 언어로 번역/부제를 넣는 것을 엄격히 금지합니다.
-- 기성 템플릿을 복사하지 말고, 사용자의 SOP와 테마 콘셉트에 맞게 매번 완전히 새로운 독창적인 제목을 창작하세요.
+================================================================================
+CRITICAL MASTER DIRECTIVE: 100% STRICT ADHERENCE TO THE USER'S PROVIDED SOP
+================================================================================
+The following SOP (Standard Operating Procedure) provided by the user is the ABSOLUTE, UNCOMPROMISING SPECIFICATION for this playlist project.
+Do NOT use generic fallback assumptions, do NOT abbreviate, and do NOT replace the SOP rules with generic pop clichés:
 
-[SOP 지침 100% 충실 준수 규칙 - 최우선 작업표준서]
-사용자가 입력한 아래 SOP 내용은 곡 제작을 위한 절대적인 작업표준서입니다. 일반적인 템플릿으로 대체하거나 임의로 내용을 왜곡하지 말고, SOP에 명시된 모든 세부 지침들을 한 줄 한 줄 철저히 반영하여 제작하세요:
-1. 사운드 정체성 및 아티스트 시그니처 반영 (악기 질감, 템포, 편곡 습관, 훅 구조)
-2. 보컬 디렉션: 도입부 첫 몇 초 만에 사로잡는 훅, 점진적으로 빌드업되는 절(Verse), 텐션을 고조시키는 프리코러스(Pre-Chorus), 감정을 터뜨리는 폭발적인 코러스(Chorus)
-3. 파트 분배 및 화답: 여성 리드 보컬 중심, 화답하는 라인은 섹션 태그 내 보조 보이스(supporting voices)로 표기
-4. 곡 러닝타임: 2:50~3:30 러닝타임에 맞는 완성도 높은 구조와 인스트루멘탈 태그
-5. Suno/Udio 스타일 프롬프트: 세부 장르, 악기 편성, 보컬 톤, BPM 템포, 믹싱 질감 포함 (SOP의 음악적 키워드를 그대로 담아 작성)
-
-[사용자 입력 테마 및 SOP 원본]
-- 테마 이름: ${theme.name}
-- 테마 카테고리: ${theme.category || '음악'}
-- 사용자 지정 SOP 내용:
+[USER SOP SPECIFICATION START]
 ${theme.sop || ''}
-- 제작 곡 수: ${effectiveTrackCount}곡
-- 보컬 설정: ${vocalLabel}
+[USER SOP SPECIFICATION END]
 
-[출력 데이터 요구사항 - 반드시 순수 JSON 형태]
-반드시 다음 구조를 가진 순수 JSON 형태로만 응답하세요. 백틱(\`\`\`json)이나 추가 설명 없이 순수 JSON만 출력하세요:
+[PROJECT PARAMETERS]
+- Theme Name: ${theme.name}
+- Theme Category: ${theme.category || 'Music'}
+- Target Track Count: ${effectiveTrackCount} track(s)
+- Vocal Setup: ${vocalLabel}
+
+================================================================================
+STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
+================================================================================
+
+1. [COMMON SOUND IDENTITY & ACOUSTIC CRITERIA]
+- Carefully inspect the SOP's Common Sound Identity / Acoustic Criteria (e.g. Type B Worn and Gritty Shellac Phonograph, 1940s shellac 78 RPM record on antique wooden phonograph, narrow frequency band, mono-centric playback feel, shellac surface crackles and hisses, mechanical needle noise, softly limited high frequencies, restrained low frequencies, thick warm midrange, moderate analog distortion/saturation, vintage compression, worn record texture, avoiding modern high-fi clarity or wide modern stereo).
+- EVERY TRACK's \`stylePrompt\` MUST EXPLICITLY EMBED AND REFLECT THESE EXACT ACOUSTIC CRITERIA!
+
+2. [STYLE PROMPT SPECIFICATIONS (stylePrompt)]
+- Write in English so it can be pasted directly into the Suno Style Prompt input field.
+- LENGTH & DEPTH TARGET: If the SOP specifies a character count target (e.g. "within 1,000 characters, aim for 800–900 characters"), your \`stylePrompt\` MUST be a comprehensive, rich, multi-sentence prompt reaching 800–900 characters!
+- NEVER output a generic 1-2 sentence prompt of 100-200 characters!
+- In every track's stylePrompt, capture:
+  (1) The exact acoustic playback texture (e.g. 1940s shellac 78 RPM record played on an antique wooden phonograph, audible shellac surface crackles and hisses, mechanical needle friction noise, warm narrow-band midrange, soft limited highs, analog saturation, vintage compression)
+  (2) Specific acoustic instruments, rhythm, and arrangement
+  (3) Era-accurate vocal delivery, timbre, and emotion
+  (4) Specific BPM tempo and dynamic flow
+
+3. [LYRICS GUIDE RULES & SECTION STRUCTURE (fullLyrics)]
+- Carefully follow the SOP's "Lyrics Guide Rules" and output specifications!
+- If the SOP specifies section guide prompts (e.g. [Intro]\\n[Short English guide: vocal emotion/delivery and arrangement]\\n\\n[Verse 1]\\n[Short English guide]\\nLyrics...):
+  EVERY single section tag ([Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Final Chorus], [Outro]) MUST have its own bracketed guide line \`[Short English guide: ...]\` immediately below the section tag, followed by the actual lyrics lines!
+  Example structure:
+  [Intro]
+  [Short English guide: solo instrument, acoustic texture, needle crackle, slow tempo]
+
+  [Verse 1]
+  [Short English guide: vocal emotion/delivery, instrument dynamics]
+  (Lyrics line 1)
+  (Lyrics line 2)
+  (Lyrics line 3)
+  (Lyrics line 4)
+
+  [Pre-Chorus]
+  [Short English guide: rising tension, subtle instrumental build]
+  (Lyrics line 1)
+  (Lyrics line 2)
+
+  [Chorus]
+  [Short English guide: central memorable hook, emotional delivery, arrangement peak]
+  (Lyrics line 1)
+  (Lyrics line 2)
+  (Lyrics line 3)
+  (Lyrics line 4)
+
+  [Verse 2]
+  [Short English guide: storytelling progression, accompaniment changes]
+  (Lyrics line 1)
+  (Lyrics line 2)
+
+  [Bridge]
+  [Short English guide: dynamic contrast, vocal shift, emotional peak]
+  (Lyrics line 1)
+  (Lyrics line 2)
+
+  [Final Chorus]
+  [Short English guide: powerful resolution, hook reprise, emotional catharsis]
+  (Lyrics line 1)
+  (Lyrics line 2)
+
+  [Outro]
+  [Short English guide: instruments fading, final needle crackle to silence]
+  (Outro lyrics or concluding line)
+- Guide prompts MUST be enclosed in square brackets [ ] to distinguish them from lyrics.
+- Do NOT output narrative sentences without brackets (such as "A soft piano begins...").
+
+4. [TRACK TITLES (title)]
+- Must be a single language only (English if English SOP).
+- NEVER output bilingual parentheses like "Title (제목)" or "제목 (Title)".
+
+5. [META INFO (metaInfo)]
+- For each track, output:
+  - vocal: e.g. "Female Solo", "Warm emotive female lead vocal"
+  - genre: e.g. "1940s Shellac Pop Ballad"
+  - mood: e.g. "Nostalgic Longing, Bittersweet Memory"
+  - bpm: e.g. "78 BPM"
+  - targetLength: e.g. "3:05"
+
+[OUTPUT FORMAT - PURE JSON ONLY]
+Respond ONLY with a valid JSON object matching this schema (no markdown fences, no conversational text):
 {
   "tracks": [
     {
       "trackNumber": 1,
-      "title": "테마와 SOP 콘셉트에 맞추어 독창적으로 창작된 단일 언어 곡 제목",
-      "mood": "SOP에 정의된 무드 및 감성 키워드",
-      "stylePrompt": "Suno 또는 Udio 등 AI 작곡 도구에 바로 복사하여 입력할 수 있는 최적화된 영문 스타일 프롬프트 (세부 장르, 악기 구성, 보컬 톤, 템포 BPM, 무드 포함)",
-      "fullLyrics": "[Intro]\\n...\\n[Verse 1]\\n...\\n[Pre-Chorus]\\n...\\n[Chorus]\\n...\\n[Verse 2]\\n...\\n[Pre-Chorus]\\n...\\n[Chorus]\\n...\\n[Bridge]\\n...\\n[Chorus]\\n...\\n[Outro]\\n... 형태의 SOP 지침을 100% 충실히 준수한 완성형 전곡 가사"
+      "title": "Single language song title strictly matching SOP concept",
+      "metaInfo": {
+        "vocal": "Detailed vocal assignment matching SOP",
+        "genre": "Genre matching SOP",
+        "mood": "Core emotional role",
+        "bpm": "e.g. 78 BPM",
+        "targetLength": "e.g. 3:05"
+      },
+      "mood": "Core emotion keyword",
+      "stylePrompt": "Comprehensive 800-900 character Suno/Udio prompt fully embedding the SOP sound criteria (Type B shellac 78 RPM record, wooden phonograph, crackles, hisses, needle noise, narrow frequency band, vintage compression, warm midrange) + instruments + vocal + BPM",
+      "fullLyrics": "Full lyrics strictly including bracketed [Short English guide: ...] on the line right after EVERY section tag ([Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Final Chorus], [Outro]), followed by the sung lyrics lines."
     }
   ],
   "youtube": {
-    "title": "조회수를 부르는 매력적인 유튜브 플레이리스트 영상 제목",
-    "description": "타임스탬프 트랙리스트와 감성적인 소개글이 포함된 완성형 유튜브 영상 설명문",
-    "tracklist": "01. Title (00:00)... 형태의 전체 트랙리스트",
-    "hashtags": "#Playlist #OST #Ballad 등 추천 해시태그",
-    "thumbnailPrompt": "Midjourney, DALL-E 3 등 AI 이미지 생성기에 최적화된 영문 썸네일 프롬프트 (16:9 cinematic shot, aesthetic lighting, high detail)",
-    "backgroundImagePrompt": "유튜브 루프 영상 또는 배경 화면 제작을 위한 고화질 16:9 프롬프트"
+    "title": "Catchy YouTube playlist video title matching theme and era",
+    "description": "Full YouTube video description with tracklist timestamps and background story",
+    "tracklist": "01. Title (00:00)...",
+    "hashtags": "#Playlist #1940s #Vintage #Phonograph #SunoAI",
+    "thumbnailPrompt": "16:9 cinematic vintage still, 1940s aesthetic, antique phonograph, aesthetic lighting, photorealistic 8k",
+    "backgroundImagePrompt": "16:9 seamless loop video prompt matching the vintage era"
   }
 }`;
 
@@ -759,6 +844,7 @@ ${theme.sop || ''}
               contents: systemPrompt,
               config: {
                 responseMimeType: 'application/json',
+                systemInstruction: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. When the SOP specifies acoustic criteria (e.g. Type B shellac 78 RPM record), style prompt length (800-900 characters), and bracketed section guides (e.g. [Intro]\\n[Guide instruction]\\n\\n[Verse 1]\\n[Guide instruction]\\nlyrics), you MUST follow them completely. Never write brief 1-line style prompts. Never omit bracketed section guides. Respond strictly in valid JSON.'
               }
             }),
             timeoutPromise
@@ -840,7 +926,7 @@ ${theme.sop || ''}
             body: JSON.stringify({
               model: engine,
               messages: [
-                { role: 'system', content: 'You are an expert AI music producer and playlist creator. Follow the user SOP with 100% strict compliance, especially regarding language, musical structure, vocal direction, and style prompt. Never output translation parentheses. Generate completely original, dynamic, and unique lyrics and titles on every request. Respond strictly in valid JSON.' },
+                { role: 'system', content: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. When the SOP specifies acoustic criteria (e.g. Type B shellac 78 RPM record), style prompt length (800-900 characters), and bracketed section guides (e.g. [Intro]\n[Guide instruction]\n\n[Verse 1]\n[Guide instruction]\nlyrics), you MUST follow them completely. Never write brief 1-line style prompts. Never omit bracketed section guides. Respond strictly in valid JSON.' },
                 { role: 'user', content: `${systemPrompt}\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
               ],
               response_format: { type: 'json_object' },
@@ -934,6 +1020,7 @@ ${theme.sop || ''}
           body: JSON.stringify({
             model: claudeModel,
             max_tokens: 4096,
+            system: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. When the SOP specifies acoustic criteria (e.g. Type B shellac 78 RPM record), style prompt length (800-900 characters), and bracketed section guides (e.g. [Intro]\n[Guide instruction]\n\n[Verse 1]\n[Guide instruction]\nlyrics), you MUST follow them completely. Never write brief 1-line style prompts. Never omit bracketed section guides. Respond strictly in valid JSON.',
             messages: [
               { role: 'user', content: `${systemPrompt}\n\n반드시 JSON 형식으로만 응답하세요.\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
             ]
@@ -1019,9 +1106,38 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
     vocal === 'male' ? 'male heartfelt soulful vocal, warm tone' :
     vocal === 'none' ? 'instrumental, no vocals' : 'expressive emotional vocal harmonies';
 
-  let trackTemplates: Array<{ title: string; mood: string; style: string; lyrics: string }> = [];
+  let trackTemplates: Array<{ title: string; mood: string; style: string; lyrics: string; metaInfo?: any }> = [];
 
-  if (sopSpecs.isEnglishOnly && sopSpecs.isCinematic) {
+  if (sopSpecs.isShellacVintage) {
+    trackTemplates = [
+      {
+        title: 'Dancing in the Amber Haze',
+        mood: 'Type B worn shellac phonograph intimacy, nostalgic 1940s romance with warm analog crackle',
+        metaInfo: {
+          vocal: 'Warm expressive female lead vocal, emotive 1940s delivery',
+          genre: '1940s Shellac Vintage Pop Ballad',
+          mood: 'Bittersweet nostalgia, quiet longing',
+          bpm: '78 BPM',
+          targetLength: '3:05'
+        },
+        style: `1940s shellac 78 RPM record aesthetic, played on an antique wooden cabinet phonograph, authentic mechanical needle rotation hiss, prominent yet musical surface crackle and patina, narrow frequency bandwidth, warm thick saturated midrange, softly rolled-off high frequencies, restrained low bass, vintage mono-centric analog tube compression. Muted trumpet solos with velvet Harmon mute, gentle felt upright piano arpeggios, warm double bass walking softly, brushed snare rhythm, expressive sincere female lead vocal with breathy vintage vibrato, nostalgic bittersweet romance, 78 bpm`,
+        lyrics: `[Intro]\n[Solo felt upright piano chords with authentic 78 RPM shellac surface crackle and warm needle hiss, slow intimate tempo]\n\n[Verse 1]\n[Intimate breathy female vocal, sparse piano accompaniment, audible mechanical needle noise]\nStreetlights flickering through the smoky glass\nWatching all the gentle silhouettes pass\nI hold the letter you folded in spring\nListening to what the old records sing\n\n[Pre-Chorus]\n[Gentle swell of muted trumpet with velvet Harmon mute, rising nostalgic tension]\nThe needle turns around the fading groove\nThere is no sorrow that this song can't move\nThe dust begins to rise, the ballroom sighs\nI see tomorrow looking through your eyes\n\n[Chorus]\n[Rich emotional female lead vocal with warm vintage vibrato, sweet memorable melodic hook]\nDancing in the amber haze of yesterday's light\nHolding on to every shadow in the quiet night\nWhen the shellac turns slow and the melodies part\nI will keep your devotion right here in my heart!\nLet the crackle play on till the morning comes through\nEvery song in the dark was a whisper to you!\n\n[Verse 2]\n[Subtle double bass walking softly, brushed snare rhythm enters with gentle swing]\nA pocket watch ticking on the wooden stand\nRemembering the warmth of your trembling hand\nTwo coffee cups fading on an empty tray\nCounting the hours till the break of day\n\n[Bridge]\n[Warm analog distortion swells, emotive trumpet and upright piano crescendo]\nTime cannot steal what the melody knows!\nBlooming like a secret where the ivy grows!\nNo winter can silence the notes that we swore\nWe will dance like we never danced before!\n\n[Final Chorus]\n[Cathartic dynamic climax with full vintage swing arrangement, soaring heartfelt vocal resolution]\nDancing in the amber haze of yesterday's light\nHolding on to every shadow in the quiet night\nWhen the shellac turns slow and the melodies part\nI will keep your devotion right here in my heart!\n\n[Outro]\n[Upright piano chords slowly dying down, solitary trumpet sigh, soft needle run-out groove hiss to silence]\nJust the record turning.\n[End]`
+      },
+      {
+        title: 'Whispers from the Velvet Gramophone',
+        mood: 'Antique wooden phonograph charm, smoky jazz lounge nostalgia',
+        metaInfo: {
+          vocal: 'Smoky emotive female vocal, delicate breath control',
+          genre: '1940s Shellac Jazz Ballad',
+          mood: 'Poignant remembrance, tender romantic warmth',
+          bpm: '76 BPM',
+          targetLength: '3:10'
+        },
+        style: `Authentic 1940s shellac 78 RPM mono sound identity, antique oak phonograph cabinet resonance, audible needle friction and surface crackle, narrow bandpass warmth, rolled-off digital highs, thick tube midrange saturation, vintage optical limiter character. Smoky female vocal delivery, delicate acoustic upright piano, soft clarinet counter-melodies, brushed snare shuffle, acoustic archtop guitar comping, romantic midnight nostalgia, 76 bpm`,
+        lyrics: `[Intro]\n[Acoustic clarinet solo floating over antique phonograph crackle and mellow piano chords]\n\n[Verse 1]\n[Tender breathy vocal delivery, acoustic archtop guitar and soft piano accompaniment]\nMidnight falling softly on the avenue\nPainting every shadow in a shade of blue\nI wind the spring and let the platter spin\nWaiting for the quiet magic to begin\n\n[Pre-Chorus]\n[Soft clarinet harmony weaves in, subtle rise in emotional dynamic]\nThe needle finds the line we used to know\nCarrying the beauty from so long ago\n\n[Chorus]\n[Warm emotive vocal hook, rich midrange resonance with vintage analog compression]\nWhispers from the velvet gramophone playing slow\nTelling all the secrets that nobody else could know\nEven when the city sleeps and lights burn low\nYou will be the only melody I know!\n\n[Bridge]\n[Clarinet counter-melody ascends, expressive piano arpeggio]\nSpin the black shellac, let the memories stay\nNothing that was beautiful can ever fade away!\n\n[Chorus]\n[Full expressive vocal reprise, warm brass warmth, memorable chorus hook]\nWhispers from the velvet gramophone playing slow\nTelling all the secrets that nobody else could know\nEven when the city sleeps and lights burn low\nYou will be the only melody I know!\n\n[Outro]\n[Soft clarinet note trailing into slow mechanical needle hiss and runout groove]\nGoodnight, my love.\n[End]`
+      }
+    ];
+  } else if (sopSpecs.isEnglishOnly && sopSpecs.isCinematic) {
     // 8 Diverse English Cinematic Ballad Tracks strictly mirroring the user's SOP
     trackTemplates = [
       {
@@ -1130,8 +1246,9 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
 
     tracks.push({
       trackNumber: i + 1,
-      title: cleanTitleSingleLanguage(rawTitle, sopSpecs.isEnglishOnly),
+      title: cleanTitleSingleLanguage(rawTitle, sopSpecs.isEnglishOnly, `Track ${i + 1}`),
       mood: template.mood,
+      metaInfo: template.metaInfo,
       stylePrompt: template.style,
       fullLyrics: template.lyrics
     });
@@ -1144,20 +1261,31 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
     return `${(idx + 1).toString().padStart(2, '0')}. ${t.title} (${min}:${sec})`;
   }).join('\n');
 
-  const youtubeTitle = sopSpecs.isEnglishOnly
-    ? `[PLAYLIST] ${theme.name} | Emotional Cinematic Movie OST Ballads for Deep Focus & Heartbreak 🎬 ☕️`
-    : `[PLAYLIST] ${theme.name} | 영화 같은 하루를 선물하는 감성 시네마틱 발라드 OST 🎬 ☕️`;
+  const youtubeTitle = sopSpecs.isShellacVintage
+    ? `[PLAYLIST] 1940s Vintage Shellac 78 RPM Phonograph | Worn Record Memories for Relaxing & Sleep 📻 ☕️`
+    : sopSpecs.isEnglishOnly
+    ? `[PLAYLIST] ${theme.name} | Emotional Ballads for Deep Focus & Heartbreak 🎬 ☕️`
+    : `[PLAYLIST] ${theme.name} | 영화 같은 하루를 선물하는 감성 플레이리스트 🎬 ☕️`;
 
-  const youtubeDesc = sopSpecs.isEnglishOnly
-    ? `Immerse yourself in a cinematic journey. Featuring heartfelt, vocal-led movie OST ballads crafted precisely according to your SOP specifications.\n\n[🎧 Tracklist]\n${tracklistText}\n\n[🎬 Recommended Listening]\n- Deep late-night contemplation & writing\n- Rainy afternoon coffee & emotional recharge\n- Movie-like immersion in every scene\n\n#PlymasterFactory #MovieOST #CinematicBallad #FilmScore #Playlist #SunoAI`
-    : `지친 마음에 깊은 울림을 전하는 ${theme.name} 플레이리스트입니다.\n입력된 SOP 지침을 바탕으로 기획된 감성 사운드로 편안한 힐링과 몰입을 즐겨보세요.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #플레이리스트 #음악추천 #BGM #OST #시네마틱 #감성음악`;
+  const youtubeDesc = sopSpecs.isShellacVintage
+    ? `Travel back in time to the 1940s. Authentic Type B worn and gritty shellac 78 RPM phonograph recordings with warm needle crackle, nostalgic melodies, and sincere vintage vocals.\n\n[🎧 Tracklist]\n${tracklistText}\n\n[📻 Sound Identity]\n- 1940s shellac 78 RPM record played on an antique wooden phonograph\n- Narrow frequency band, surface crackles & mechanical needle noise\n- Thick warm midrange & analog tube saturation\n\n#PlymasterFactory #Vintage1940s #ShellacRecord #78RPM #Phonograph #SunoAI`
+    : sopSpecs.isEnglishOnly
+    ? `Immerse yourself in a musical journey. Crafted precisely according to your SOP specifications.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #Playlist #SunoAI`
+    : `지친 마음에 깊은 울림을 전하는 ${theme.name} 플레이리스트입니다.\n입력된 SOP 지침을 바탕으로 기획된 감성 사운드로 편안한 힐링과 몰입을 즐겨보세요.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #플레이리스트 #음악추천 #BGM #감성음악`;
 
-  const hashtags = sopSpecs.isEnglishOnly
-    ? '#MovieOST #CinematicBallad #FilmSoundtrack #Ballad #Playlist #VocalBallad'
-    : '#영화OST #시네마틱발라드 #플레이리스트 #감성음악 #작업용BGM #감성발라드';
+  const hashtags = sopSpecs.isShellacVintage
+    ? '#Vintage1940s #ShellacPhonograph #78RPM #VintagePop #RetroBallad #SunoAI'
+    : sopSpecs.isEnglishOnly
+    ? '#Playlist #MusicProduction #SunoAI #AudioCards'
+    : '#플레이리스트 #음악추천 #감성음악 #SunoAI';
 
-  const thumbnailPrompt = 'Cinematic 16:9 movie still, melancholic beautiful film scene, soft warm golden hour light through sheer curtain, 35mm film aesthetic, emotional depth, photorealistic, 8k resolution --ar 16:9';
-  const backgroundImagePrompt = '16:9 seamless film loop background: warm vintage cinema aesthetic, slow ambient light rays, soft floating dust particles, emotional cozy atmosphere';
+  const thumbnailPrompt = sopSpecs.isShellacVintage
+    ? '1940s antique wooden phonograph playing a spinning shellac 78 RPM record on a polished mahogany table, soft warm amber incandescent glow, atmospheric dust motes floating in light rays, vintage sepia tone, cinematic 16:9 photorealistic 8k'
+    : 'Cinematic 16:9 movie still, melancholic beautiful scene, soft warm golden hour light through sheer curtain, 35mm film aesthetic, photorealistic, 8k resolution --ar 16:9';
+
+  const backgroundImagePrompt = sopSpecs.isShellacVintage
+    ? '16:9 seamless vintage room loop: antique 1940s gramophone with brass horn, gentle spinning record, warm amber fireplace glow, slow cozy dust particles, relaxing vintage aesthetic'
+    : '16:9 seamless film loop background: warm vintage cinema aesthetic, slow ambient light rays, soft floating dust particles, emotional cozy atmosphere';
 
   return {
     tracks,

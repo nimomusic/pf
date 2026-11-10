@@ -36,10 +36,18 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
     full += `### 1. 트랙 리스트 (총 ${data.tracks.length}곡)\n\n`;
     data.tracks.forEach((t) => {
       full += `----------------------------------------\n`;
-      full += `Track ${t.trackNumber}\n`;
-      full += `Title: ${t.title}\n`;
-      full += `Style Prompt: ${t.stylePrompt}\n`;
-      full += `Full Lyrics:\n${t.fullLyrics}\n\n`;
+      full += `Track ${t.trackNumber} — ${t.title}\n\n`;
+      if (t.metaInfo) {
+        full += `Meta Info\n`;
+        full += `Vocal: ${t.metaInfo.vocal || 'Female'}\n`;
+        full += `Genre: ${t.metaInfo.genre || 'Vintage Pop'}\n`;
+        full += `Mood: ${t.metaInfo.mood || t.mood || 'Nostalgic'}\n`;
+        full += `BPM: ${t.metaInfo.bpm || '80 BPM'}\n`;
+        full += `Target Length: ${t.metaInfo.targetLength || '3:05'}\n\n`;
+      }
+      full += `Title\n${t.title}\n\n`;
+      full += `Style Prompt\n${t.stylePrompt}\n\n`;
+      full += `Lyrics\n${t.fullLyrics}\n\n`;
     });
 
     full += `\n### 2. 유튜브 업로드 패키지\n\n`;
@@ -161,7 +169,10 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
           {activeTab === 'tracks' && (
             <div className="space-y-6">
               {data.tracks.map((track: TrackItem) => {
-                const trackFullText = `Track ${track.trackNumber}\nTitle: ${track.title}\nStyle Prompt: ${track.stylePrompt}\nFull Lyrics:\n${track.fullLyrics}`;
+                const metaStr = track.metaInfo
+                  ? `Meta Info\nVocal: ${track.metaInfo.vocal || 'Female'}\nGenre: ${track.metaInfo.genre || 'Vintage Pop'}\nMood: ${track.metaInfo.mood || track.mood || 'Nostalgic'}\nBPM: ${track.metaInfo.bpm || '80 BPM'}\nTarget Length: ${track.metaInfo.targetLength || '3:05'}\n\n`
+                  : '';
+                const trackFullText = `Track ${track.trackNumber} — ${track.title}\n\n${metaStr}Title\n${track.title}\n\nStyle Prompt\n${track.stylePrompt}\n\nLyrics\n${track.fullLyrics}`;
 
                 return (
                   <div
@@ -200,6 +211,37 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                     </div>
 
                     <div className="p-5 space-y-4 text-xs">
+                      {/* Meta Info (if present in SOP) */}
+                      {track.metaInfo && (
+                        <div className="p-3.5 bg-indigo-50/70 rounded-xl border border-indigo-200/80 flex flex-wrap items-center gap-2">
+                          <span className="font-extrabold text-indigo-950 text-xs mr-1">Meta Info:</span>
+                          {track.metaInfo.vocal && (
+                            <span className="bg-white px-2.5 py-1 rounded-md text-[11px] font-semibold text-indigo-700 border border-indigo-100 shadow-2xs">
+                              🎙️ {track.metaInfo.vocal}
+                            </span>
+                          )}
+                          {track.metaInfo.genre && (
+                            <span className="bg-white px-2.5 py-1 rounded-md text-[11px] font-semibold text-indigo-700 border border-indigo-100 shadow-2xs">
+                              🎵 {track.metaInfo.genre}
+                            </span>
+                          )}
+                          {track.metaInfo.bpm && (
+                            <span className="bg-white px-2.5 py-1 rounded-md text-[11px] font-semibold text-indigo-700 border border-indigo-100 shadow-2xs">
+                              ⏱️ {track.metaInfo.bpm}
+                            </span>
+                          )}
+                          {track.metaInfo.targetLength && (
+                            <span className="bg-white px-2.5 py-1 rounded-md text-[11px] font-semibold text-indigo-700 border border-indigo-100 shadow-2xs">
+                              ⏳ {track.metaInfo.targetLength}
+                            </span>
+                          )}
+                          {track.metaInfo.mood && (
+                            <span className="bg-white px-2.5 py-1 rounded-md text-[11px] font-semibold text-indigo-700 border border-indigo-100 shadow-2xs">
+                              ✨ {track.metaInfo.mood}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {/* 1. 곡 제목 (Song Title) */}
                       <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200">
                         <div className="flex items-center justify-between gap-2 mb-2">
