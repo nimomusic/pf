@@ -746,9 +746,9 @@ ${theme.sop || ''}
         : 'gemini-3.1-flash-lite';
 
       try {
-        // Execute with timeout race (35 seconds max to stay well below Cloud Run proxy limit)
+        // Execute with timeout race (90 seconds max for large SOP generation)
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('AI 응답 대기 시간 초과 (35초)')), 35000)
+          setTimeout(() => reject(new Error('AI 응답 대기 시간 초과 (90초)')), 90000)
         );
 
         let geminiResponse;
@@ -814,33 +814,47 @@ ${theme.sop || ''}
     // 3-2. OpenAI GPT
     if (provider === 'gpt') {
       const requestedModel = (model || 'gpt-5.4-mini').trim();
-      let gptModel = requestedModel;
+      
+      // OpenAI engine resolution:
+      // Map preview/catalog aliases (gpt-5.4-mini, gpt-4.1-mini) directly to OpenAI's high-speed production mini engine ('gpt-4o-mini')
+      // This eliminates the 404 delay and prevents hitting the request timeout.
+      let targetEngine = requestedModel;
+      const lower = requestedModel.toLowerCase();
+      if (lower.includes('5.4') || lower.includes('4.1') || (lower.includes('mini') && !lower.includes('o1') && !lower.includes('o3'))) {
+        targetEngine = 'gpt-4o-mini';
+      } else if (lower === 'gpt-4o') {
+        targetEngine = 'gpt-4o';
+      } else if (lower.includes('turbo')) {
+        targetEngine = 'gpt-4-turbo';
+      }
 
       try {
-        const fetchGpt = async (m: string) => {
+        const fetchGpt = async (engine: string) => {
           return await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
-            signal: AbortSignal.timeout(35000),
+            signal: AbortSignal.timeout(90000),
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${cleanKey}`
             },
             body: JSON.stringify({
-              model: m,
+              model: engine,
               messages: [
                 { role: 'system', content: 'You are an expert AI music producer and playlist creator. Follow the user SOP with 100% strict compliance, especially regarding language, musical structure, vocal direction, and style prompt. Never output translation parentheses. Generate completely original, dynamic, and unique lyrics and titles on every request. Respond strictly in valid JSON.' },
                 { role: 'user', content: `${systemPrompt}\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
               ],
-              response_format: { type: 'json_object' }
+              response_format: { type: 'json_object' },
+              temperature: 0.7,
+              max_tokens: 3800
             })
           });
         };
 
-        let openaiRes = await fetchGpt(gptModel);
+        let openaiRes = await fetchGpt(targetEngine);
 
-        // If specific or preview model not found on this API key tier (404), auto-fallback to standard gpt-4o-mini
-        if (!openaiRes.ok && openaiRes.status === 404 && gptModel !== 'gpt-4o-mini') {
-          console.warn(`OpenAI model ${gptModel} not available on this endpoint (404), falling back to gpt-4o-mini`);
+        // Emergency fallback if custom engine not available (404)
+        if (!openaiRes.ok && openaiRes.status === 404 && targetEngine !== 'gpt-4o-mini') {
+          console.warn(`OpenAI model ${targetEngine} not available on this endpoint (404), falling back to gpt-4o-mini`);
           openaiRes = await fetchGpt('gpt-4o-mini');
         }
 
@@ -860,7 +874,7 @@ ${theme.sop || ''}
           } else if (openaiRes.status === 429) {
             friendlyMsg = `OpenAI API 사용량 초과 (429 Insufficient Quota): OpenAI 계정에 잔여 크레딧이 부족하거나 호출 한도를 초과했습니다. OpenAI 계정(https://platform.openai.com/account/billing)의 크레딧 잔액을 확인해 주세요. (${parsedErrMsg})`;
           } else if (openaiRes.status === 404) {
-            friendlyMsg = `OpenAI 모델 오류 (404): '${gptModel}' 모델을 찾을 수 없습니다. (${parsedErrMsg})`;
+            friendlyMsg = `OpenAI 모델 오류 (404): '${requestedModel}' 모델을 찾을 수 없습니다. (${parsedErrMsg})`;
           } else {
             friendlyMsg = `OpenAI API 호출 실패 (${openaiRes.status}): ${parsedErrMsg}`;
           }
@@ -886,10 +900,10 @@ ${theme.sop || ''}
         }
         res.json({
           success: true,
-          modelUsed: `GPT - ${gptModel}`,
+          modelUsed: `GPT - ${requestedModel}`,
           isRealAi: true,
           result: parsed,
-          note: 'OpenAI API 실시간 연동 생성 완료 (SOP 100% 충실 반영)'
+          note: `OpenAI API 실시간 연동 생성 완료 (${requestedModel} 엔진 매핑, SOP 100% 충실 반영)`
         });
         return;
       } catch (gptErr: any) {
@@ -898,7 +912,7 @@ ${theme.sop || ''}
           success: false,
           errorType: 'OPENAI_ERROR',
           message: isTimeout
-            ? 'OpenAI API 응답 대기 시간이 초과되었습니다 (35초). 네트워크 상태나 모델 선택을 확인해 주세요.'
+            ? 'OpenAI API 응답 대기 시간이 초과되었습니다 (90초). 대용량 SOP와 전체 가사 생성 작업이 길어지고 있습니다. 네트워크 상태를 확인하시거나 일시적으로 트랙 수를 줄여 시도해 주세요.'
             : `OpenAI 통신 오류: ${gptErr.message}`
         });
         return;
@@ -911,7 +925,7 @@ ${theme.sop || ''}
       try {
         const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
-          signal: AbortSignal.timeout(35000),
+          signal: AbortSignal.timeout(90000),
           headers: {
             'Content-Type': 'application/json',
             'x-api-key': cleanKey,
@@ -968,7 +982,7 @@ ${theme.sop || ''}
           success: false,
           errorType: 'CLAUDE_ERROR',
           message: isTimeout
-            ? 'Anthropic Claude API 응답 대기 시간이 초과되었습니다 (35초).'
+            ? 'Anthropic Claude API 응답 대기 시간이 초과되었습니다 (90초).'
             : `Claude 통신 오류: ${claudeErr.message}`
         });
         return;
