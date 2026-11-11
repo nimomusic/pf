@@ -514,9 +514,31 @@ function parseSopSpecs(theme: any) {
   
   const engCharCount = (rawSop.match(/[a-zA-Z]/g) || []).length;
   const korCharCount = (rawSop.match(/[\uAC00-\uD7AF]/g) || []).length;
+  const jpnCharCount = (rawSop.match(/[\u3040-\u309F\u30A0-\u30FF]/g) || []).length;
 
-  // Check if Korean or Kor-Eng code-switching is intended in the SOP
-  const hasKoreanDirectives = 
+  // 1. Japanese J-POP Detection
+  // Check if Japanese lyrics or J-POP is mandated in the SOP
+  const isJapanese = 
+    combined.includes('100% 일본어') ||
+    combined.includes('100% japanese') ||
+    combined.includes('일본어 가사') ||
+    combined.includes('일본어 곡 제목') ||
+    combined.includes('일본어 제목') ||
+    combined.includes('j-pop') ||
+    combined.includes('jpop') ||
+    combined.includes('제이팝') ||
+    combined.includes('city pop') ||
+    combined.includes('시티 팝') ||
+    combined.includes('시티팝') ||
+    combined.includes('alt-pop / electronic r&b') ||
+    combined.includes('electronic r&b j-pop') ||
+    combined.includes('r&b j-pop') ||
+    (combined.includes('일본어') && !combined.includes('한국어 가사')) ||
+    (combined.includes('japanese') && !combined.includes('korean lyrics')) ||
+    jpnCharCount > 10;
+
+  // 2. Korean Directives (Strictly when NOT Japanese)
+  const hasKoreanDirectives = !isJapanese && (
     combined.includes('한영 혼용') ||
     combined.includes('한영혼용') ||
     combined.includes('kor-eng') ||
@@ -527,41 +549,47 @@ function parseSopSpecs(theme: any) {
     combined.includes('한국 알앤비') ||
     combined.includes('인스타 감성') ||
     combined.includes('느좋') ||
-    korCharCount > 30;
+    korCharCount > 30
+  );
 
-  const isKorEngMixed = 
+  const isKorEngMixed = !isJapanese && (
     combined.includes('한영 혼용') ||
     combined.includes('한영혼용') ||
     combined.includes('kor-eng') ||
     combined.includes('code-switching') ||
-    (combined.includes('한국어') && (combined.includes('영어') || combined.includes('english')));
+    (combined.includes('한국어') && (combined.includes('영어') || combined.includes('english')))
+  );
 
-  // Strictly check if 100% English is explicitly mandated without Korean mixing
-  const isEnglishExplicit = 
-    (combined.includes('100% english') ||
-     combined.includes('in 100% english') ||
-     combined.includes('all lyrics must be written in 100% english') ||
-     combined.includes('all lyrics must be written in english') ||
-     combined.includes('write lyrics naturally in english') ||
-     combined.includes('100% 영문') ||
-     combined.includes('영어로만 작성') ||
-     combined.includes('written in 100% english')) &&
-    !hasKoreanDirectives;
+  // 3. 100% English Explicit Check (Strictly when NOT Japanese and NOT Korean)
+  const isEnglishExplicit = !isJapanese && !hasKoreanDirectives && (
+    combined.includes('100% english') ||
+    combined.includes('in 100% english') ||
+    combined.includes('all lyrics must be written in 100% english') ||
+    combined.includes('all lyrics must be written in english') ||
+    combined.includes('write lyrics naturally in english') ||
+    combined.includes('100% 영문') ||
+    combined.includes('영어로만 작성') ||
+    combined.includes('written in 100% english')
+  );
 
-  // Only English if explicitly mandated and no Korean directives
-  const isEnglishOnly = isEnglishExplicit && !hasKoreanDirectives;
+  const isEnglishOnly = isEnglishExplicit && !hasKoreanDirectives && !isJapanese;
 
-  const isKoreanTitle = hasKoreanDirectives || isKorEngMixed || !isEnglishOnly;
-
-  const isKoreanHipHopRnb = 
-    combined.includes('알앤비') ||
-    combined.includes('힙합') ||
-    combined.includes('r&b') ||
-    combined.includes('hip-hop') ||
-    combined.includes('hiphop') ||
+  // Korean Hip-Hop & R&B (Strictly excluded when J-POP!)
+  const isKoreanHipHopRnb = !isJapanese && (
+    combined.includes('한국 알앤비') ||
+    combined.includes('한국 힙합') ||
     combined.includes('인스타 감성') ||
     combined.includes('느좋') ||
-    combined.includes('트랩');
+    ((combined.includes('알앤비') || combined.includes('힙합') || combined.includes('hip-hop') || combined.includes('trap')) &&
+     (combined.includes('한영 혼용') || combined.includes('한영혼용') || combined.includes('특수 보컬 질감') || combined.includes('suno 키워드')))
+  );
+
+  const targetLang: 'japanese' | 'english' | 'korean' = 
+    isJapanese ? 'japanese' :
+    isEnglishOnly ? 'english' : 'korean';
+
+  const isKoreanTitle = targetLang === 'korean';
+  const isJapaneseTitle = targetLang === 'japanese';
 
   // Check if [Intro] or [Outro] are forbidden in the SOP
   const forbidsIntroOutro = 
@@ -579,61 +607,97 @@ function parseSopSpecs(theme: any) {
     combined.includes('1940') ||
     combined.includes('vintage pop');
 
-  const isCinematic = 
+  const isCinematic = !isJapanese && (
     combined.includes('film') ||
     combined.includes('movie') ||
     combined.includes('cinematic') ||
     combined.includes('ost') ||
-    combined.includes('soundtrack');
+    combined.includes('soundtrack')
+  );
 
   return { 
+    isJapanese,
+    targetLang,
     isEnglishOnly, 
     isKoreanTitle, 
+    isJapaneseTitle,
     isKorEngMixed, 
     isKoreanHipHopRnb, 
     forbidsIntroOutro, 
     isShellacVintage, 
     isCinematic, 
     engCharCount, 
-    korCharCount 
+    korCharCount,
+    jpnCharCount
   };
 }
 
-// Helper: Ensure track title contains ONLY the target language (no bilingual parentheses)
-function cleanTitleSingleLanguage(title: string, isEnglishTarget: boolean, fallbackTitle = 'Track Title'): string {
+// Helper: Ensure track title contains ONLY the target language (no bilingual parentheses or multi-line translations)
+function cleanTitleSingleLanguage(
+  title: string, 
+  targetLang: 'japanese' | 'english' | 'korean', 
+  fallbackTitle = 'Track Title'
+): string {
   if (!title) return fallbackTitle;
   let clean = title.trim();
   clean = clean.replace(/^\[?track\s*\d*\]?:?\s*/i, '').replace(/^["'`]|["'`]$/g, '').trim();
 
-  // If title has parentheses e.g. "한국어 (English)" or "English (Korean)"
+  // If title contains multiple numbered lines (e.g. from SOP Step 4: "1. 画面の向こう\n2. on the other side...\n3. 화면 너머")
+  const lines = clean.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length > 1) {
+    if (targetLang === 'japanese') {
+      const jpLine = lines.find(l => /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(l) && !/[\uAC00-\uD7AF]/.test(l));
+      if (jpLine) clean = jpLine;
+    } else if (targetLang === 'english') {
+      const engLine = lines.find(l => /[a-zA-Z]/.test(l) && !/[\uAC00-\uD7AF]/.test(l) && !/[\u3040-\u309F\u30A0-\u30FF]/.test(l));
+      if (engLine) clean = engLine;
+    } else {
+      const korLine = lines.find(l => /[\uAC00-\uD7AF]/.test(l));
+      if (korLine) clean = korLine;
+    }
+  }
+
+  // Strip leading numbering e.g. "1. ", "1) ", "- "
+  clean = clean.replace(/^(?:\d+[\.\)]|[-•*])\s*/, '').trim();
+
+  // If title has parentheses e.g. "画面の向こう (화면 너머)" or "画面の向こう (on the other side)"
   const parenMatch = clean.match(/^([^(]+)\s*\(([^)]+)\)$/);
   if (parenMatch) {
     const part1 = parenMatch[1].trim();
     const part2 = parenMatch[2].trim();
-    const part1HasKor = /[\uAC00-\uD7AF]/.test(part1);
-    const part2HasKor = /[\uAC00-\uD7AF]/.test(part2);
-    const part1HasEng = /[a-zA-Z]/.test(part1);
-    const part2HasEng = /[a-zA-Z]/.test(part2);
-
-    if (isEnglishTarget) {
-      if (part2HasEng && !part2HasKor) return part2;
-      if (part1HasEng && !part1HasKor) return part1;
+    if (targetLang === 'japanese') {
+      const p1IsJp = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(part1) && !/[\uAC00-\uD7AF]/.test(part1);
+      const p2IsJp = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(part2) && !/[\uAC00-\uD7AF]/.test(part2);
+      if (p1IsJp) return part1;
+      if (p2IsJp) return part2;
+    } else if (targetLang === 'english') {
+      const p1IsEng = /[a-zA-Z]/.test(part1) && !/[\uAC00-\uD7AF]/.test(part1);
+      const p2IsEng = /[a-zA-Z]/.test(part2) && !/[\uAC00-\uD7AF]/.test(part2);
+      if (p2IsEng) return part2;
+      if (p1IsEng) return part1;
     } else {
-      if (part1HasKor && !part1HasEng) return part1;
-      if (part2HasKor && !part2HasEng) return part2;
+      const p1IsKor = /[\uAC00-\uD7AF]/.test(part1);
+      const p2IsKor = /[\uAC00-\uD7AF]/.test(part2);
+      if (p1IsKor) return part1;
+      if (p2IsKor) return part2;
     }
   }
 
-  // Strip remaining unwanted brackets in the non-target language
-  if (isEnglishTarget) {
-    clean = clean.replace(/\([\uAC00-\uD7AF\s]+\)/g, '').trim();
+  // Strip remaining unwanted brackets in other languages
+  if (targetLang === 'japanese') {
+    clean = clean.replace(/\([\uAC00-\uD7AF\s]+\)/g, '').replace(/\([a-zA-Z0-9\s-]+\)/g, '').trim();
     if (/[\uAC00-\uD7AF]/.test(clean)) {
       clean = clean.replace(/[\uAC00-\uD7AF]/g, '').trim();
-      if (!clean) clean = fallbackTitle;
+    }
+  } else if (targetLang === 'english') {
+    clean = clean.replace(/\([\uAC00-\uD7AF\s]+\)/g, '').replace(/\([\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\s]+\)/g, '').trim();
+    if (/[\uAC00-\uD7AF\u3040-\u309F\u30A0-\u30FF]/.test(clean)) {
+      clean = clean.replace(/[\uAC00-\uD7AF\u3040-\u309F\u30A0-\u30FF]/g, '').trim();
     }
   } else {
-    clean = clean.replace(/\([a-zA-Z0-9\s-]+\)/g, '').trim();
+    clean = clean.replace(/\([a-zA-Z0-9\s-]+\)/g, '').replace(/\([\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\s]+\)/g, '').trim();
   }
+
   return clean || fallbackTitle;
 }
 
@@ -727,10 +791,50 @@ app.post(['/api/generate', '/generate'], async (req: Request, res: Response) => 
       return;
     }
 
+    const targetLang = sopSpecs.targetLang;
+    const isJapanese = sopSpecs.isJapanese;
     const isKorEng = sopSpecs.isKorEngMixed || sopSpecs.isKoreanHipHopRnb;
     const isPureEnglish = sopSpecs.isEnglishOnly;
 
-    const languageRule = isPureEnglish
+    const languageRule = isJapanese
+      ? `[CRITICAL MANDATORY LANGUAGE REQUIREMENT: 100% PURE JAPANESE J-POP (100% 일본어 가사 및 일본어 곡 제목)]
+The user's SOP explicitly mandates Japanese R&B / J-POP with 100% Japanese sung lyrics and a Japanese song title.
+You MUST strictly follow these 4 field rules:
+
+1. TRACK TITLE ("title"):
+   - MUST BE A PURE JAPANESE SONG TITLE (일본어 곡 제목 - 漢字, ひらがな, カタカナ), e.g. "画面の向こう", "夜を泳ぐ", "残響", "微熱", "青い静寂", "街の灯り", "鍵をかけた部屋".
+   - Follow the SOP's title rules (1. 일본어 제목). NEVER output a Korean title! NEVER output an English-only title!
+   - NEVER output bilingual parentheses or translations in the title (e.g. do NOT output "画面の向こう (화면 너머)" or "1. 画面の向こう"). Output ONLY the single Japanese title!
+
+2. STYLE PROMPT ("stylePrompt") - MANDATORY 750 to 950 CHARACTERS (AIM FOR 800-900 CHARACTERS):
+   - MUST BE 100% IN ENGLISH, optimized for Suno / Udio prompt box (Zero Japanese or Korean characters).
+   - Write a rich, multi-sentence prompt covering all core dimensions:
+     (1) Genre & Vibe: electronic R&B J-pop, cinematic Japanese alt-pop, philosophical city ballad, intimate, urban, deep, elegant, lonely, quietly devastating, nocturnal city atmosphere
+     (2) Tempo, Rhythm & Groove: Exact 90~96 BPM, minimal electronic drums, soft kick, laidback swinging groove, restrained R&B rhythm
+     (3) Instrumentation: Mellow vintage electric piano, deep sub bass, glassy synth keys, clean guitar fragments, ambient room texture, foley SFX, space and air
+     (4) Vocal Texture & Performance: Original Japanese female lead, deep clear low-register tone, intimate low verse delivery, wide emotional chorus, restrained vibrato, no over-belting, polished vocal +2dB
+     (5) Spatial Mix & Mastering: Polished alt-pop mix, wide stereo panorama, bass clean, pristine dynamic headroom, hard stop ending
+     (6) Negative Exclusions: Exclude: -over-belting, -nasal vocal, -idol tone, -heavy autotune, -EDM, -trap, -muddy bass, -fadeout, -fast tempo, -harsh highs
+
+3. SECTION TAGS & GUIDES IN "fullLyrics":
+   - Section headers and bracketed sound guides MUST BE IN ENGLISH:
+     e.g. [Intro: Mellow electric piano, soft ambient room tone]
+          [Verse 1: Intimate low verse, soft kick and clean guitar fragments]
+          [Pre-Chorus: Glassy synth keys entering, elegant R&B passing chords]
+          [Chorus: Wide emotional delivery, restrained vibrato, full bass lift]
+          [Instrumental Interlude: Glassy synths, subtle guitar licks and ambient space]
+          [Verse 2: Detailed narrative continuing, quiet electric piano]
+          [Bridge: Stripped back, philosophical tone, soft ambient pads]
+          [Chorus: Final emotional chorus, expansive spatial reverb]
+          [Outro: Electric piano fading, quiet room tone, hard stop]
+   - Section tags MUST name the part and the English arrangement/vocal guide in square brackets.
+
+4. SUNG LYRICS BODY IN "fullLyrics" - MANDATORY 100% PURE JAPANESE (28~32 SUNG LINES):
+   - ABSOLUTE PROHIBITION: NEVER USE A SINGLE KOREAN CHARACTER OR WORD! KOREAN IS STRICTLY FORBIDDEN IN fullLyrics!
+   - ALL SUNG LYRICS MUST BE WRITTEN IN 100% NATURAL, POETIC, AND SOPHISTICATED JAPANESE (漢字, ひらがな, カタカナ).
+   - Write full lyrics of 28 to 32 lines across the full song progression (Intro, Verse 1, Pre-Chorus, Chorus, Verse 2, Interlude, Bridge, Chorus, Outro).
+   - Embody urban loneliness, quiet devastation, and poignant inner emotions fitting Japanese R&B (like Utada Hikaru, eill, iri, Friday Night Plans).`
+      : isPureEnglish
       ? `[CRITICAL MANDATORY LANGUAGE REQUIREMENT: 100% ENGLISH]
 The SOP explicitly commands 100% English production.
 - Track titles (title) MUST be 100% English only. Never include Korean translations or bilingual parentheses.
@@ -814,6 +918,7 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 1. [SOUND IDENTITY & ACOUSTIC CRITERIA]
 - Carefully inspect the SOP's Sound Identity, Acoustic Criteria, Genre, and Production Directives.
 - EVERY TRACK's 'stylePrompt' MUST EXCLUSIVELY EMBED AND REFLECT THE EXACT SOUND CRITERIA OF THE CURRENT SOP:
+  * If Japanese Electronic R&B J-pop / City Pop: electric piano, deep sub bass, minimal electronic drums, soft kick, glassy synth keys, clean guitar fragments, ambient room texture, original Japanese female lead, deep clear tone, intimate low verse, wide emotional chorus.
   * If Korean R&B Hip-Hop: ambient synth pads, deep 808 bass, lazy trap snare, rolling hi-hats, reverb-heavy electric piano, chosen vocal texture preset keywords.
   * If Cinematic Movie OST Ballad: felt upright piano intro, soaring orchestra strings, building crescendo, emotional dynamic range.
   * If 1940s Shellac: 78 RPM record, antique wooden phonograph, surface crackle, warm midrange.
@@ -833,32 +938,34 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 
 3. [LYRICS GUIDE RULES & SECTION STRUCTURE (fullLyrics)]
 - MANDATORY FULL-SONG PRODUCTION LENGTH: Target 2:50 to 3:30 duration.
-- ABSOLUTE PROHIBITION: DO NOT output a short 12-line snippet! Full lyrics MUST contain AT LEAST 36 to 50 sung lines across at least 7 distinct sections!
+- ABSOLUTE PROHIBITION: DO NOT output a short 12-line snippet! Full lyrics MUST contain AT LEAST 28 to 35 sung lines across all distinct sections!
 - Complete Section Progression:
-  * [Verse 1: <detailed English guide>] (8 to 10 lines)
-  * [Pre-Chorus: <detailed English guide>] (4 to 6 lines)
-  * [Chorus: <detailed English guide>] (8 to 10 lines)
-  * [Verse 2: <detailed English guide>] (8 to 10 lines)
-  * [Pre-Chorus: <detailed English guide>] or [Instrumental Break: <detailed English guide>] (4 to 6 lines)
-  * [Chorus: <detailed English guide>] (8 to 10 lines)
-  * [Bridge: <detailed English guide>] (4 to 6 lines)
-  * [Final Chorus: <detailed English guide>] (8 to 10 lines)
+  * [Intro: <detailed English guide>]
+  * [Verse 1: <detailed English guide>]
+  * [Pre-Chorus: <detailed English guide>]
+  * [Chorus: <detailed English guide>]
+  * [Instrumental Interlude: <detailed English guide>] or [Verse 2: <detailed English guide>]
+  * [Verse 2: <detailed English guide>]
+  * [Bridge: <detailed English guide>]
+  * [Chorus: <detailed English guide>]
+  * [Outro: <detailed English guide>]
   ${sopSpecs.forbidsIntroOutro ? `* CRITICAL: Do NOT include [Intro] or [Outro] tags per the SOP instructions! Start directly with [Verse 1] and finish with [Final Chorus]!` : `* Include appropriate bracketed section tags.`}
 - Guide prompts MUST be enclosed in square brackets [ ] to distinguish them from lyrics.
 - Do NOT output narrative sentences without brackets (such as "A soft piano begins...").
 
 4. [TRACK TITLES (title)]
+- For Japanese J-POP SOPs: PURE JAPANESE TITLE ONLY (일본어 곡 제목 - 漢字/ひらがな, e.g. "画面の向こう", "夜を泳ぐ", "残響", "微熱"). NEVER output Korean or English titles!
 - For 100% English SOPs: English titles only.
 - For Korean / Korean R&B Hip-Hop SOPs: KOREAN TITLES ONLY (한국어 곡 제목, e.g. "공허", "새벽 세 시", "비워내", "어스름"). NEVER output English titles!
 - NEVER output bilingual parentheses like "Title (제목)" or "제목 (Title)".
 
 5. [META INFO (metaInfo)]
 - For each track, output:
-  - vocal: e.g. "20s female vocal, husky yet silky texture" (matching SOP)
-  - genre: Genre strictly matching current SOP (e.g. "Atmospheric R&B, Chill Trap Hip-Hop")
-  - mood: Core emotional role defined in current SOP (e.g. "Dreamy & Empty, Late Night Aesthetic")
-  - bpm: e.g. "82 BPM" (matching SOP tempo)
-  - targetLength: e.g. "3:05" (matching SOP length)
+  - vocal: e.g. ${isJapanese ? '"original Japanese female lead, deep clear tone, intimate low verse"' : '"20s female vocal, husky yet silky texture"'}
+  - genre: Genre strictly matching current SOP (e.g. ${isJapanese ? '"Electronic R&B J-pop, Cinematic Alt-pop"' : '"Atmospheric R&B, Chill Trap Hip-Hop"'})
+  - mood: Core emotional role defined in current SOP (e.g. ${isJapanese ? '"Urban loneliness, quietly devastating"' : '"Dreamy & Empty, Late Night Aesthetic"'})
+  - bpm: e.g. ${isJapanese ? '"94 BPM"' : '"82 BPM"'}
+  - targetLength: e.g. "3:15"
 
 [OUTPUT FORMAT - PURE JSON ONLY]
 Respond ONLY with a valid JSON object matching this schema (no markdown fences, no conversational text):
@@ -866,17 +973,17 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
   "tracks": [
     {
       "trackNumber": 1,
-      "title": ${isPureEnglish ? '"Single language English song title"' : '"한국어 곡 제목 (예: 공허, 새벽 세 시, 어스름)"'},
+      "title": ${isJapanese ? '"純粋な日本語の曲名 (例: 画面の向こう, 夜を泳ぐ, 残響)"' : isPureEnglish ? '"Single language English song title"' : '"한국어 곡 제목 (예: 공허, 새벽 세 시, 어스름)"'},
       "metaInfo": {
         "vocal": "Detailed vocal assignment matching SOP (age, gender, chosen texture preset keywords)",
         "genre": "Genre strictly matching current SOP",
         "mood": "Core emotional role",
-        "bpm": "e.g. 82 BPM",
-        "targetLength": "e.g. 3:05"
+        "bpm": "e.g. 94 BPM",
+        "targetLength": "e.g. 3:15"
       },
       "mood": "Core emotion keyword",
-      "stylePrompt": "Expansive, comprehensive 750 to 950 character 100% English Suno prompt embedding: (1) micro-genre & vibe, (2) tempo & groove (BPM), (3) detailed instrumentation & sound design, (4) vocal texture (age, gender, Suno keywords, vocal delivery), (5) spatial mix & mastering, (6) Exclude terms.",
-      "fullLyrics": "Full 3-minute complete song lyrics of 36 to 50 lines spanning at least 7 distinct sections: [Verse 1: ...] (8-10 lines), [Pre-Chorus: ...] (4-6 lines), [Chorus: ...] (8-10 lines), [Verse 2: ...] (8-10 lines), [Pre-Chorus / Instrumental Break: ...], [Chorus: ...] (8-10 lines), [Bridge: ...] (4-6 lines), [Final Chorus: ...] (8-10 lines). Sung lines in natural Korean-English code-switching (75% Korean + 25% English). No [Intro] or [Outro] if forbidden by SOP."
+      "stylePrompt": "Expansive, comprehensive 750 to 950 character 100% English Suno prompt embedding: (1) micro-genre & vibe, (2) tempo & groove (BPM), (3) detailed instrumentation & sound design, (4) vocal texture (original Japanese female lead, low clear tone, delivery), (5) spatial mix & mastering, (6) Exclude terms.",
+      "fullLyrics": ${isJapanese ? '"100% pure Japanese lyrics (漢字・ひらがな・カタカナ, 28-32 lines) with English bracketed section tags [Intro: ...], [Verse 1: ...], [Chorus: ...]. ZERO Korean words."' : isPureEnglish ? '"Full 100% English lyrics of 36-50 lines with English section tags"' : isKorEng ? '"Full lyrics with English bracketed section tags followed by Korean-English code-switching sung lines (75% Korean + 25% English)."' : '"Full lyrics with English bracketed section tags followed by sung lyrics in the SOP language."'}
     }
   ],
   "youtube": {
@@ -888,6 +995,8 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
     "backgroundImagePrompt": "16:9 seamless loop video prompt matching current theme"
   }
 }`;
+
+    const standardSystemInstruction = 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY RULES: (1) Style prompts MUST be comprehensive, rich, and detailed (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries). (2) When SOP specifies Japanese / J-POP (e.g. Electronic R&B J-pop, City Pop), track titles MUST be in pure Japanese (漢字/ひらがな, e.g. 画面の向こう, 夜を泳ぐ), style prompts in 100% English, section tags in English brackets, and sung lyrics in 100% PURE JAPANESE (漢字/ひらがな/カタカナ, 28-32 lines) with ABSOLUTELY ZERO KOREAN. (3) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용, track titles MUST be in Korean only, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (Korean 75% + English 25%). (4) When SOP specifies 100% English, output 100% English only. (5) Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.';
 
     // 3. Provider execution
 
@@ -911,8 +1020,6 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
         const timeoutPromise = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('AI 응답 대기 시간 초과 (90초)')), 90000)
         );
-
-        const standardSystemInstruction = 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY LENGTH REQUIREMENTS: (1) Style prompts MUST be comprehensive, rich, and detailed (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries). (2) Full lyrics MUST be a complete ~3-minute song spanning at least 7 full sections (Verse 1, Pre-Chorus, Chorus, Verse 2, Pre-Chorus/Break, Chorus, Bridge, Final Chorus) totaling at least 36 to 50 sung lines (NEVER output abbreviated 3-section or 12-line snippets). (3) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용 (Kor-Eng Code-switching), track titles MUST be in Korean only, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (Korean 75% + English 25%). (4) Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.';
 
         let geminiResponse;
         try {
@@ -956,7 +1063,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
             ...tr,
             trackNumber: tr.trackNumber || (idx + 1),
-            title: cleanTitleSingleLanguage(tr.title, sopSpecs.isEnglishOnly, sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title')
+            title: cleanTitleSingleLanguage(tr.title, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title')
           }));
         }
         res.json({
@@ -1007,7 +1114,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
             body: JSON.stringify({
               model: engine,
               messages: [
-                { role: 'system', content: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY LENGTH REQUIREMENTS: (1) Style prompts MUST be comprehensive, rich, and detailed (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries). (2) Full lyrics MUST be a complete ~3-minute song spanning at least 7 full sections (Verse 1, Pre-Chorus, Chorus, Verse 2, Pre-Chorus/Break, Chorus, Bridge, Final Chorus) totaling at least 36 to 50 sung lines (NEVER output abbreviated 3-section or 12-line snippets). (3) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용 (Kor-Eng Code-switching), track titles MUST be in Korean only, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (Korean 75% + English 25%). (4) Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.' },
+                { role: 'system', content: standardSystemInstruction },
                 { role: 'user', content: `${systemPrompt}\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
               ],
               response_format: { type: 'json_object' },
@@ -1062,7 +1169,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
             ...tr,
             trackNumber: tr.trackNumber || (idx + 1),
-            title: cleanTitleSingleLanguage(tr.title, sopSpecs.isEnglishOnly, sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title')
+            title: cleanTitleSingleLanguage(tr.title, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title')
           }));
         }
         res.json({
@@ -1101,7 +1208,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           body: JSON.stringify({
             model: claudeModel,
             max_tokens: 6000,
-            system: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY LENGTH REQUIREMENTS: (1) Style prompts MUST be comprehensive, rich, and detailed (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries). (2) Full lyrics MUST be a complete ~3-minute song spanning at least 7 full sections (Verse 1, Pre-Chorus, Chorus, Verse 2, Pre-Chorus/Break, Chorus, Bridge, Final Chorus) totaling at least 36 to 50 sung lines (NEVER output abbreviated 3-section or 12-line snippets). (3) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용 (Kor-Eng Code-switching), track titles MUST be in Korean only, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (Korean 75% + English 25%). (4) Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.',
+            system: standardSystemInstruction,
             messages: [
               { role: 'user', content: `${systemPrompt}\n\n반드시 JSON 형식으로만 응답하세요.\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
             ]
@@ -1133,7 +1240,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
             ...tr,
             trackNumber: tr.trackNumber || (idx + 1),
-            title: cleanTitleSingleLanguage(tr.title, sopSpecs.isEnglishOnly, sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title')
+            title: cleanTitleSingleLanguage(tr.title, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title')
           }));
         }
         res.json({
@@ -1296,6 +1403,245 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
         mood: '영화가 끝난 후에도 멈추지 않는 깊은 감동과 여운',
         style: `grand orchestral film ballad, full strings, warm acoustic piano, ${vocalTag}, 75 bpm`,
         lyrics: `[Intro]\n(웅장하면서도 쓸쓸한 스트링 서주)\n\n[Verse 1]\n마지막 장면이 끝나고 암전이 찾아올 때\n내 맘에 남은 너의 대사는 영원히 살아있어\n\n[Chorus]\n엔딩 크레딧이 모두 올라가도\n우리의 사랑은 끝나지 않는 영화처럼 계속돼\n\n[Outro]\n(현악 합주 페이드)`
+      }
+    ];
+  } else if (sopSpecs.isJapanese) {
+    // Japanese J-POP / Electronic R&B - 100% Japanese Title & 100% Japanese Sung Lyrics with English bracket tags
+    trackTemplates = [
+      {
+        title: '画面の向こう',
+        mood: '画面越しの孤独と真夜中の静けさに寄り添う、都会的で洗練された電子オルタナティブR&B',
+        metaInfo: {
+          vocal: '20s Japanese female vocal, intimate low-register tone, delicate breathy delivery, restrained vibrato',
+          genre: 'Electronic R&B J-POP, Alt-Pop',
+          mood: 'Urban Loneliness, Intimate & Quietly Devastating',
+          bpm: '94 BPM',
+          targetLength: '3:15'
+        },
+        style: `electronic R&B J-pop, cinematic Japanese alt-pop, philosophical city ballad, late-night urban solitude, intimate, lonely, quietly devastating, warm vintage Rhodes electric piano chords with slow stereo tremolo, glassy analog synthesizer pads, atmospheric ambient room tone, soft filtered 808 sub-bass pulse, 90-96 bpm minimal 4/4 electronic drum groove, subtle vinyl crackle and turntable patina, foley rain ambience against apartment window glass, sparse clean electric guitar fragments, 20s Japanese female vocal, intimate low register tone, delicate breathy delivery, restrained vibrato, wide emotional expansion in chorus, clear vocal presence, dry lead vocal mix, front-and-center lead vocal placement, modern Tokyo night playlist mastering, 94 bpm, -over-belting, -rock vocal drive, -orchestra, -bright brass, -edm drop, -fast rock tempo, -monotone delivery`,
+        lyrics: `[Intro: Mellow Rhodes electric piano, atmospheric room tone]
+(Soft ambient room tone, mellow electric piano arpeggios slowly breathing)
+
+[Verse 1: Intimate low verse, soft kick and clean guitar fragments]
+青い光が照らし出す部屋
+指先がなぞる冷たい画面
+既読のつかないメッセージだけが
+暗闇の中に浮かんでいる
+眠らない街のどこかで
+あなたも同じ月を見ているの？
+言葉にならない溜息ひとつ
+静かに夜の底へと沈んでいく
+
+[Pre-Chorus: Rising emotional tension, subtle sub-bass lift]
+届かない距離ばかり数えて
+胸の奥が少しだけ痛むけれど
+この孤独さえ愛おしいと思えるのは
+あなたが残したぬくもりのせい
+
+[Chorus: Wide emotional delivery, restrained vibrato, full bass lift]
+画面の向こう、遠く離れた街で
+私の声は聴こえていますか
+どれだけ夜を重ねても消えない想い
+小さなスクロールの向こう側に
+確かにある温もりを信じているから
+言えないさよならを抱きしめて
+今夜も静かにあなたを想う
+
+[Verse 2: Intimate storytelling, delicate electric piano chords]
+通り過ぎる電車の遠い響き
+カーテンを揺らす真夜中の風
+誰かの足音が遠ざかるたび
+ひとりきりの輪郭が深くなる
+思い出ばかりが鮮やかすぎて
+未来の景色が滲んでしまう
+それでもこの場所で息をしている
+
+[Pre-Chorus: Rising emotional tension, subtle sub-bass lift]
+届かない距離ばかり数えて
+胸の奥が少しだけ痛むけれど
+この孤独さえ愛おしいと思えるのは
+あなたが残したぬくもりのせい
+
+[Chorus: Wide emotional delivery, restrained vibrato, full bass lift]
+画面の向こう、遠く離れた街で
+私の声は聴こえていますか
+どれだけ夜を重ねても消えない想い
+小さなスクロールの向こう側に
+確かにある温もりを信じているから
+言えないさよならを抱きしめて
+今夜も静かにあなたを想う
+
+[Bridge: Stripped back acoustic piano, vulnerable close delivery]
+触れ合えなくても
+言葉が途切れても
+あの日の笑顔が消えることはない
+心はいつでもあなたの隣にいる
+
+[Final Chorus: Maximum emotional release, subtle vocal doubles]
+画面の向こう、夜明けが近づく空
+孤独な光を包み込んでいく
+どれだけ遠く離れていても
+この想いは色褪せないまま
+画面の向こうのあなたへと届いて
+また新しい朝が始まるまで
+静かに目を閉じて眠りにつく
+
+[Outro: Mellow electric piano fading to ambient city night silence]
+(Mellow electric piano softly resolving into silence)
+おやすみ、私の光
+[End]`
+      },
+      {
+        title: '夜を泳ぐ',
+        mood: '深夜の首都高と冷たいネオンライト、静寂を漂うエレクトロニック・シティ・バラード',
+        metaInfo: {
+          vocal: '20s Japanese female vocal, hushed breathy tone, melancholic whisper-singing',
+          genre: 'Electronic R&B J-POP, City Ballad',
+          mood: 'Nocturnal Loneliness, Dreamy & Sophisticated',
+          bpm: '92 BPM',
+          targetLength: '3:10'
+        },
+        style: `electronic R&B J-pop, cinematic Japanese alt-pop, philosophical city ballad, midnight highway expressway drive, nocturnal solitude, dreamy and sophisticated, mellow vintage Fender Rhodes electric piano, lush detuned analog synthesizer textures, deep gliding 808 sub-bass, soft minimal kick, clean dry snare, subtle distant city traffic foley ambience, 20s Japanese female vocal, intimate low register, whispered vocal delivery, restrained vibrato, wide emotional extension and layered falsetto hook, clear vocal presence, front-and-center lead vocal placement, dry intimate vocal mix, spacious stereo panorama, punchy low-end headroom, modern Tokyo playlist mastering, 92 bpm, -over-belting, -rock vocal drive, -orchestra, -bright brass, -edm drop, -fast rock tempo, -monotone delivery`,
+        lyrics: `[Intro: Atmospheric synth pad and gentle Rhodes chords]
+(Gentle Rhodes chords with subtle tape saturation and distant city ambience)
+
+[Verse 1: Breathy intimate vocal, minimal beat and warm Rhodes]
+ハイウェイを流れていく車のテールランプ
+赤と白の光が滲むフロントガラス
+助手席の空白に投げたジャケット
+深夜二時の静寂が胸を満たす
+どこへ向かえば忘れられるだろう
+交差点の青信号がただ冷たく光る
+アクセルを踏み込むたびに
+昨日の記憶がバックミラーを掠める
+
+[Pre-Chorus: Subtle rising pulse, gentle hi-hat movement]
+街の灯りが星空のように瞬いて
+私の孤独をそっと照らし出す
+言い出せなかった本当の言葉が
+喉の奥で小さく震えている
+
+[Chorus: Wide emotional delivery, restrained vibrato, full bass lift]
+夜を泳ぐ、暗闇の深い海を
+光の届かない場所まで深く
+あなたなしでも息ができるように
+静かな波に身を任せて
+消えそうな面影を追いかけながら
+孤独さえも私の味方にして
+夜明け前の風を抱きしめる
+
+[Verse 2: Conversational tone, soft kick and Rhodes]
+カーラジオから流れる古いR&B
+いつかふたりで口ずさんだメロディ
+ボリュームを少しだけ上げてみるけれど
+切なさばかりが胸に響いてくる
+誰も知らない秘密の抜け道
+ヘッドライトが照らすアスファルト
+私たちはどこで擦れ違ったのかな
+
+[Chorus: Wide emotional delivery, restrained vibrato, full bass lift]
+夜を泳ぐ、暗闇の深い海を
+光の届かない場所まで深く
+あなたなしでも息ができるように
+静かな波に身を任せて
+消えそうな面影を追いかけながら
+孤独さえも私の味方にして
+夜明け前の風を抱きしめる
+
+[Bridge: Stripped-down Rhodes chords, intimate whisper]
+振り向かないと決めたはずなのに
+まだあなたの匂いが残っている
+さよならは始まりの合図だから
+もう涙は見せないと誓うよ
+
+[Final Chorus: Maximum emotional release, layered vocal harmonies]
+夜を泳ぐ、東の空が白むまで
+哀しみさえも光に変えて
+あなたと過ごしたすべての時間を
+美しかった記憶として残すために
+この夜を泳ぎ切ったその先で
+私はきっと前を向いて歩き出せる
+
+[Outro: Soft Fender Rhodes fading to dawn silence]
+(Fender Rhodes fading to soft morning silence)
+夜が明けていく
+[End]`
+      },
+      {
+        title: '残響の街',
+        mood: '都会の雑踏と通り過ぎる日常のディテール、美しく切ないオルタナティブ・ポップ',
+        metaInfo: {
+          vocal: '20s Japanese female vocal, cool crystalline tone, intimate low register, wide emotional chorus',
+          genre: 'Philosophical Electronic R&B J-POP',
+          mood: 'Philosophical Melancholy, Elegant Urban Solitude',
+          bpm: '96 BPM',
+          targetLength: '3:20'
+        },
+        style: `electronic R&B J-pop, cinematic Japanese alt-pop, philosophical city ballad, rainy metropolitan Shibuya aesthetic, urban, intimate, lonely, quietly devastating, glassy electric piano arpeggios, spacious warm analog synthesizer textures, tight sub bass pulse, minimal 4/4 electronic percussion, clean muted jazz guitar chords, vinyl needle grain, authentic foley rain drops on asphalt, 20s Japanese female vocal, intimate low tone, cool crystalline vocal timbre, restrained vibrato, wide emotional chorus lift, clear vocal presence, front-and-center lead vocal placement, wide stereophonic field, pristine modern playlist master, 96 bpm, -over-belting, -rock vocal drive, -orchestra, -bright brass, -edm drop, -fast rock tempo, -monotone delivery`,
+        lyrics: `[Intro: Glassy synth keys and muted clean guitar motif]
+(Glassy synth keys floating over subtle vinyl crackle and distant rain foley)
+
+[Verse 1: Cool crystalline vocal, sparse electric piano chords]
+傘を打つ雨粒のリズムに合わせて
+見慣れた交差点を渡る人波
+すれ違う誰の目にも映らない
+透明な私だけがここに立っている
+カフェの窓ガラスに残る指紋のように
+日常の隙間に焼きついた記憶
+触れれば消えてしまう幻を
+今もまだ探しているのかもしれない
+
+[Pre-Chorus: Subtle bass entrance, rising emotional cadence]
+日常という名の波に流されながら
+大切なものを見失いそうになる
+それでも胸の奥の小さな鼓動が
+忘れてはいけない痛みを教えてくれる
+
+[Chorus: Wide emotional delivery, restrained vibrato, full bass lift]
+残響の街、ビルボードの光の下で
+あなたの名前を心で呼ぶ
+騒がしい雑踏の真ん中で
+ふたりだけの静寂を覚えている
+言葉では届かない深い場所へ
+この切なさが溶け込んでいくように
+今夜も雨の街に歌を降らせる
+
+[Verse 2: Intimate reflective delivery, rhythmic soft beat]
+濡れた歩道に反射するネオンの文字
+通り過ぎるタクシーが跳ね上げる水しぶき
+ありふれた景色のひとつひとつが
+なぜかこんなにも愛おしく思える
+完璧な愛なんてなかったけれど
+不器用な優しさは本物だった
+そう思える今が少し誇らしい
+
+[Chorus: Wide emotional delivery, restrained vibrato, full bass lift]
+残響の街、ビルボードの光の下で
+あなたの名前を心で呼ぶ
+騒がしい雑踏の真ん中で
+ふたりだけの静寂を覚えている
+言葉では届かない深い場所へ
+この切なさが溶け込んでいくように
+今夜も雨の街に歌を降らせる
+
+[Bridge: Delicate electric piano solo, emotional vulnerability]
+やまない雨はないと誰かが言っても
+この雨に洗われていたい夜がある
+悲しみも全部抱きしめたまま
+明日へと歩いていくから
+
+[Final Chorus: Highest emotional peak, wide layered backing vocals]
+残響の街、雲の切れ間に光が射す
+雨上がりの匂いが立ち込めて
+あなたのくれたすべての愛が
+私の足元を確かに照らしている
+どんなに世界が色褪せようとも
+この歌はずっと街の風に乗って響き続ける
+
+[Outro: Glassy synth keys and rain fading out]
+(Glassy synth keys gently fading into rain ambience)
+街の残響の中に
+[End]`
       }
     ];
   } else if (sopSpecs.isKoreanHipHopRnb || sopSpecs.isKorEngMixed) {
@@ -1584,7 +1930,7 @@ Our unforgettable late night drive`
 
     tracks.push({
       trackNumber: i + 1,
-      title: cleanTitleSingleLanguage(rawTitle, sopSpecs.isEnglishOnly, sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title'),
+      title: cleanTitleSingleLanguage(rawTitle, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title'),
       mood: template.mood,
       metaInfo: template.metaInfo,
       stylePrompt: template.style,
@@ -1601,6 +1947,8 @@ Our unforgettable late night drive`
 
   const youtubeTitle = sopSpecs.isShellacVintage
     ? `[PLAYLIST] 1940s Vintage Shellac 78 RPM Phonograph | Worn Record Memories for Relaxing & Sleep 📻 ☕️`
+    : sopSpecs.isJapanese
+    ? `[PLAYLIST] ${theme.name} | 深夜の都市と孤独を包む洗練されたオルタナティブ R&B J-POP 🌙 🎧`
     : sopSpecs.isKoreanHipHopRnb
     ? `[PLAYLIST] ${theme.name} | 늦은 밤 감각적인 새벽 드라이브 느좋 칠(Chill) 알앤비 힙합 🌙 🎧`
     : sopSpecs.isEnglishOnly
@@ -1609,6 +1957,8 @@ Our unforgettable late night drive`
 
   const youtubeDesc = sopSpecs.isShellacVintage
     ? `Travel back in time to the 1940s. Authentic Type B worn and gritty shellac 78 RPM phonograph recordings with warm needle crackle, nostalgic melodies, and sincere vintage vocals.\n\n[🎧 Tracklist]\n${tracklistText}\n\n[📻 Sound Identity]\n- 1940s shellac 78 RPM record played on an antique wooden phonograph\n- Narrow frequency band, surface crackles & mechanical needle noise\n- Thick warm midrange & analog tube saturation\n\n#PlymasterFactory #Vintage1940s #ShellacRecord #78RPM #Phonograph #SunoAI`
+    : sopSpecs.isJapanese
+    ? `都会の夜と静寂に溶け込む洗練されたオルタナティブ R&B J-POP。\n${theme.name}のSOPに基づき、心に染み渡るサウンドと日本語歌詞でお届けします。\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #JPOP #ElectronicRnB #CityPop #AltPop #SunoAI`
     : sopSpecs.isKoreanHipHopRnb
     ? `감각적인 늦은 밤, 몽환적인 칠(Chill) 트랩 비트와 세련된 한영 혼용 보컬/싱랩의 향연.\n${theme.name} 플레이리스트와 함께 새벽 드라이브의 미묘한 텐션과 여유를 즐겨보세요.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #인스타감성 #느좋 #알앤비힙합 #한국알앤비 #새벽드라이브 #SunoAI`
     : sopSpecs.isEnglishOnly
@@ -1617,6 +1967,8 @@ Our unforgettable late night drive`
 
   const hashtags = sopSpecs.isShellacVintage
     ? '#Vintage1940s #ShellacPhonograph #78RPM #VintagePop #RetroBallad #SunoAI'
+    : sopSpecs.isJapanese
+    ? '#JPOP #ElectronicRnB #CityPop #AltPop #SunoAI #Playlist'
     : sopSpecs.isKoreanHipHopRnb
     ? '#인스타감성 #느좋 #알앤비 #한국힙합 #칠트랩 #새벽음악 #SunoAI'
     : sopSpecs.isEnglishOnly
@@ -1625,12 +1977,16 @@ Our unforgettable late night drive`
 
   const thumbnailPrompt = sopSpecs.isShellacVintage
     ? '1940s antique wooden phonograph playing a spinning shellac 78 RPM record on a polished mahogany table, soft warm amber incandescent glow, atmospheric dust motes floating in light rays, vintage sepia tone, cinematic 16:9 photorealistic 8k'
+    : sopSpecs.isJapanese
+    ? '16:9 Tokyo rainy night view through high-rise apartment window, soft neon reflections on wet glass, warm interior desk lamp, sophisticated urban loneliness, cinematic 35mm photography 8k'
     : sopSpecs.isKoreanHipHopRnb
     ? '16:9 aesthetic Korean late night mood, rainy city car window reflections, neon bokeh, moody cinema lighting, 35mm film grain, photorealistic 8k'
     : 'Cinematic 16:9 movie still, melancholic beautiful scene, soft warm golden hour light through sheer curtain, 35mm film aesthetic, photorealistic, 8k resolution --ar 16:9';
 
   const backgroundImagePrompt = sopSpecs.isShellacVintage
     ? '16:9 seamless vintage room loop: antique 1940s gramophone with brass horn, gentle spinning record, warm amber fireplace glow, slow cozy dust particles, relaxing vintage aesthetic'
+    : sopSpecs.isJapanese
+    ? '16:9 seamless loop: Tokyo midnight city lights through raindrop glass window, slow ambient reflections, calm urban atmosphere'
     : sopSpecs.isKoreanHipHopRnb
     ? '16:9 seamless loop: late night neon city lights reflecting through car windshield, slow ambient motion, moody aesthetic atmosphere'
     : '16:9 seamless film loop background: warm vintage cinema aesthetic, slow ambient light rays, soft floating dust particles, emotional cozy atmosphere';
