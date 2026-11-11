@@ -734,37 +734,58 @@ app.post(['/api/generate', '/generate'], async (req: Request, res: Response) => 
       ? `[CRITICAL MANDATORY LANGUAGE REQUIREMENT: 100% ENGLISH]
 The SOP explicitly commands 100% English production.
 - Track titles (title) MUST be 100% English only. Never include Korean translations or bilingual parentheses.
-- Style prompts (stylePrompt), section tags, and section guides MUST be 100% English.
-- ALL lyrics in fullLyrics MUST be written in 100% pure English. Not a single Korean word or syllable.`
+- Style prompts (stylePrompt), section tags, and section guides MUST be 100% English (750 to 950 characters).
+- ALL lyrics in fullLyrics MUST be written in 100% pure English (36 to 50 lines across all sections for a 3-minute song). Not a single Korean word or syllable.`
       : isKorEng
-      ? `[CRITICAL MANDATORY LANGUAGE & SCRIPT REQUIREMENTS: KOREAN R&B HIP-HOP (한영 혼용)]
-The user's SOP explicitly specifies Korean R&B / Hip-Hop with Korean-English Code-switching (한영 혼용). Follow these exact 4 field rules:
+      ? `[CRITICAL MANDATORY SPECIFICATIONS: KOREAN R&B HIP-HOP (한영 혼용)]
+The user's SOP explicitly specifies Korean R&B / Hip-Hop with Korean-English Code-switching (한영 혼용) for a complete 3-minute commercial playlist track. Follow these 4 strict field rules:
 
 1. TRACK TITLE ("title"):
-   - MUST BE A KOREAN TITLE (한국어 곡 제목), e.g. "공허", "비워내", "반달", "늦은 밤", "새벽 세 시".
-   - Follow the SOP's title rules (1단어, 2단어 조합, 또는 짧은 구).
-   - NEVER output an English-only title for this theme!
+   - MUST BE A KOREAN TITLE ONLY (한국어 곡 제목), e.g. "공허", "비워내", "어스름", "새벽 세 시", "달 그림자", "잔향".
+   - Follow the SOP's title rules (1단어, 2단어 조합, 또는 짧은 감성 구).
+   - NEVER output an English title, and NEVER include English translations in parentheses!
 
-2. STYLE PROMPT ("stylePrompt"):
+2. STYLE PROMPT ("stylePrompt") - MANDATORY 750 to 950 CHARACTERS (AIM FOR 800-900 CHARACTERS):
    - MUST BE 100% IN ENGLISH, optimized for Suno / Udio prompt box.
-   - Format: Genre & Vibe, Instrument Detail, Vocal Texture with specific Suno keywords, BPM, and mix character.
-   - Example format: "Atmospheric R&B, chill trap hip-hop, trendy aesthetic vibe, late night mood, ambient synth pads, deep 808 bass, trap hi-hats, early 20s male vocal, deep smoky texture, dry vocal mix, raw vocal texture, front-and-center vocals, minimal backing, 82 bpm"
+   - ABSOLUTE PROHIBITION: NEVER output a short 1-2 sentence prompt (150-250 characters)!
+   - You MUST write an expansive, detailed prompt of 750~950 characters covering ALL 6 DIMENSIONS:
+     (1) Micro-Genre & Aesthetic: Atmospheric Korean R&B, chill trap hip-hop, trendy nocturnal aesthetic vibe, late-night bedroom lo-fi mood, dreamy and contemplative
+     (2) Tempo, Rhythm & Groove: Exact BPM (e.g. 82 BPM), swinging half-time groove, lazy trap snare, rolling 32nd hi-hat triplets, laidback rimshots
+     (3) Detailed Instruments & Sound Design: Vintage Rhodes electric piano with tremolo, detuned ambient analog synthesizer pads, deep gliding 808 sub-bass pulse, filtered vocal chop counter-melodies, subtle warm tape saturation and vinyl crackle
+     (4) Vocal Texture & Performance: Specific age/gender and exact Suno keywords from the chosen 20-preset list (e.g. "early 20s female vocal, husky yet silky, slightly raspy soft vocal, sandy texture, breathy singing-rap delivery, airy falsetto ad-libs, intimate close-mic capture, dry lead vocal mix, raw vocal texture, front-and-center presence, minimal backing layer")
+     (5) Spatial Mix & Mastering: Spacious stereo panorama, airy shimmering highs, warm tight low frequencies, modern clean playlist-ready master
+     (6) Exclusions: Exclude: -orchestra, -string section, -bright brass, -edm drop, -fast rock tempo, -flat emotionless delivery
 
 3. SECTION TAGS & GUIDES IN "fullLyrics":
    - Section headers and bracketed guides MUST BE IN ENGLISH:
-     e.g. [Verse 1: Breathy singing rap over atmospheric synth]
-          [Pre-Chorus: Building up with trap hi-hats and deep 808]
-          [Chorus: Dreamy and rhythmic vocal hook]
+     e.g. [Verse 1: Breathy singing rap over warm Rhodes and deep 808]
+          [Pre-Chorus: Building up with trap hi-hats and deep 808 bass]
+          [Chorus: Dreamy and rhythmic vocal hook with stacked falsetto]
+          [Verse 2: Laidback syncopated melodic rap flow]
           [Instrumental Break: Dreamy synth solo with heavy reverb, 8 bars]
-   ${sopSpecs.forbidsIntroOutro ? `- IMPORTANT TAG PROHIBITION: The SOP explicitly orders: "중요 주의사항: 곡 구조 생성 시 [Intro]와 [Outro] 태그는 절대 사용하지 마라. 곡은 1절(Verse)이나 코러스(Chorus) 등으로 바로 시작하고 마무리되도록 구성해라." You MUST NEVER include [Intro] or [Outro] tags for this theme! Start directly with [Verse 1] or [Chorus]!` : ''}
+          [Chorus: Full melodic release with layered ad-libs]
+          [Bridge: Stripped-down emotional turn, intimate whispered vocal]
+          [Final Chorus: Climax hook, layered harmonies, high emotional ad-libs]
+   ${sopSpecs.forbidsIntroOutro ? `- IMPORTANT TAG PROHIBITION: The SOP explicitly orders: "중요 주의사항: 곡 구조 생성 시 [Intro]와 [Outro] 태그는 절대 사용하지 마라. 1절([Verse 1])로 바로 시작하고 코러스([Final Chorus])로 바로 끝나도록 구성해라." You MUST NEVER include [Intro] or [Outro] tags for this theme! Start directly with [Verse 1] and finish with [Final Chorus]!` : ''}
 
-4. SUNG LYRICS BODY IN "fullLyrics":
+4. SUNG LYRICS BODY IN "fullLyrics" - MANDATORY 36 TO 50 LINES (FULL 3-MINUTE SONG):
+   - ABSOLUTE PROHIBITION: DO NOT OUTPUT A SHORT 3-SECTION / 12-LINE SNIPPET!
+   - The song must be a COMPLETE 3-MINUTE TRACK (2:50~3:30) with AT LEAST 7 FULL SECTIONS:
+     * [Verse 1: ...] (8 to 10 sung lines)
+     * [Pre-Chorus: ...] (4 to 6 sung lines)
+     * [Chorus: ...] (8 to 10 sung lines)
+     * [Verse 2: ...] (8 to 10 sung lines)
+     * [Pre-Chorus: ...] or [Instrumental Break: ...] (4 to 6 lines)
+     * [Chorus: ...] (8 to 10 sung lines)
+     * [Bridge: ...] (4 to 6 sung lines)
+     * [Final Chorus: ...] (8 to 10 sung lines with emotional climax)
    - SUNG LYRICS MUST BE KOREAN-ENGLISH CODE-SWITCHING (한영 혼용: approx. 70~80% Korean, 20~30% English)!
    - Write natural Korean conversational lyrics with smooth English rhyme endings, English hook phrases, and trendy ad-libs (Yeah, Right, Uh-huh, Hm-hm).
    - NEVER output 100% English lyrics! Korean MUST be the primary language of the sung lyrics lines!`
-      : `[LANGUAGE GUIDELINES]
-- Track titles and sung lyrics must match the language of the SOP. If the SOP is written in Korean, track titles and lyrics must be in Korean.
-- Style prompts (stylePrompt) and section guide brackets must be in English for Suno/Udio compatibility.`;
+      : `[LANGUAGE & LENGTH GUIDELINES]
+- Track titles and sung lyrics must match the language of the SOP. If the SOP is in Korean, use Korean titles and lyrics.
+- Style prompts MUST be comprehensive (750-950 characters) and written in 100% English for Suno/Udio.
+- Full lyrics MUST be a complete 3-minute song (at least 36-50 lines across at least 7 structural sections).`;
 
     const systemPrompt = `You are "Plymaster", a world-class AI executive music producer and Suno/Udio prompt engineer.
 
@@ -793,37 +814,47 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 1. [SOUND IDENTITY & ACOUSTIC CRITERIA]
 - Carefully inspect the SOP's Sound Identity, Acoustic Criteria, Genre, and Production Directives.
 - EVERY TRACK's 'stylePrompt' MUST EXCLUSIVELY EMBED AND REFLECT THE EXACT SOUND CRITERIA OF THE CURRENT SOP:
-  * If the SOP specifies Korean R&B Hip-Hop (e.g. ambient synth pads, deep 808 bass, trap hi-hats, reverb-heavy electric piano, vocal texture keywords), embed that.
-  * If the SOP specifies a Cinematic Movie OST Ballad (e.g. felt upright piano intro, soaring orchestra strings, building crescendo, emotional dynamic range), embed that.
-  * If the SOP specifies 1940s Shellac (e.g. 78 RPM record, antique wooden phonograph, surface crackle, warm midrange), embed that.
+  * If Korean R&B Hip-Hop: ambient synth pads, deep 808 bass, lazy trap snare, rolling hi-hats, reverb-heavy electric piano, chosen vocal texture preset keywords.
+  * If Cinematic Movie OST Ballad: felt upright piano intro, soaring orchestra strings, building crescendo, emotional dynamic range.
+  * If 1940s Shellac: 78 RPM record, antique wooden phonograph, surface crackle, warm midrange.
 - CRITICAL ISOLATION RULE: NEVER inherit, copy, or mix in instruments, eras, vintage crackles, or sound textures from previous or other themes! Use ONLY what is requested in the current SOP!
 
 2. [STYLE PROMPT SPECIFICATIONS (stylePrompt)]
 - Write in English so it can be pasted directly into the Suno / Udio Style Prompt input field.
-- LENGTH & DEPTH TARGET: If the SOP specifies a character count target (e.g. "within 1,000 characters, aim for 800–900 characters" or "under 990 characters"), your 'stylePrompt' MUST be a comprehensive, rich, descriptive multi-sentence prompt reaching 800–900 characters!
-- NEVER output a generic 1-2 sentence prompt of 100-200 characters!
-- In every track's stylePrompt, capture:
+- MANDATORY LENGTH & DEPTH TARGET: MUST BE 750 to 950 characters (aim for 800–900 characters)!
+- ABSOLUTE PROHIBITION: NEVER output a short 1-2 sentence prompt of 100-250 characters!
+- In every track's stylePrompt, capture in full multi-sentence depth:
   (1) The exact acoustic sound identity, playback texture, and micro-genre defined in the current SOP
   (2) Specific instruments, arrangement progression, and rhythmic groove defined in the current SOP
   (3) Era and emotion-accurate vocal delivery, timbre, age/gender, and dynamics defined in the current SOP
   (4) Specific BPM tempo and energy flow defined in the current SOP
+  (5) Spatial mix character, stereo panorama, and mastering texture
+  (6) Negative exclusion keywords (Exclude: -...)
 
 3. [LYRICS GUIDE RULES & SECTION STRUCTURE (fullLyrics)]
-- Carefully follow the SOP's "Lyrics Guide Rules" and output specifications!
-- If the SOP specifies section guide prompts (e.g. [Verse 1: emotion, vocal delivery, arrangement] or [Verse 1]\n[Short English guide: ...]):
-  Follow the SOP's exact formatting for section tags and guides!
-  ${sopSpecs.forbidsIntroOutro ? `* CRITICAL: Do NOT include [Intro] or [Outro] tags per the SOP instructions! Start directly with [Verse 1] or [Chorus]!` : `* Include appropriate bracketed section tags.`}
+- MANDATORY FULL-SONG PRODUCTION LENGTH: Target 2:50 to 3:30 duration.
+- ABSOLUTE PROHIBITION: DO NOT output a short 12-line snippet! Full lyrics MUST contain AT LEAST 36 to 50 sung lines across at least 7 distinct sections!
+- Complete Section Progression:
+  * [Verse 1: <detailed English guide>] (8 to 10 lines)
+  * [Pre-Chorus: <detailed English guide>] (4 to 6 lines)
+  * [Chorus: <detailed English guide>] (8 to 10 lines)
+  * [Verse 2: <detailed English guide>] (8 to 10 lines)
+  * [Pre-Chorus: <detailed English guide>] or [Instrumental Break: <detailed English guide>] (4 to 6 lines)
+  * [Chorus: <detailed English guide>] (8 to 10 lines)
+  * [Bridge: <detailed English guide>] (4 to 6 lines)
+  * [Final Chorus: <detailed English guide>] (8 to 10 lines)
+  ${sopSpecs.forbidsIntroOutro ? `* CRITICAL: Do NOT include [Intro] or [Outro] tags per the SOP instructions! Start directly with [Verse 1] and finish with [Final Chorus]!` : `* Include appropriate bracketed section tags.`}
 - Guide prompts MUST be enclosed in square brackets [ ] to distinguish them from lyrics.
 - Do NOT output narrative sentences without brackets (such as "A soft piano begins...").
 
 4. [TRACK TITLES (title)]
 - For 100% English SOPs: English titles only.
-- For Korean / Korean R&B Hip-Hop SOPs: KOREAN TITLES ONLY (한국어 곡 제목, e.g. "공허", "새벽 세 시", "비워내"). NEVER output English titles!
+- For Korean / Korean R&B Hip-Hop SOPs: KOREAN TITLES ONLY (한국어 곡 제목, e.g. "공허", "새벽 세 시", "비워내", "어스름"). NEVER output English titles!
 - NEVER output bilingual parentheses like "Title (제목)" or "제목 (Title)".
 
 5. [META INFO (metaInfo)]
 - For each track, output:
-  - vocal: e.g. "early 20s male vocal, deep smoky texture" (matching SOP)
+  - vocal: e.g. "20s female vocal, husky yet silky texture" (matching SOP)
   - genre: Genre strictly matching current SOP (e.g. "Atmospheric R&B, Chill Trap Hip-Hop")
   - mood: Core emotional role defined in current SOP (e.g. "Dreamy & Empty, Late Night Aesthetic")
   - bpm: e.g. "82 BPM" (matching SOP tempo)
@@ -835,17 +866,17 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
   "tracks": [
     {
       "trackNumber": 1,
-      "title": ${isPureEnglish ? '"Single language English song title"' : '"한국어 곡 제목 (예: 공허, 새벽 세 시)"'},
+      "title": ${isPureEnglish ? '"Single language English song title"' : '"한국어 곡 제목 (예: 공허, 새벽 세 시, 어스름)"'},
       "metaInfo": {
-        "vocal": "Detailed vocal assignment matching SOP",
+        "vocal": "Detailed vocal assignment matching SOP (age, gender, chosen texture preset keywords)",
         "genre": "Genre strictly matching current SOP",
         "mood": "Core emotional role",
         "bpm": "e.g. 82 BPM",
         "targetLength": "e.g. 3:05"
       },
       "mood": "Core emotion keyword",
-      "stylePrompt": "Comprehensive 100% English Suno/Udio prompt strictly embedding the current SOP's acoustic criteria, genre, instruments, vocal timbre, and BPM",
-      "fullLyrics": ${isPureEnglish ? '"Full 100% English lyrics with English section tags"' : isKorEng ? '"Full lyrics with English bracketed section tags [Verse 1: ...] followed by Korean-English code-switching (한영 혼용: Korean 80% + English 20%) sung lines."' : '"Full lyrics with English bracketed section tags followed by sung lyrics in the SOP language."'}
+      "stylePrompt": "Expansive, comprehensive 750 to 950 character 100% English Suno prompt embedding: (1) micro-genre & vibe, (2) tempo & groove (BPM), (3) detailed instrumentation & sound design, (4) vocal texture (age, gender, Suno keywords, vocal delivery), (5) spatial mix & mastering, (6) Exclude terms.",
+      "fullLyrics": "Full 3-minute complete song lyrics of 36 to 50 lines spanning at least 7 distinct sections: [Verse 1: ...] (8-10 lines), [Pre-Chorus: ...] (4-6 lines), [Chorus: ...] (8-10 lines), [Verse 2: ...] (8-10 lines), [Pre-Chorus / Instrumental Break: ...], [Chorus: ...] (8-10 lines), [Bridge: ...] (4-6 lines), [Final Chorus: ...] (8-10 lines). Sung lines in natural Korean-English code-switching (75% Korean + 25% English). No [Intro] or [Outro] if forbidden by SOP."
     }
   ],
   "youtube": {
@@ -881,6 +912,8 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           setTimeout(() => reject(new Error('AI 응답 대기 시간 초과 (90초)')), 90000)
         );
 
+        const standardSystemInstruction = 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY LENGTH REQUIREMENTS: (1) Style prompts MUST be comprehensive, rich, and detailed (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries). (2) Full lyrics MUST be a complete ~3-minute song spanning at least 7 full sections (Verse 1, Pre-Chorus, Chorus, Verse 2, Pre-Chorus/Break, Chorus, Bridge, Final Chorus) totaling at least 36 to 50 sung lines (NEVER output abbreviated 3-section or 12-line snippets). (3) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용 (Kor-Eng Code-switching), track titles MUST be in Korean only, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (Korean 75% + English 25%). (4) Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.';
+
         let geminiResponse;
         try {
           geminiResponse = await Promise.race([
@@ -889,7 +922,8 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
               contents: systemPrompt,
               config: {
                 responseMimeType: 'application/json',
-                systemInstruction: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. When the SOP specifies Korean R&B / Hip-Hop with 한영 혼용 (Kor-Eng Code-switching), track titles MUST be in Korean, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching. When the SOP specifies 100% English, output 100% English. Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.'
+                maxOutputTokens: 8192,
+                systemInstruction: standardSystemInstruction
               }
             }),
             timeoutPromise
@@ -905,6 +939,8 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
                 contents: systemPrompt,
                 config: {
                   responseMimeType: 'application/json',
+                  maxOutputTokens: 8192,
+                  systemInstruction: standardSystemInstruction
                 }
               }),
               timeoutPromise
@@ -971,12 +1007,12 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
             body: JSON.stringify({
               model: engine,
               messages: [
-                { role: 'system', content: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. When the SOP specifies Korean R&B / Hip-Hop with 한영 혼용 (Kor-Eng Code-switching), track titles MUST be in Korean, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching. When the SOP specifies 100% English, output 100% English. Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.' },
+                { role: 'system', content: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY LENGTH REQUIREMENTS: (1) Style prompts MUST be comprehensive, rich, and detailed (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries). (2) Full lyrics MUST be a complete ~3-minute song spanning at least 7 full sections (Verse 1, Pre-Chorus, Chorus, Verse 2, Pre-Chorus/Break, Chorus, Bridge, Final Chorus) totaling at least 36 to 50 sung lines (NEVER output abbreviated 3-section or 12-line snippets). (3) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용 (Kor-Eng Code-switching), track titles MUST be in Korean only, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (Korean 75% + English 25%). (4) Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.' },
                 { role: 'user', content: `${systemPrompt}\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
               ],
               response_format: { type: 'json_object' },
               temperature: 0.7,
-              max_tokens: 3800
+              max_tokens: 6000
             })
           });
         };
@@ -1064,8 +1100,8 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           },
           body: JSON.stringify({
             model: claudeModel,
-            max_tokens: 4096,
-            system: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. When the SOP specifies Korean R&B / Hip-Hop with 한영 혼용 (Kor-Eng Code-switching), track titles MUST be in Korean, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching. When the SOP specifies 100% English, output 100% English. Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.',
+            max_tokens: 6000,
+            system: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY LENGTH REQUIREMENTS: (1) Style prompts MUST be comprehensive, rich, and detailed (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries). (2) Full lyrics MUST be a complete ~3-minute song spanning at least 7 full sections (Verse 1, Pre-Chorus, Chorus, Verse 2, Pre-Chorus/Break, Chorus, Bridge, Final Chorus) totaling at least 36 to 50 sung lines (NEVER output abbreviated 3-section or 12-line snippets). (3) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용 (Kor-Eng Code-switching), track titles MUST be in Korean only, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (Korean 75% + English 25%). (4) Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.',
             messages: [
               { role: 'user', content: `${systemPrompt}\n\n반드시 JSON 형식으로만 응답하세요.\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
             ]
@@ -1265,16 +1301,92 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
   } else if (sopSpecs.isKoreanHipHopRnb || sopSpecs.isKorEngMixed) {
     trackTemplates = [
       {
+        title: '어스름',
+        mood: '황혼이 내려앉는 도시의 어스름과 늦은 밤 감각적인 칠(Chill)한 감성',
+        metaInfo: {
+          vocal: '20대 중반 여성 보컬, husky yet silky texture, slightly raspy soft vocal, sandy texture',
+          genre: 'Atmospheric Korean R&B, Chill Trap Hip-Hop',
+          mood: 'Dreamy & Bittersweet, Late Night Aesthetic',
+          bpm: '82 BPM',
+          targetLength: '3:08'
+        },
+        style: `Atmospheric Korean R&B, chill nocturnal trap hip-hop, trendy Instagram reels aesthetic mood, late-night bedroom lo-fi vibe, bittersweet and dreamy contemplation, warm vintage Rhodes electric piano with gentle tremolo, detuned ambient analog synthesizer pads, deep gliding 808 sub-bass pulse with pitch glide, crisp rimshot and lazy trap snare, rolling 32nd hi-hat triplets, subtle tape saturation and vinyl dust crackle, filtered airy vocal chops in background, 20s female vocal, husky yet silky, slightly raspy soft vocal, sandy texture, breathy singing-rap delivery, tender falsetto runs, intimate close-mic capture, dry lead vocal mix, raw vocal texture, front-and-center presence, minimal backing layer, spacious stereo imaging, airy shimmering highs, warm tight low frequencies, modern clean playlist master, 82 bpm, -orchestra, -bright brass, -edm drop, -fast rock tempo, -flat emotionless delivery`,
+        lyrics: `[Verse 1: Breathy sing-rap over warm Rhodes and deep 808 pulse]
+푸른 어스름이 내려앉는 창문가
+멍하니 서서 지켜보는 fading skyline
+오늘 하루도 참 바쁘게 지나갔는데
+왜 내 맘은 아직 그 자리에 멈춰 서 있는지
+Yeah, scrolling through our old pictures again
+지우지 못한 대화들이 귓가에 맴돌아
+아무 일도 없던 척 넘겨보려 해도
+차가운 한숨만 하얗게 번져가, alright
+
+[Pre-Chorus: Rising vocal tension with rolling 32nd hi-hats]
+어둠이 천천히 도시를 삼켜갈 때
+숨겨둔 외로움이 자꾸만 새어나와
+너의 기억인지 아니면 미련인 건지
+Still caught up inside this dusk, right?
+
+[Chorus: Dreamy and rhythmic vocal hook with stacked falsetto]
+어스름 속에 번져가는 너의 잔향
+Can't let you fade away in the dark, yeah
+홀로 남겨진 이 방을 가득 채우는 vibe
+잡힐 듯 잡히지 않는 silent night
+Tell me why the shadows feel so deep
+너 없는 이 어스름 끝에서 I still seek
+다시 돌아갈 수 없는 그 순간들을 찾아
+Falling into memories, falling into you
+
+[Verse 2: Laidback conversational melodic flow with subtle ad-libs]
+가로등 불빛이 하나둘씩 깜빡거려
+어색한 침묵 사이로 흐르는 radio
+너와 즐겨 듣던 익숙한 track이 흐르면
+I swear I'm losing all my focus again
+Yeah, 기억나? 한강 변을 거닐던 새벽
+차가운 손을 잡아주던 너의 온기
+이제는 흐릿한 필터 속의 장면처럼
+손 틈새로 흩어져버린 blue haze, hm-hm
+
+[Instrumental Break: Reverb-soaked electric piano solo and deep 808 glide, 8 bars]
+
+[Chorus: Dreamy and rhythmic vocal hook with layered ad-libs]
+어스름 속에 번져가는 너의 잔향
+Can't let you fade away in the dark, yeah
+홀로 남겨진 이 방을 가득 채우는 vibe
+잡힐 듯 잡히지 않는 silent night
+Tell me why the shadows feel so deep
+너 없는 이 어스름 끝에서 I still seek
+다시 돌아갈 수 없는 그 순간들을 찾아
+Falling into memories, falling into you
+
+[Bridge: Stripped-down emotional turn, intimate whispered delivery]
+시간을 돌릴 수만 있다면
+우리가 어긋나기 전 그 계절로
+Don't say it's over, don't say goodbye
+희미해진 달빛 아래 널 불러봐
+한 번만 더 내 곁에 머물러줄래
+
+[Final Chorus: Full emotional climax, layered harmonies and soaring ad-libs]
+어스름 속에 번져가는 너의 잔향
+Can't let you fade away in the dark, yeah
+홀로 남겨진 이 방을 가득 채우는 vibe
+잡힐 듯 잡히지 않는 silent night
+Tell me why the shadows feel so deep
+너 없는 이 어스름 끝에서 I still seek
+영원히 끝나지 않을 노래처럼
+I'll remember you in this dusk forever`
+      },
+      {
         title: '공허',
         mood: '채워지지 않는 일상의 공허함과 늦은 밤 몽환적인 칠(Chill)한 감성',
         metaInfo: {
-          vocal: 'early 20s male vocal, colorless ethereal translucent breathy tone',
-          genre: 'Atmospheric R&B, Chill Trap Hip-Hop',
+          vocal: 'early 20s male vocal, colorless ethereal translucent breathy tone, androgynous falsetto',
+          genre: 'Atmospheric Korean R&B, Chill Trap Hip-Hop',
           mood: 'Dreamy & Empty, Late Night Aesthetic',
           bpm: '82 BPM',
           targetLength: '3:05'
         },
-        style: `Atmospheric R&B, chill trap hip-hop, trendy aesthetic vibe, late night mood, dreamy and empty, ambient synth pads, deep 808 bass, trap hi-hats, reverb-heavy electric piano, early 20s male vocal, colorless, ethereal, translucent breathy tone, androgynous falsetto, clear vocal presence, dry vocal mix, raw vocal texture, front-and-center vocals, minimal backing, spacious and modern mix, 82 bpm`,
+        style: `Atmospheric Korean R&B, chill nocturnal trap hip-hop, trendy Instagram aesthetic vibe, late-night bedroom lo-fi mood, dreamy and empty contemplation, ambient lush analog synth pads, deep gliding 808 sub-bass with pitch bends, swinging lazy trap hi-hats, reverb-heavy vintage Rhodes electric piano, subtle vinyl crackle and warm tape saturation, early 20s male vocal, colorless, ethereal, translucent breathy tone, androgynous falsetto runs, intimate close-mic delivery, clear vocal presence, dry lead vocal mix, raw vocal texture, front-and-center lead vocal placement, minimal backing harmony layer, spacious and modern stereophonic mix, punchy low-end headroom, sparkling airy high-frequency shimmer, 82 bpm, -orchestra, -string section, -bright brass, -edm drop, -fast rock tempo, -flat emotionless delivery, -autotune artifact`,
         lyrics: `[Verse 1: Breathy singing rap over atmospheric synth and soft 808]
 Love-love the stars, love-love the moon
 별 다를 것 없이 흘러가는 afternoon
@@ -1290,6 +1402,7 @@ I keep looking at my screen, scrolling all night
 내 하루는 어딘가 비어 있는 듯해
 너의 빈자린지, 아니면 내 욕심인지
 Still don't know what I'm looking for
+차오르는 밤의 공기 속에 나를 맡겨
 
 [Chorus: Dreamy and rhythmic vocal hook with stacked falsetto]
 채워지지 않는 네모난 빈칸
@@ -1298,6 +1411,8 @@ Always leaving me feeling so blank, yeah
 혼자서 삼키는 차가운 밤의 잔향
 Can somebody tell me why it hurts so slow?
 채워도 채워지지 않는 feeling hollow
+흩어지는 연기처럼 사라져버린 vibe
+I'm just drifting all through the night
 
 [Verse 2: Laidback syncopated melodic rap flow]
 벽에 걸린 시계 소리만 유난히 tick-tock
@@ -1309,7 +1424,7 @@ Yeah, nobody knows how it feels inside
 너 없는 밤거릴 혼자 걷다 보면
 또다시 차가운 바람만 스쳐가, hm-hm
 
-[Instrumental Break: Dreamy synth solo with heavy reverb, 8 bars]
+[Instrumental Break: Dreamy synth solo with heavy reverb and deep 808 glide, 8 bars]
 
 [Chorus: Dreamy and rhythmic vocal hook with emotional ad-libs]
 채워지지 않는 네모난 빈칸
@@ -1317,19 +1432,38 @@ Always leaving me feeling so blank, yeah
 불 꺼진 방 안에 덩그러니 남아
 혼자서 삼키는 차가운 밤의 잔향
 Can somebody tell me why it hurts so slow?
-채워도 채워지지 않는 feeling hollow`
+채워도 채워지지 않는 feeling hollow
+흩어지는 연기처럼 사라져버린 vibe
+I'm just drifting all through the night
+
+[Bridge: Hushed vulnerable sing-rap with ambient pad]
+텅 빈 마음의 빈자릴 뭘로 채워야 할지
+달빛마저 외면하는 차가운 도시
+I just wanna be alright, I just wanna let it fly
+어두운 터널 끝 희미한 불빛을 따라
+한 번 더 나를 찾아가 볼게
+
+[Final Chorus: Full melodic release with stacked ad-libs and harmonies]
+채워지지 않는 네모난 빈칸
+Always leaving me feeling so blank, yeah
+불 꺼진 방 안에 덩그러니 남아
+혼자서 삼키는 차가운 밤의 잔향
+Can somebody tell me why it hurts so slow?
+채워도 채워지지 않는 feeling hollow
+새벽이 오면 조금은 나아질까
+Still singing this midnight lullaby`
       },
       {
         title: '새벽 세 시',
         mood: '은밀한 관계의 텐션과 늦은 밤 드라이브의 몽환적인 그루브',
         metaInfo: {
-          vocal: 'mid 20s male vocal, slurred drunken nasal tone, heavy sticky voice',
+          vocal: 'mid 20s male vocal, slurred drunken melodrama, syrupy thick nasal tone, heavy sticky voice',
           genre: 'Late-Night Chill Trap R&B',
           mood: 'Subtle Romantic Tension, Sensual Groove',
           bpm: '85 BPM',
           targetLength: '3:12'
         },
-        style: `Chill trap R&B, late-night drive aesthetic, subtle tension, nocturnal vibe, deep sub 808 pulse, warm Rhodes chords, filtered vocal chops, lazy trap snare, mid 20s male vocal, slurred drunken nasal tone, heavy and sticky voice, clear vocal presence, dry vocal mix, front-and-center vocals, modern Korean R&B production, 85 bpm`,
+        style: `Chill trap Korean R&B, late-night midnight highway drive aesthetic, subtle romantic tension, nocturnal bedroom groove, deep sub 808 pulse with extended gliding 808 bass, warm vintage Rhodes chords drenched in stereo chorus, filtered pitch-shifted vocal chop counterpoints, lazy laidback trap snare, swung rolling hi-hat groove, mid 20s male vocal, slurred drunken melodrama, syrupy thick nasal tone, heavy and sticky voice delivery, clear vocal presence, dry vocal mix, raw authentic texture, front-and-center lead vocal placement, modern Korean R&B studio production texture, wide spatial panorama, punchy compressed bassline, silky analog high-end sheen, 85 bpm, -orchestra, -bright brass, -edm drop, -fast rock tempo, -monotone delivery, -screaming vocal`,
         lyrics: `[Verse 1: Murmured sing-rap over warm Rhodes and deep 808]
 새벽 세 시, 차창 밖은 온통 푸른빛
 가라앉은 공기 속에 울리는 beat
@@ -1345,6 +1479,7 @@ Yeah, unspoken words hanging in the air
 오늘 밤은 그냥 흘러가는 대로 가
 Don't say a word, just feel this ride
 아슬아슬한 이 텐션 속에 빠져들어
+너와 나의 거리가 좁혀지는 시간
 
 [Chorus: Sensual melodic hook with smooth vocal layering]
 Late night 3 AM, we're drifting away
@@ -1353,6 +1488,8 @@ Late night 3 AM, we're drifting away
 이 밤이 끝나지 않길 원해, just you and I
 Catching this feeling, nowhere to hide
 달빛 아래 번져가는 midnight ride
+너의 숨결이 닿을 때마다
+I'm losing my mind, caught in your tide
 
 [Verse 2: Conversational casual delivery with ad-libs]
 라디오에선 익숙한 melody가 나와
@@ -1361,16 +1498,37 @@ Catching this feeling, nowhere to hide
 I swear I'm losing all my control
 Yeah, 툭 던진 한마디에 심장이 뛰어
 "오늘 밤은 조금 더 같이 있고 싶어"
+너의 나직한 목소리가 번져올 때
+우린 이미 같은 꿈속으로 들어가
 
 [Instrumental Break: Reverb-soaked electric piano and 808 groove, 8 bars]
 
-[Chorus: Full melodic release with layered ad-libs]
+[Chorus: Sensual melodic hook with smooth vocal layering]
 Late night 3 AM, we're drifting away
 어둠 속에 번지는 subtle grey
 아무도 모르게 나눈 은밀한 vibe
 이 밤이 끝나지 않길 원해, just you and I
 Catching this feeling, nowhere to hide
-달빛 아래 번져가는 midnight ride`
+달빛 아래 번져가는 midnight ride
+너의 숨결이 닿을 때마다
+I'm losing my mind, caught in your tide
+
+[Bridge: Low intimate whisper over filtered sub-bass]
+붉은 신호등에 멈춰선 우리
+시선이 마주치는 아찔한 순간
+You know what I mean, no need to speak
+이 밤의 끝을 함께할 유일한 사람
+바로 너라는 걸 아니까
+
+[Final Chorus: Full melodic release with layered ad-libs and high harmonies]
+Late night 3 AM, we're drifting away
+어둠 속에 번지는 subtle grey
+아무도 모르게 나눈 은밀한 vibe
+이 밤이 끝나지 않길 원해, just you and I
+Catching this feeling, nowhere to hide
+달빛 아래 번져가는 midnight ride
+아침이 와도 깨어나지 않을
+Our unforgettable late night drive`
       }
     ];
   } else {

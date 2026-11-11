@@ -712,6 +712,239 @@ function generateClientSopPlaylist(
         lyrics: `[Intro]\n(웅장하면서도 쓸쓸한 스트링 서주)\n\n[Verse 1]\n마지막 장면이 끝나고 암전이 찾아올 때\n내 맘에 남은 너의 대사는 영원히 살아있어\n\n[Chorus]\n엔딩 크레딧이 모두 올라가도\n우리의 사랑은 끝나지 않는 영화처럼 계속돼\n\n[Outro]\n(현악 합주 페이드)`
       }
     ];
+  } else if (specs.isKoreanHipHopRnb || specs.isKorEngMixed) {
+    templates = [
+      {
+        title: '어스름',
+        mood: '황혼이 내려앉는 도시의 어스름과 늦은 밤 감각적인 칠(Chill)한 감성',
+        metaInfo: {
+          vocal: '20대 중반 여성 보컬, husky yet silky texture, slightly raspy soft vocal, sandy texture',
+          genre: 'Atmospheric Korean R&B, Chill Trap Hip-Hop',
+          mood: 'Dreamy & Bittersweet, Late Night Aesthetic',
+          bpm: '82 BPM',
+          targetLength: '3:08'
+        },
+        style: `Atmospheric Korean R&B, chill nocturnal trap hip-hop, trendy Instagram reels aesthetic mood, late-night bedroom lo-fi vibe, bittersweet and dreamy contemplation, warm vintage Rhodes electric piano with gentle tremolo, detuned ambient analog synthesizer pads, deep gliding 808 sub-bass pulse with pitch glide, crisp rimshot and lazy trap snare, rolling 32nd hi-hat triplets, subtle tape saturation and vinyl dust crackle, filtered airy vocal chops in background, 20s female vocal, husky yet silky, slightly raspy soft vocal, sandy texture, breathy singing-rap delivery, tender falsetto runs, intimate close-mic capture, dry lead vocal mix, raw vocal texture, front-and-center presence, minimal backing layer, spacious stereo imaging, airy shimmering highs, warm tight low frequencies, modern clean playlist master, 82 bpm, -orchestra, -bright brass, -edm drop, -fast rock tempo, -flat emotionless delivery`,
+        lyrics: `[Verse 1: Breathy sing-rap over warm Rhodes and deep 808 pulse]
+푸른 어스름이 내려앉는 창문가
+멍하니 서서 지켜보는 fading skyline
+오늘 하루도 참 바쁘게 지나갔는데
+왜 내 맘은 아직 그 자리에 멈춰 서 있는지
+Yeah, scrolling through our old pictures again
+지우지 못한 대화들이 귓가에 맴돌아
+아무 일도 없던 척 넘겨보려 해도
+차가운 한숨만 하얗게 번져가, alright
+
+[Pre-Chorus: Rising vocal tension with rolling 32nd hi-hats]
+어둠이 천천히 도시를 삼켜갈 때
+숨겨둔 외로움이 자꾸만 새어나와
+너의 기억인지 아니면 미련인 건지
+Still caught up inside this dusk, right?
+
+[Chorus: Dreamy and rhythmic vocal hook with stacked falsetto]
+어스름 속에 번져가는 너의 잔향
+Can't let you fade away in the dark, yeah
+홀로 남겨진 이 방을 가득 채우는 vibe
+잡힐 듯 잡히지 않는 silent night
+Tell me why the shadows feel so deep
+너 없는 이 어스름 끝에서 I still seek
+다시 돌아갈 수 없는 그 순간들을 찾아
+Falling into memories, falling into you
+
+[Verse 2: Laidback conversational melodic flow with subtle ad-libs]
+가로등 불빛이 하나둘씩 깜빡거려
+어색한 침묵 사이로 흐르는 radio
+너와 즐겨 듣던 익숙한 track이 흐르면
+I swear I'm losing all my focus again
+Yeah, 기억나? 한강 변을 거닐던 새벽
+차가운 손을 잡아주던 너의 온기
+이제는 흐릿한 필터 속의 장면처럼
+손 틈새로 흩어져버린 blue haze, hm-hm
+
+[Instrumental Break: Reverb-soaked electric piano solo and deep 808 glide, 8 bars]
+
+[Chorus: Dreamy and rhythmic vocal hook with layered ad-libs]
+어스름 속에 번져가는 너의 잔향
+Can't let you fade away in the dark, yeah
+홀로 남겨진 이 방을 가득 채우는 vibe
+잡힐 듯 잡히지 않는 silent night
+Tell me why the shadows feel so deep
+너 없는 이 어스름 끝에서 I still seek
+다시 돌아갈 수 없는 그 순간들을 찾아
+Falling into memories, falling into you
+
+[Bridge: Stripped-down emotional turn, intimate whispered delivery]
+시간을 돌릴 수만 있다면
+우리가 어긋나기 전 그 계절로
+Don't say it's over, don't say goodbye
+희미해진 달빛 아래 널 불러봐
+한 번만 더 내 곁에 머물러줄래
+
+[Final Chorus: Full emotional climax, layered harmonies and soaring ad-libs]
+어스름 속에 번져가는 너의 잔향
+Can't let you fade away in the dark, yeah
+홀로 남겨진 이 방을 가득 채우는 vibe
+잡힐 듯 잡히지 않는 silent night
+Tell me why the shadows feel so deep
+너 없는 이 어스름 끝에서 I still seek
+영원히 끝나지 않을 노래처럼
+I'll remember you in this dusk forever`
+      },
+      {
+        title: '공허',
+        mood: '채워지지 않는 일상의 공허함과 늦은 밤 몽환적인 칠(Chill)한 감성',
+        metaInfo: {
+          vocal: 'early 20s male vocal, colorless ethereal translucent breathy tone, androgynous falsetto',
+          genre: 'Atmospheric Korean R&B, Chill Trap Hip-Hop',
+          mood: 'Dreamy & Empty, Late Night Aesthetic',
+          bpm: '82 BPM',
+          targetLength: '3:05'
+        },
+        style: `Atmospheric Korean R&B, chill nocturnal trap hip-hop, trendy Instagram aesthetic vibe, late-night bedroom lo-fi mood, dreamy and empty contemplation, ambient lush analog synth pads, deep gliding 808 sub-bass with pitch bends, swinging lazy trap hi-hats, reverb-heavy vintage Rhodes electric piano, subtle vinyl crackle and warm tape saturation, early 20s male vocal, colorless, ethereal, translucent breathy tone, androgynous falsetto runs, intimate close-mic delivery, clear vocal presence, dry lead vocal mix, raw vocal texture, front-and-center lead vocal placement, minimal backing harmony layer, spacious and modern stereophonic mix, punchy low-end headroom, sparkling airy high-frequency shimmer, 82 bpm, -orchestra, -string section, -bright brass, -edm drop, -fast rock tempo, -flat emotionless delivery, -autotune artifact`,
+        lyrics: `[Verse 1: Breathy singing rap over atmospheric synth and soft 808]
+Love-love the stars, love-love the moon
+별 다를 것 없이 흘러가는 afternoon
+똑같은 방, 똑같은 침대에서
+멍하니 올려다보는 천장까지
+Yeah, 왜 별다른 이유도 없이
+가슴 한구석이 텅 빈 건지
+I keep looking at my screen, scrolling all night
+아무 의미 없는 피드만 넘기지, right?
+
+[Pre-Chorus: Building up with trap hi-hats and deep 808 bass]
+시간은 참 잘만 흘러가는데
+내 하루는 어딘가 비어 있는 듯해
+너의 빈자린지, 아니면 내 욕심인지
+Still don't know what I'm looking for
+차오르는 밤의 공기 속에 나를 맡겨
+
+[Chorus: Dreamy and rhythmic vocal hook with stacked falsetto]
+채워지지 않는 네모난 빈칸
+Always leaving me feeling so blank, yeah
+불 꺼진 방 안에 덩그러니 남아
+혼자서 삼키는 차가운 밤의 잔향
+Can somebody tell me why it hurts so slow?
+채워도 채워지지 않는 feeling hollow
+흩어지는 연기처럼 사라져버린 vibe
+I'm just drifting all through the night
+
+[Verse 2: Laidback syncopated melodic rap flow]
+벽에 걸린 시계 소리만 유난히 tick-tock
+지워버린 메시지 창을 다시 또 click, stop
+괜히 쿨한 척 넘겨보려 해도
+거울 속에 비친 표정은 그대로
+Yeah, nobody knows how it feels inside
+화려한 필터 뒤에 숨겨둔 my mind
+너 없는 밤거릴 혼자 걷다 보면
+또다시 차가운 바람만 스쳐가, hm-hm
+
+[Instrumental Break: Dreamy synth solo with heavy reverb and deep 808 glide, 8 bars]
+
+[Chorus: Dreamy and rhythmic vocal hook with emotional ad-libs]
+채워지지 않는 네모난 빈칸
+Always leaving me feeling so blank, yeah
+불 꺼진 방 안에 덩그러니 남아
+혼자서 삼키는 차가운 밤의 잔향
+Can somebody tell me why it hurts so slow?
+채워도 채워지지 않는 feeling hollow
+흩어지는 연기처럼 사라져버린 vibe
+I'm just drifting all through the night
+
+[Bridge: Hushed vulnerable sing-rap with ambient pad]
+텅 빈 마음의 빈자릴 뭘로 채워야 할지
+달빛마저 외면하는 차가운 도시
+I just wanna be alright, I just wanna let it fly
+어두운 터널 끝 희미한 불빛을 따라
+한 번 더 나를 찾아가 볼게
+
+[Final Chorus: Full melodic release with stacked ad-libs and harmonies]
+채워지지 않는 네모난 빈칸
+Always leaving me feeling so blank, yeah
+불 꺼진 방 안에 덩그러니 남아
+혼자서 삼키는 차가운 밤의 잔향
+Can somebody tell me why it hurts so slow?
+채워도 채워지지 않는 feeling hollow
+새벽이 오면 조금은 나아질까
+Still singing this midnight lullaby`
+      },
+      {
+        title: '새벽 세 시',
+        mood: '은밀한 관계의 텐션과 늦은 밤 드라이브의 몽환적인 그루브',
+        metaInfo: {
+          vocal: 'mid 20s male vocal, slurred drunken melodrama, syrupy thick nasal tone, heavy sticky voice',
+          genre: 'Late-Night Chill Trap R&B',
+          mood: 'Subtle Romantic Tension, Sensual Groove',
+          bpm: '85 BPM',
+          targetLength: '3:12'
+        },
+        style: `Chill trap Korean R&B, late-night midnight highway drive aesthetic, subtle romantic tension, nocturnal bedroom groove, deep sub 808 pulse with extended gliding 808 bass, warm vintage Rhodes chords drenched in stereo chorus, filtered pitch-shifted vocal chop counterpoints, lazy laidback trap snare, swung rolling hi-hat groove, mid 20s male vocal, slurred drunken melodrama, syrupy thick nasal tone, heavy and sticky voice delivery, clear vocal presence, dry vocal mix, raw authentic texture, front-and-center lead vocal placement, modern Korean R&B studio production texture, wide spatial panorama, punchy compressed bassline, silky analog high-end sheen, 85 bpm, -orchestra, -bright brass, -edm drop, -fast rock tempo, -monotone delivery, -screaming vocal`,
+        lyrics: `[Verse 1: Murmured sing-rap over warm Rhodes and deep 808]
+새벽 세 시, 차창 밖은 온통 푸른빛
+가라앉은 공기 속에 울리는 beat
+너는 조수석에 기대어 고갤 돌려
+미묘한 눈빛으로 날 빤히 쳐다봐
+Yeah, unspoken words hanging in the air
+우리 둘 사이 흐르는 strange tension, right?
+신호등은 깜빡이고 우린 말이 없어
+핸들을 잡은 손끝이 조금 떨려와
+
+[Pre-Chorus: Tightening vocal flow with rolling hi-hats]
+어디로 가야 할지 묻지 마
+오늘 밤은 그냥 흘러가는 대로 가
+Don't say a word, just feel this ride
+아슬아슬한 이 텐션 속에 빠져들어
+너와 나의 거리가 좁혀지는 시간
+
+[Chorus: Sensual melodic hook with smooth vocal layering]
+Late night 3 AM, we're drifting away
+어둠 속에 번지는 subtle grey
+아무도 모르게 나눈 은밀한 vibe
+이 밤이 끝나지 않길 원해, just you and I
+Catching this feeling, nowhere to hide
+달빛 아래 번져가는 midnight ride
+너의 숨결이 닿을 때마다
+I'm losing my mind, caught in your tide
+
+[Verse 2: Conversational casual delivery with ad-libs]
+라디오에선 익숙한 melody가 나와
+괜히 볼륨을 키워 어색함을 지워
+너의 향기가 시트 가득 스밀 때
+I swear I'm losing all my control
+Yeah, 툭 던진 한마디에 심장이 뛰어
+"오늘 밤은 조금 더 같이 있고 싶어"
+너의 나직한 목소리가 번져올 때
+우린 이미 같은 꿈속으로 들어가
+
+[Instrumental Break: Reverb-soaked electric piano and 808 groove, 8 bars]
+
+[Chorus: Sensual melodic hook with smooth vocal layering]
+Late night 3 AM, we're drifting away
+어둠 속에 번지는 subtle grey
+아무도 모르게 나눈 은밀한 vibe
+이 밤이 끝나지 않길 원해, just you and I
+Catching this feeling, nowhere to hide
+달빛 아래 번져가는 midnight ride
+너의 숨결이 닿을 때마다
+I'm losing my mind, caught in your tide
+
+[Bridge: Low intimate whisper over filtered sub-bass]
+붉은 신호등에 멈춰선 우리
+시선이 마주치는 아찔한 순간
+You know what I mean, no need to speak
+이 밤의 끝을 함께할 유일한 사람
+바로 너라는 걸 아니까
+
+[Final Chorus: Full melodic release with layered ad-libs and high harmonies]
+Late night 3 AM, we're drifting away
+어둠 속에 번지는 subtle grey
+아무도 모르게 나눈 은밀한 vibe
+이 밤이 끝나지 않길 원해, just you and I
+Catching this feeling, nowhere to hide
+달빛 아래 번져가는 midnight ride
+아침이 와도 깨어나지 않을
+Our unforgettable late night drive`
+      }
+    ];
   } else {
     const rawSop = theme.sop || '';
     const styleMatch = rawSop.match(/(?:Style(?:\s+of\s+Music)?(?:\s+Prompt)?(?:\s+지침)?\s*[:]\s*['"]?)([^'"\n\r]+)/i);
