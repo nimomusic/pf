@@ -85,7 +85,10 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
           sop: formSop
         });
         const updatedList = themes.map((t) => (t.id === editingId ? updated : t));
+        onSelectTheme(updated);
         onThemesUpdated(updatedList);
+        setIsEditing(false);
+        onClose();
       } else {
         // Create new theme
         const created = await createTheme({
@@ -95,10 +98,11 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
           sop: formSop
         });
         const updatedList = [created, ...themes];
-        onThemesUpdated(updatedList);
         onSelectTheme(created);
+        onThemesUpdated(updatedList);
+        setIsEditing(false);
+        onClose();
       }
-      setIsEditing(false);
     } catch (err: any) {
       setErrorMsg(err.message || '저장 중 오류가 발생했습니다.');
     } finally {

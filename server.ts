@@ -710,27 +710,31 @@ ${theme.sop || ''}
 STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 ================================================================================
 
-1. [COMMON SOUND IDENTITY & ACOUSTIC CRITERIA]
-- Carefully inspect the SOP's Common Sound Identity / Acoustic Criteria (e.g. Type B Worn and Gritty Shellac Phonograph, 1940s shellac 78 RPM record on antique wooden phonograph, narrow frequency band, mono-centric playback feel, shellac surface crackles and hisses, mechanical needle noise, softly limited high frequencies, restrained low frequencies, thick warm midrange, moderate analog distortion/saturation, vintage compression, worn record texture, avoiding modern high-fi clarity or wide modern stereo).
-- EVERY TRACK's \`stylePrompt\` MUST EXPLICITLY EMBED AND REFLECT THESE EXACT ACOUSTIC CRITERIA!
+1. [SOUND IDENTITY & ACOUSTIC CRITERIA]
+- Carefully inspect the SOP's Sound Identity, Acoustic Criteria, Genre, and Production Directives.
+- EVERY TRACK's 'stylePrompt' MUST EXCLUSIVELY EMBED AND REFLECT THE EXACT SOUND CRITERIA OF THE CURRENT SOP:
+  * If the SOP specifies a Cinematic Movie OST Ballad (e.g. felt upright piano intro, soaring orchestra strings, building crescendo, emotional dynamic range), embed that.
+  * If the SOP specifies 1940s Shellac (e.g. 78 RPM record, antique wooden phonograph, surface crackle, warm midrange), embed that.
+  * If the SOP specifies an Acoustic Lounge Pop or any other custom theme, embed its specific acoustic traits.
+- CRITICAL ISOLATION RULE: NEVER inherit, copy, or mix in instruments, eras, vintage crackles, or sound textures from previous or other themes! Use ONLY what is requested in the current SOP!
 
 2. [STYLE PROMPT SPECIFICATIONS (stylePrompt)]
-- Write in English so it can be pasted directly into the Suno Style Prompt input field.
-- LENGTH & DEPTH TARGET: If the SOP specifies a character count target (e.g. "within 1,000 characters, aim for 800–900 characters"), your \`stylePrompt\` MUST be a comprehensive, rich, multi-sentence prompt reaching 800–900 characters!
+- Write in English so it can be pasted directly into the Suno / Udio Style Prompt input field.
+- LENGTH & DEPTH TARGET: If the SOP specifies a character count target (e.g. "within 1,000 characters, aim for 800–900 characters" or "under 990 characters"), your 'stylePrompt' MUST be a comprehensive, rich, descriptive multi-sentence prompt reaching 800–900 characters!
 - NEVER output a generic 1-2 sentence prompt of 100-200 characters!
 - In every track's stylePrompt, capture:
-  (1) The exact acoustic playback texture (e.g. 1940s shellac 78 RPM record played on an antique wooden phonograph, audible shellac surface crackles and hisses, mechanical needle friction noise, warm narrow-band midrange, soft limited highs, analog saturation, vintage compression)
-  (2) Specific acoustic instruments, rhythm, and arrangement
-  (3) Era-accurate vocal delivery, timbre, and emotion
-  (4) Specific BPM tempo and dynamic flow
+  (1) The exact acoustic sound identity, playback texture, and micro-genre defined in the current SOP
+  (2) Specific instruments, arrangement progression, and rhythmic groove defined in the current SOP
+  (3) Era and emotion-accurate vocal delivery, timbre, age/gender, and dynamics defined in the current SOP
+  (4) Specific BPM tempo and energy flow defined in the current SOP
 
 3. [LYRICS GUIDE RULES & SECTION STRUCTURE (fullLyrics)]
 - Carefully follow the SOP's "Lyrics Guide Rules" and output specifications!
-- If the SOP specifies section guide prompts (e.g. [Intro]\\n[Short English guide: vocal emotion/delivery and arrangement]\\n\\n[Verse 1]\\n[Short English guide]\\nLyrics...):
-  EVERY single section tag ([Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Final Chorus], [Outro]) MUST have its own bracketed guide line \`[Short English guide: ...]\` immediately below the section tag, followed by the actual lyrics lines!
+- If the SOP specifies section guide prompts (e.g. [Verse 1: emotion, vocal delivery, arrangement] or [Verse 1]\n[Short English guide: ...]):
+  Follow the SOP's exact formatting for section tags and guides!
   Example structure:
   [Intro]
-  [Short English guide: solo instrument, acoustic texture, needle crackle, slow tempo]
+  [Short English guide: instrumental opening, core acoustic atmosphere, tempo]
 
   [Verse 1]
   [Short English guide: vocal emotion/delivery, instrument dynamics]
@@ -767,8 +771,9 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
   (Lyrics line 2)
 
   [Outro]
-  [Short English guide: instruments fading, final needle crackle to silence]
+  [Short English guide: instruments fading to silence]
   (Outro lyrics or concluding line)
+  [End]
 - Guide prompts MUST be enclosed in square brackets [ ] to distinguish them from lyrics.
 - Do NOT output narrative sentences without brackets (such as "A soft piano begins...").
 
@@ -778,11 +783,11 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 
 5. [META INFO (metaInfo)]
 - For each track, output:
-  - vocal: e.g. "Female Solo", "Warm emotive female lead vocal"
-  - genre: e.g. "1940s Shellac Pop Ballad"
-  - mood: e.g. "Nostalgic Longing, Bittersweet Memory"
-  - bpm: e.g. "78 BPM"
-  - targetLength: e.g. "3:05"
+  - vocal: e.g. "Warm expressive female lead vocal, emotive delivery" (matching SOP)
+  - genre: Genre strictly matching current SOP (e.g. "Cinematic OST Ballad", "Acoustic Pop")
+  - mood: Core emotional role defined in current SOP
+  - bpm: e.g. "74 BPM" (matching SOP tempo)
+  - targetLength: e.g. "3:10" (matching SOP length)
 
 [OUTPUT FORMAT - PURE JSON ONLY]
 Respond ONLY with a valid JSON object matching this schema (no markdown fences, no conversational text):
@@ -793,23 +798,23 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
       "title": "Single language song title strictly matching SOP concept",
       "metaInfo": {
         "vocal": "Detailed vocal assignment matching SOP",
-        "genre": "Genre matching SOP",
+        "genre": "Genre strictly matching current SOP",
         "mood": "Core emotional role",
-        "bpm": "e.g. 78 BPM",
-        "targetLength": "e.g. 3:05"
+        "bpm": "e.g. 74 BPM",
+        "targetLength": "e.g. 3:10"
       },
       "mood": "Core emotion keyword",
-      "stylePrompt": "Comprehensive 800-900 character Suno/Udio prompt fully embedding the SOP sound criteria (Type B shellac 78 RPM record, wooden phonograph, crackles, hisses, needle noise, narrow frequency band, vintage compression, warm midrange) + instruments + vocal + BPM",
-      "fullLyrics": "Full lyrics strictly including bracketed [Short English guide: ...] on the line right after EVERY section tag ([Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Final Chorus], [Outro]), followed by the sung lyrics lines."
+      "stylePrompt": "Comprehensive 800-900 character Suno/Udio prompt strictly embedding the current SOP's acoustic criteria, genre, instruments, vocal timbre, and BPM",
+      "fullLyrics": "Full lyrics strictly including section tags and guides followed by the song lyrics matching the SOP directives."
     }
   ],
   "youtube": {
-    "title": "Catchy YouTube playlist video title matching theme and era",
+    "title": "Catchy YouTube playlist video title matching theme and concept",
     "description": "Full YouTube video description with tracklist timestamps and background story",
     "tracklist": "01. Title (00:00)...",
-    "hashtags": "#Playlist #1940s #Vintage #Phonograph #SunoAI",
-    "thumbnailPrompt": "16:9 cinematic vintage still, 1940s aesthetic, antique phonograph, aesthetic lighting, photorealistic 8k",
-    "backgroundImagePrompt": "16:9 seamless loop video prompt matching the vintage era"
+    "hashtags": "#Playlist #SunoAI",
+    "thumbnailPrompt": "16:9 cinematic still matching current theme aesthetic, photorealistic 8k",
+    "backgroundImagePrompt": "16:9 seamless loop video prompt matching current theme"
   }
 }`;
 
@@ -844,7 +849,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
               contents: systemPrompt,
               config: {
                 responseMimeType: 'application/json',
-                systemInstruction: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. When the SOP specifies acoustic criteria (e.g. Type B shellac 78 RPM record), style prompt length (800-900 characters), and bracketed section guides (e.g. [Intro]\\n[Guide instruction]\\n\\n[Verse 1]\\n[Guide instruction]\\nlyrics), you MUST follow them completely. Never write brief 1-line style prompts. Never omit bracketed section guides. Respond strictly in valid JSON.'
+                systemInstruction: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. Derive all acoustic criteria, instruments, genre, vocal directions, and style prompts exclusively from the user provided SOP. Never inherit or mix in instruments, eras, or textures from previous themes or other projects. When the SOP specifies style prompt length (800-900 characters) and bracketed section guides (e.g. [Intro]\n[Guide instruction]\n\n[Verse 1]\n[Guide instruction]\nlyrics), you MUST follow them completely. Never write brief 1-line style prompts. Respond strictly in valid JSON.'
               }
             }),
             timeoutPromise
@@ -926,7 +931,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
             body: JSON.stringify({
               model: engine,
               messages: [
-                { role: 'system', content: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. When the SOP specifies acoustic criteria (e.g. Type B shellac 78 RPM record), style prompt length (800-900 characters), and bracketed section guides (e.g. [Intro]\n[Guide instruction]\n\n[Verse 1]\n[Guide instruction]\nlyrics), you MUST follow them completely. Never write brief 1-line style prompts. Never omit bracketed section guides. Respond strictly in valid JSON.' },
+                { role: 'system', content: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. Derive all acoustic criteria, instruments, genre, vocal directions, and style prompts exclusively from the user provided SOP. Never inherit or mix in instruments, eras, or textures from previous themes or other projects. When the SOP specifies style prompt length (800-900 characters) and bracketed section guides (e.g. [Intro]\n[Guide instruction]\n\n[Verse 1]\n[Guide instruction]\nlyrics), you MUST follow them completely. Never write brief 1-line style prompts. Respond strictly in valid JSON.' },
                 { role: 'user', content: `${systemPrompt}\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
               ],
               response_format: { type: 'json_object' },
@@ -1020,7 +1025,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           body: JSON.stringify({
             model: claudeModel,
             max_tokens: 4096,
-            system: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. When the SOP specifies acoustic criteria (e.g. Type B shellac 78 RPM record), style prompt length (800-900 characters), and bracketed section guides (e.g. [Intro]\n[Guide instruction]\n\n[Verse 1]\n[Guide instruction]\nlyrics), you MUST follow them completely. Never write brief 1-line style prompts. Never omit bracketed section guides. Respond strictly in valid JSON.',
+            system: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. Derive all acoustic criteria, instruments, genre, vocal directions, and style prompts exclusively from the user provided SOP. Never inherit or mix in instruments, eras, or textures from previous themes or other projects. When the SOP specifies style prompt length (800-900 characters) and bracketed section guides (e.g. [Intro]\n[Guide instruction]\n\n[Verse 1]\n[Guide instruction]\nlyrics), you MUST follow them completely. Never write brief 1-line style prompts. Respond strictly in valid JSON.',
             messages: [
               { role: 'user', content: `${systemPrompt}\n\n반드시 JSON 형식으로만 응답하세요.\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
             ]
@@ -1218,18 +1223,42 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
       }
     ];
   } else {
+    // Dynamic extraction from user SOP for custom registered themes
+    const rawSop = theme.sop || '';
+    const styleMatch = rawSop.match(/(?:Style(?:\s+of\s+Music)?(?:\s+Prompt)?(?:\s+지침)?\s*[:]\s*['"]?)([^'"\n\r]+)/i);
+    const customStyle = styleMatch && styleMatch[1].trim()
+      ? styleMatch[1].trim()
+      : `${theme.category || theme.name}, emotive instrumentation, ${vocalTag}, 92 bpm, faithful to SOP`;
+
+    const bpmMatch = rawSop.match(/(\d{2,3})\s*(?:~|-|\/)?\s*(\d{2,3})?\s*bpm/i);
+    const customBpm = bpmMatch ? `${bpmMatch[1]} BPM` : '92 BPM';
+
     trackTemplates = [
       {
         title: sopSpecs.isEnglishOnly ? 'Whispers in the Silence' : `${theme.name} - 1번 트랙`,
-        mood: 'SOP 지침에 정의된 무드와 사운드 정체성',
-        style: `${theme.category || 'melodic music'}, authentic acoustic instruments, ${vocalTag}, 90 bpm, faithful to SOP`,
-        lyrics: `[Intro]\n(Atmospheric opening theme)\n\n[Verse 1]\nMoving through the quiet light of dawn\nA melody that keeps on holding on\n\n[Chorus]\nDeep inside where music learns to soar\nThis is the song we have been waiting for`
+        mood: `${theme.name}의 고유한 사운드 정체성과 감성`,
+        metaInfo: {
+          vocal: vocal === 'female' ? 'Female Lead Vocal' : vocal === 'male' ? 'Male Lead Vocal' : 'Vocal',
+          genre: theme.category || theme.name,
+          mood: 'Emotional Atmosphere',
+          bpm: customBpm,
+          targetLength: '3:15'
+        },
+        style: customStyle,
+        lyrics: `[Intro]\n[Opening instrumental motif according to SOP]\n\n[Verse 1]\n[Tender vocal delivery, subtle acoustic accompaniment]\nMoving through the quiet light of dawn\nA melody that keeps on holding on\n\n[Chorus]\n[Memorable vocal hook, full dynamic resolution]\nDeep inside where music learns to soar\nThis is the song we have been waiting for!\n\n[Outro]\n[Gentle fade to silence]\n[End]`
       },
       {
         title: sopSpecs.isEnglishOnly ? 'Echoes Across the Horizon' : `${theme.name} - 2번 트랙`,
-        mood: '서정적이고 따뜻한 멜로디의 전개',
-        style: `${theme.category || 'music'}, expressive acoustic arrangement, ${vocalTag}, 88 bpm`,
-        lyrics: `[Intro]\n(Warm acoustic intro)\n\n[Verse 1]\nFootsteps along an open road\nCarrying all the love we know\n\n[Chorus]\nAcross the skies, into the dawn\nA timeless melody playing on`
+        mood: `${theme.name}의 서정적인 감성과 멜로디`,
+        metaInfo: {
+          vocal: vocal === 'female' ? 'Female Lead Vocal' : vocal === 'male' ? 'Male Lead Vocal' : 'Vocal',
+          genre: theme.category || theme.name,
+          mood: 'Warm Acoustic Vibe',
+          bpm: customBpm,
+          targetLength: '3:05'
+        },
+        style: customStyle,
+        lyrics: `[Intro]\n[Acoustic instrumental intro]\n\n[Verse 1]\n[Expressive vocal delivery]\nFootsteps along an open road\nCarrying all the love we know\n\n[Chorus]\n[Harmonic climax, rich instrumentation]\nAcross the skies, into the dawn\nA timeless melody playing on!\n\n[Outro]\n[Warm closing fade]\n[End]`
       }
     ];
   }

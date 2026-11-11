@@ -220,6 +220,7 @@ export default function App() {
     if (isRunning) return;
 
     setApiErrorMessage(null);
+    setResultData(null);
     setIsRunning(true);
     setProgressPercent(5);
     setStepIndex(0);
@@ -529,6 +530,7 @@ export default function App() {
                                 type="button"
                                 onClick={() => {
                                   setSelectedTheme(th);
+                                  setResultData(null);
                                   setIsThemeDropdownOpen(false);
                                 }}
                                 className={`w-full px-4 py-2.5 text-left text-xs sm:text-sm font-medium flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer ${
@@ -844,13 +846,17 @@ export default function App() {
         onClose={() => setShowThemeManager(false)}
         themes={themes}
         currentThemeId={selectedTheme?.id || ''}
-        onSelectTheme={(th) => setSelectedTheme(th)}
+        onSelectTheme={(th) => {
+          setSelectedTheme(th);
+          setResultData(null);
+        }}
         onThemesUpdated={(updated) => {
           setThemes(updated);
-          if (selectedTheme) {
-            const matching = updated.find((t) => t.id === selectedTheme.id);
-            if (matching) setSelectedTheme(matching);
-          }
+          setSelectedTheme((prev) => {
+            if (!prev) return updated[0] || null;
+            const matching = updated.find((t) => t.id === prev.id);
+            return matching || updated[0] || null;
+          });
         }}
       />
 

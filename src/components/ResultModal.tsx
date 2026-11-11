@@ -39,11 +39,11 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
       full += `Track ${t.trackNumber} — ${t.title}\n\n`;
       if (t.metaInfo) {
         full += `Meta Info\n`;
-        full += `Vocal: ${t.metaInfo.vocal || 'Female'}\n`;
-        full += `Genre: ${t.metaInfo.genre || 'Vintage Pop'}\n`;
-        full += `Mood: ${t.metaInfo.mood || t.mood || 'Nostalgic'}\n`;
+        full += `Vocal: ${t.metaInfo.vocal || (data.vocal === 'male' ? 'Male Lead Vocal' : data.vocal === 'female' ? 'Female Lead Vocal' : 'Vocal')}\n`;
+        full += `Genre: ${t.metaInfo.genre || data.themeName}\n`;
+        full += `Mood: ${t.metaInfo.mood || t.mood || 'Emotional'}\n`;
         full += `BPM: ${t.metaInfo.bpm || '80 BPM'}\n`;
-        full += `Target Length: ${t.metaInfo.targetLength || '3:05'}\n\n`;
+        full += `Target Length: ${t.metaInfo.targetLength || '3:10'}\n\n`;
       }
       full += `Title\n${t.title}\n\n`;
       full += `Style Prompt\n${t.stylePrompt}\n\n`;

@@ -665,18 +665,41 @@ function generateClientSopPlaylist(
       }
     ];
   } else {
+    const rawSop = theme.sop || '';
+    const styleMatch = rawSop.match(/(?:Style(?:\s+of\s+Music)?(?:\s+Prompt)?(?:\s+지침)?\s*[:]\s*['"]?)([^'"\n\r]+)/i);
+    const customStyle = styleMatch && styleMatch[1].trim()
+      ? styleMatch[1].trim()
+      : `${theme.category || theme.name}, emotive instrumentation, ${vocalTag}, 92 bpm, faithful to SOP`;
+
+    const bpmMatch = rawSop.match(/(\d{2,3})\s*(?:~|-|\/)?\s*(\d{2,3})?\s*bpm/i);
+    const customBpm = bpmMatch ? `${bpmMatch[1]} BPM` : '92 BPM';
+
     templates = [
       {
         title: specs.isEnglishOnly ? 'Whispers in the Silence' : `${theme.name} - 1번 트랙`,
-        mood: 'SOP 지침에 정의된 무드와 아티스트 정체성을 반영한 사운드',
-        style: `${theme.category || 'music'}, expressive melodic arrangement, ${vocalTag}, 90 bpm, faithful to SOP`,
-        lyrics: `[Intro]\n(Melodic theme opening)\n\n[Verse 1]\nMoving through the quiet light of dawn\nA melody that keeps on holding on\n\n[Chorus]\nDeep inside where music learns to soar\nThis is the song we have been waiting for\n\n[Outro]\n(Fade out)`
+        mood: `${theme.name}의 고유한 사운드 정체성과 감성`,
+        metaInfo: {
+          vocal: vocal === 'female' ? 'Female Lead Vocal' : vocal === 'male' ? 'Male Lead Vocal' : 'Vocal',
+          genre: theme.category || theme.name,
+          mood: 'Emotional Atmosphere',
+          bpm: customBpm,
+          targetLength: '3:15'
+        },
+        style: customStyle,
+        lyrics: `[Intro]\n[Opening instrumental motif according to SOP]\n\n[Verse 1]\n[Tender vocal delivery, subtle acoustic accompaniment]\nMoving through the quiet light of dawn\nA melody that keeps on holding on\n\n[Chorus]\n[Memorable vocal hook, full dynamic resolution]\nDeep inside where music learns to soar\nThis is the song we have been waiting for!\n\n[Outro]\n[Gentle fade to silence]\n[End]`
       },
       {
         title: specs.isEnglishOnly ? 'Echoes Across the Horizon' : `${theme.name} - 2번 트랙`,
-        mood: '서정적이고 따뜻한 멜로디의 전개',
-        style: `${theme.category || 'music'}, expressive acoustic arrangement, ${vocalTag}, 88 bpm`,
-        lyrics: `[Intro]\n(Warm acoustic intro)\n\n[Verse 1]\nFootsteps along an open road\nCarrying all the love we know\n\n[Chorus]\nAcross the skies, into the dawn\nA timeless melody playing on`
+        mood: `${theme.name}의 서정적인 감성과 멜로디`,
+        metaInfo: {
+          vocal: vocal === 'female' ? 'Female Lead Vocal' : vocal === 'male' ? 'Male Lead Vocal' : 'Vocal',
+          genre: theme.category || theme.name,
+          mood: 'Warm Acoustic Vibe',
+          bpm: customBpm,
+          targetLength: '3:05'
+        },
+        style: customStyle,
+        lyrics: `[Intro]\n[Acoustic instrumental intro]\n\n[Verse 1]\n[Expressive vocal delivery]\nFootsteps along an open road\nCarrying all the love we know\n\n[Chorus]\n[Harmonic climax, rich instrumentation]\nAcross the skies, into the dawn\nA timeless melody playing on!\n\n[Outro]\n[Warm closing fade]\n[End]`
       }
     ];
   }
