@@ -515,22 +515,62 @@ function parseSopSpecs(theme: any) {
   const engCharCount = (rawSop.match(/[a-zA-Z]/g) || []).length;
   const korCharCount = (rawSop.match(/[\uAC00-\uD7AF]/g) || []).length;
 
-  const isEnglishExplicit = 
-    combined.includes('100% english') ||
-    combined.includes('in 100% english') ||
-    combined.includes('all lyrics must be written in english') ||
-    combined.includes('all lyrics must be written in 100% english') ||
-    combined.includes('write lyrics naturally in english') ||
-    combined.includes('english lyrics') ||
-    combined.includes('lyrics must be in english') ||
-    combined.includes('영어로 작성') ||
-    combined.includes('영어 가사') ||
-    combined.includes('영문 가사') ||
-    combined.includes('100% 영문') ||
-    combined.includes('written in english');
+  // Check if Korean or Kor-Eng code-switching is intended in the SOP
+  const hasKoreanDirectives = 
+    combined.includes('한영 혼용') ||
+    combined.includes('한영혼용') ||
+    combined.includes('kor-eng') ||
+    combined.includes('code-switching') ||
+    combined.includes('한국어') ||
+    combined.includes('국문') ||
+    combined.includes('한국 힙합') ||
+    combined.includes('한국 알앤비') ||
+    combined.includes('인스타 감성') ||
+    combined.includes('느좋') ||
+    korCharCount > 30;
 
-  // If explicit keyword OR if SOP text is primarily English (more English letters than Korean)
-  const isEnglishOnly = isEnglishExplicit || (engCharCount > 25 && engCharCount > korCharCount);
+  const isKorEngMixed = 
+    combined.includes('한영 혼용') ||
+    combined.includes('한영혼용') ||
+    combined.includes('kor-eng') ||
+    combined.includes('code-switching') ||
+    (combined.includes('한국어') && (combined.includes('영어') || combined.includes('english')));
+
+  // Strictly check if 100% English is explicitly mandated without Korean mixing
+  const isEnglishExplicit = 
+    (combined.includes('100% english') ||
+     combined.includes('in 100% english') ||
+     combined.includes('all lyrics must be written in 100% english') ||
+     combined.includes('all lyrics must be written in english') ||
+     combined.includes('write lyrics naturally in english') ||
+     combined.includes('100% 영문') ||
+     combined.includes('영어로만 작성') ||
+     combined.includes('written in 100% english')) &&
+    !hasKoreanDirectives;
+
+  // Only English if explicitly mandated and no Korean directives
+  const isEnglishOnly = isEnglishExplicit && !hasKoreanDirectives;
+
+  const isKoreanTitle = hasKoreanDirectives || isKorEngMixed || !isEnglishOnly;
+
+  const isKoreanHipHopRnb = 
+    combined.includes('알앤비') ||
+    combined.includes('힙합') ||
+    combined.includes('r&b') ||
+    combined.includes('hip-hop') ||
+    combined.includes('hiphop') ||
+    combined.includes('인스타 감성') ||
+    combined.includes('느좋') ||
+    combined.includes('트랩');
+
+  // Check if [Intro] or [Outro] are forbidden in the SOP
+  const forbidsIntroOutro = 
+    combined.includes('intro]와 [outro] 태그는 절대 사용하지 마라') ||
+    combined.includes('intro]와 [outro] 태그는 사용하지 마라') ||
+    combined.includes('intro와 outro 태그는 절대 사용하지 마라') ||
+    combined.includes('intro는 사용하지 마라') ||
+    combined.includes('intro 태그 금지') ||
+    combined.includes('no intro');
 
   const isShellacVintage = 
     combined.includes('shellac') ||
@@ -546,14 +586,24 @@ function parseSopSpecs(theme: any) {
     combined.includes('ost') ||
     combined.includes('soundtrack');
 
-  return { isEnglishOnly, isShellacVintage, isCinematic, engCharCount, korCharCount };
+  return { 
+    isEnglishOnly, 
+    isKoreanTitle, 
+    isKorEngMixed, 
+    isKoreanHipHopRnb, 
+    forbidsIntroOutro, 
+    isShellacVintage, 
+    isCinematic, 
+    engCharCount, 
+    korCharCount 
+  };
 }
 
 // Helper: Ensure track title contains ONLY the target language (no bilingual parentheses)
 function cleanTitleSingleLanguage(title: string, isEnglishTarget: boolean, fallbackTitle = 'Track Title'): string {
   if (!title) return fallbackTitle;
   let clean = title.trim();
-  clean = clean.replace(/^["'`]|["'`]$/g, '').trim();
+  clean = clean.replace(/^\[?track\s*\d*\]?:?\s*/i, '').replace(/^["'`]|["'`]$/g, '').trim();
 
   // If title has parentheses e.g. "한국어 (English)" or "English (Korean)"
   const parenMatch = clean.match(/^([^(]+)\s*\(([^)]+)\)$/);
@@ -677,14 +727,44 @@ app.post(['/api/generate', '/generate'], async (req: Request, res: Response) => 
       return;
     }
 
-    const languageRule = sopSpecs.isEnglishOnly
+    const isKorEng = sopSpecs.isKorEngMixed || sopSpecs.isKoreanHipHopRnb;
+    const isPureEnglish = sopSpecs.isEnglishOnly;
+
+    const languageRule = isPureEnglish
       ? `[CRITICAL MANDATORY LANGUAGE REQUIREMENT: 100% ENGLISH]
-The SOP specifies English lyrics/production (e.g. "All lyrics must be written in 100% English" / "Write lyrics naturally in English").
-- ALL lyrics in fullLyrics MUST be written in 100% pure English. Not a single Korean word or syllable.
-- Track titles (title) MUST be 100% English only. Never include Korean translations or bilingual parentheses like "Song Name (한국어)" or "한국어 (English)".
-- Style prompts (stylePrompt), section tags, and section guides MUST be 100% pure English.`
+The SOP explicitly commands 100% English production.
+- Track titles (title) MUST be 100% English only. Never include Korean translations or bilingual parentheses.
+- Style prompts (stylePrompt), section tags, and section guides MUST be 100% English.
+- ALL lyrics in fullLyrics MUST be written in 100% pure English. Not a single Korean word or syllable.`
+      : isKorEng
+      ? `[CRITICAL MANDATORY LANGUAGE & SCRIPT REQUIREMENTS: KOREAN R&B HIP-HOP (한영 혼용)]
+The user's SOP explicitly specifies Korean R&B / Hip-Hop with Korean-English Code-switching (한영 혼용). Follow these exact 4 field rules:
+
+1. TRACK TITLE ("title"):
+   - MUST BE A KOREAN TITLE (한국어 곡 제목), e.g. "공허", "비워내", "반달", "늦은 밤", "새벽 세 시".
+   - Follow the SOP's title rules (1단어, 2단어 조합, 또는 짧은 구).
+   - NEVER output an English-only title for this theme!
+
+2. STYLE PROMPT ("stylePrompt"):
+   - MUST BE 100% IN ENGLISH, optimized for Suno / Udio prompt box.
+   - Format: Genre & Vibe, Instrument Detail, Vocal Texture with specific Suno keywords, BPM, and mix character.
+   - Example format: "Atmospheric R&B, chill trap hip-hop, trendy aesthetic vibe, late night mood, ambient synth pads, deep 808 bass, trap hi-hats, early 20s male vocal, deep smoky texture, dry vocal mix, raw vocal texture, front-and-center vocals, minimal backing, 82 bpm"
+
+3. SECTION TAGS & GUIDES IN "fullLyrics":
+   - Section headers and bracketed guides MUST BE IN ENGLISH:
+     e.g. [Verse 1: Breathy singing rap over atmospheric synth]
+          [Pre-Chorus: Building up with trap hi-hats and deep 808]
+          [Chorus: Dreamy and rhythmic vocal hook]
+          [Instrumental Break: Dreamy synth solo with heavy reverb, 8 bars]
+   ${sopSpecs.forbidsIntroOutro ? `- IMPORTANT TAG PROHIBITION: The SOP explicitly orders: "중요 주의사항: 곡 구조 생성 시 [Intro]와 [Outro] 태그는 절대 사용하지 마라. 곡은 1절(Verse)이나 코러스(Chorus) 등으로 바로 시작하고 마무리되도록 구성해라." You MUST NEVER include [Intro] or [Outro] tags for this theme! Start directly with [Verse 1] or [Chorus]!` : ''}
+
+4. SUNG LYRICS BODY IN "fullLyrics":
+   - SUNG LYRICS MUST BE KOREAN-ENGLISH CODE-SWITCHING (한영 혼용: approx. 70~80% Korean, 20~30% English)!
+   - Write natural Korean conversational lyrics with smooth English rhyme endings, English hook phrases, and trendy ad-libs (Yeah, Right, Uh-huh, Hm-hm).
+   - NEVER output 100% English lyrics! Korean MUST be the primary language of the sung lyrics lines!`
       : `[LANGUAGE GUIDELINES]
-Follow the language specified in the SOP. Track titles must be in the single original language without bilingual translations in parentheses.`;
+- Track titles and sung lyrics must match the language of the SOP. If the SOP is written in Korean, track titles and lyrics must be in Korean.
+- Style prompts (stylePrompt) and section guide brackets must be in English for Suno/Udio compatibility.`;
 
     const systemPrompt = `You are "Plymaster", a world-class AI executive music producer and Suno/Udio prompt engineer.
 
@@ -713,9 +793,9 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 1. [SOUND IDENTITY & ACOUSTIC CRITERIA]
 - Carefully inspect the SOP's Sound Identity, Acoustic Criteria, Genre, and Production Directives.
 - EVERY TRACK's 'stylePrompt' MUST EXCLUSIVELY EMBED AND REFLECT THE EXACT SOUND CRITERIA OF THE CURRENT SOP:
+  * If the SOP specifies Korean R&B Hip-Hop (e.g. ambient synth pads, deep 808 bass, trap hi-hats, reverb-heavy electric piano, vocal texture keywords), embed that.
   * If the SOP specifies a Cinematic Movie OST Ballad (e.g. felt upright piano intro, soaring orchestra strings, building crescendo, emotional dynamic range), embed that.
   * If the SOP specifies 1940s Shellac (e.g. 78 RPM record, antique wooden phonograph, surface crackle, warm midrange), embed that.
-  * If the SOP specifies an Acoustic Lounge Pop or any other custom theme, embed its specific acoustic traits.
 - CRITICAL ISOLATION RULE: NEVER inherit, copy, or mix in instruments, eras, vintage crackles, or sound textures from previous or other themes! Use ONLY what is requested in the current SOP!
 
 2. [STYLE PROMPT SPECIFICATIONS (stylePrompt)]
@@ -732,62 +812,22 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 - Carefully follow the SOP's "Lyrics Guide Rules" and output specifications!
 - If the SOP specifies section guide prompts (e.g. [Verse 1: emotion, vocal delivery, arrangement] or [Verse 1]\n[Short English guide: ...]):
   Follow the SOP's exact formatting for section tags and guides!
-  Example structure:
-  [Intro]
-  [Short English guide: instrumental opening, core acoustic atmosphere, tempo]
-
-  [Verse 1]
-  [Short English guide: vocal emotion/delivery, instrument dynamics]
-  (Lyrics line 1)
-  (Lyrics line 2)
-  (Lyrics line 3)
-  (Lyrics line 4)
-
-  [Pre-Chorus]
-  [Short English guide: rising tension, subtle instrumental build]
-  (Lyrics line 1)
-  (Lyrics line 2)
-
-  [Chorus]
-  [Short English guide: central memorable hook, emotional delivery, arrangement peak]
-  (Lyrics line 1)
-  (Lyrics line 2)
-  (Lyrics line 3)
-  (Lyrics line 4)
-
-  [Verse 2]
-  [Short English guide: storytelling progression, accompaniment changes]
-  (Lyrics line 1)
-  (Lyrics line 2)
-
-  [Bridge]
-  [Short English guide: dynamic contrast, vocal shift, emotional peak]
-  (Lyrics line 1)
-  (Lyrics line 2)
-
-  [Final Chorus]
-  [Short English guide: powerful resolution, hook reprise, emotional catharsis]
-  (Lyrics line 1)
-  (Lyrics line 2)
-
-  [Outro]
-  [Short English guide: instruments fading to silence]
-  (Outro lyrics or concluding line)
-  [End]
+  ${sopSpecs.forbidsIntroOutro ? `* CRITICAL: Do NOT include [Intro] or [Outro] tags per the SOP instructions! Start directly with [Verse 1] or [Chorus]!` : `* Include appropriate bracketed section tags.`}
 - Guide prompts MUST be enclosed in square brackets [ ] to distinguish them from lyrics.
 - Do NOT output narrative sentences without brackets (such as "A soft piano begins...").
 
 4. [TRACK TITLES (title)]
-- Must be a single language only (English if English SOP).
+- For 100% English SOPs: English titles only.
+- For Korean / Korean R&B Hip-Hop SOPs: KOREAN TITLES ONLY (한국어 곡 제목, e.g. "공허", "새벽 세 시", "비워내"). NEVER output English titles!
 - NEVER output bilingual parentheses like "Title (제목)" or "제목 (Title)".
 
 5. [META INFO (metaInfo)]
 - For each track, output:
-  - vocal: e.g. "Warm expressive female lead vocal, emotive delivery" (matching SOP)
-  - genre: Genre strictly matching current SOP (e.g. "Cinematic OST Ballad", "Acoustic Pop")
-  - mood: Core emotional role defined in current SOP
-  - bpm: e.g. "74 BPM" (matching SOP tempo)
-  - targetLength: e.g. "3:10" (matching SOP length)
+  - vocal: e.g. "early 20s male vocal, deep smoky texture" (matching SOP)
+  - genre: Genre strictly matching current SOP (e.g. "Atmospheric R&B, Chill Trap Hip-Hop")
+  - mood: Core emotional role defined in current SOP (e.g. "Dreamy & Empty, Late Night Aesthetic")
+  - bpm: e.g. "82 BPM" (matching SOP tempo)
+  - targetLength: e.g. "3:05" (matching SOP length)
 
 [OUTPUT FORMAT - PURE JSON ONLY]
 Respond ONLY with a valid JSON object matching this schema (no markdown fences, no conversational text):
@@ -795,17 +835,17 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
   "tracks": [
     {
       "trackNumber": 1,
-      "title": "Single language song title strictly matching SOP concept",
+      "title": ${isPureEnglish ? '"Single language English song title"' : '"한국어 곡 제목 (예: 공허, 새벽 세 시)"'},
       "metaInfo": {
         "vocal": "Detailed vocal assignment matching SOP",
         "genre": "Genre strictly matching current SOP",
         "mood": "Core emotional role",
-        "bpm": "e.g. 74 BPM",
-        "targetLength": "e.g. 3:10"
+        "bpm": "e.g. 82 BPM",
+        "targetLength": "e.g. 3:05"
       },
       "mood": "Core emotion keyword",
-      "stylePrompt": "Comprehensive 800-900 character Suno/Udio prompt strictly embedding the current SOP's acoustic criteria, genre, instruments, vocal timbre, and BPM",
-      "fullLyrics": "Full lyrics strictly including section tags and guides followed by the song lyrics matching the SOP directives."
+      "stylePrompt": "Comprehensive 100% English Suno/Udio prompt strictly embedding the current SOP's acoustic criteria, genre, instruments, vocal timbre, and BPM",
+      "fullLyrics": ${isPureEnglish ? '"Full 100% English lyrics with English section tags"' : isKorEng ? '"Full lyrics with English bracketed section tags [Verse 1: ...] followed by Korean-English code-switching (한영 혼용: Korean 80% + English 20%) sung lines."' : '"Full lyrics with English bracketed section tags followed by sung lyrics in the SOP language."'}
     }
   ],
   "youtube": {
@@ -849,7 +889,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
               contents: systemPrompt,
               config: {
                 responseMimeType: 'application/json',
-                systemInstruction: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. Derive all acoustic criteria, instruments, genre, vocal directions, and style prompts exclusively from the user provided SOP. Never inherit or mix in instruments, eras, or textures from previous themes or other projects. When the SOP specifies style prompt length (800-900 characters) and bracketed section guides (e.g. [Intro]\n[Guide instruction]\n\n[Verse 1]\n[Guide instruction]\nlyrics), you MUST follow them completely. Never write brief 1-line style prompts. Respond strictly in valid JSON.'
+                systemInstruction: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. When the SOP specifies Korean R&B / Hip-Hop with 한영 혼용 (Kor-Eng Code-switching), track titles MUST be in Korean, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching. When the SOP specifies 100% English, output 100% English. Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.'
               }
             }),
             timeoutPromise
@@ -880,7 +920,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
             ...tr,
             trackNumber: tr.trackNumber || (idx + 1),
-            title: cleanTitleSingleLanguage(tr.title, sopSpecs.isEnglishOnly)
+            title: cleanTitleSingleLanguage(tr.title, sopSpecs.isEnglishOnly, sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title')
           }));
         }
         res.json({
@@ -931,7 +971,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
             body: JSON.stringify({
               model: engine,
               messages: [
-                { role: 'system', content: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. Derive all acoustic criteria, instruments, genre, vocal directions, and style prompts exclusively from the user provided SOP. Never inherit or mix in instruments, eras, or textures from previous themes or other projects. When the SOP specifies style prompt length (800-900 characters) and bracketed section guides (e.g. [Intro]\n[Guide instruction]\n\n[Verse 1]\n[Guide instruction]\nlyrics), you MUST follow them completely. Never write brief 1-line style prompts. Respond strictly in valid JSON.' },
+                { role: 'system', content: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. When the SOP specifies Korean R&B / Hip-Hop with 한영 혼용 (Kor-Eng Code-switching), track titles MUST be in Korean, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching. When the SOP specifies 100% English, output 100% English. Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.' },
                 { role: 'user', content: `${systemPrompt}\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
               ],
               response_format: { type: 'json_object' },
@@ -986,7 +1026,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
             ...tr,
             trackNumber: tr.trackNumber || (idx + 1),
-            title: cleanTitleSingleLanguage(tr.title, sopSpecs.isEnglishOnly)
+            title: cleanTitleSingleLanguage(tr.title, sopSpecs.isEnglishOnly, sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title')
           }));
         }
         res.json({
@@ -1025,7 +1065,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           body: JSON.stringify({
             model: claudeModel,
             max_tokens: 4096,
-            system: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. Derive all acoustic criteria, instruments, genre, vocal directions, and style prompts exclusively from the user provided SOP. Never inherit or mix in instruments, eras, or textures from previous themes or other projects. When the SOP specifies style prompt length (800-900 characters) and bracketed section guides (e.g. [Intro]\n[Guide instruction]\n\n[Verse 1]\n[Guide instruction]\nlyrics), you MUST follow them completely. Never write brief 1-line style prompts. Respond strictly in valid JSON.',
+            system: 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. When the SOP specifies Korean R&B / Hip-Hop with 한영 혼용 (Kor-Eng Code-switching), track titles MUST be in Korean, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching. When the SOP specifies 100% English, output 100% English. Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.',
             messages: [
               { role: 'user', content: `${systemPrompt}\n\n반드시 JSON 형식으로만 응답하세요.\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
             ]
@@ -1057,7 +1097,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
             ...tr,
             trackNumber: tr.trackNumber || (idx + 1),
-            title: cleanTitleSingleLanguage(tr.title, sopSpecs.isEnglishOnly)
+            title: cleanTitleSingleLanguage(tr.title, sopSpecs.isEnglishOnly, sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title')
           }));
         }
         res.json({
@@ -1222,6 +1262,117 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
         lyrics: `[Intro]\n(웅장하면서도 쓸쓸한 스트링 서주)\n\n[Verse 1]\n마지막 장면이 끝나고 암전이 찾아올 때\n내 맘에 남은 너의 대사는 영원히 살아있어\n\n[Chorus]\n엔딩 크레딧이 모두 올라가도\n우리의 사랑은 끝나지 않는 영화처럼 계속돼\n\n[Outro]\n(현악 합주 페이드)`
       }
     ];
+  } else if (sopSpecs.isKoreanHipHopRnb || sopSpecs.isKorEngMixed) {
+    trackTemplates = [
+      {
+        title: '공허',
+        mood: '채워지지 않는 일상의 공허함과 늦은 밤 몽환적인 칠(Chill)한 감성',
+        metaInfo: {
+          vocal: 'early 20s male vocal, colorless ethereal translucent breathy tone',
+          genre: 'Atmospheric R&B, Chill Trap Hip-Hop',
+          mood: 'Dreamy & Empty, Late Night Aesthetic',
+          bpm: '82 BPM',
+          targetLength: '3:05'
+        },
+        style: `Atmospheric R&B, chill trap hip-hop, trendy aesthetic vibe, late night mood, dreamy and empty, ambient synth pads, deep 808 bass, trap hi-hats, reverb-heavy electric piano, early 20s male vocal, colorless, ethereal, translucent breathy tone, androgynous falsetto, clear vocal presence, dry vocal mix, raw vocal texture, front-and-center vocals, minimal backing, spacious and modern mix, 82 bpm`,
+        lyrics: `[Verse 1: Breathy singing rap over atmospheric synth and soft 808]
+Love-love the stars, love-love the moon
+별 다를 것 없이 흘러가는 afternoon
+똑같은 방, 똑같은 침대에서
+멍하니 올려다보는 천장까지
+Yeah, 왜 별다른 이유도 없이
+가슴 한구석이 텅 빈 건지
+I keep looking at my screen, scrolling all night
+아무 의미 없는 피드만 넘기지, right?
+
+[Pre-Chorus: Building up with trap hi-hats and deep 808 bass]
+시간은 참 잘만 흘러가는데
+내 하루는 어딘가 비어 있는 듯해
+너의 빈자린지, 아니면 내 욕심인지
+Still don't know what I'm looking for
+
+[Chorus: Dreamy and rhythmic vocal hook with stacked falsetto]
+채워지지 않는 네모난 빈칸
+Always leaving me feeling so blank, yeah
+불 꺼진 방 안에 덩그러니 남아
+혼자서 삼키는 차가운 밤의 잔향
+Can somebody tell me why it hurts so slow?
+채워도 채워지지 않는 feeling hollow
+
+[Verse 2: Laidback syncopated melodic rap flow]
+벽에 걸린 시계 소리만 유난히 tick-tock
+지워버린 메시지 창을 다시 또 click, stop
+괜히 쿨한 척 넘겨보려 해도
+거울 속에 비친 표정은 그대로
+Yeah, nobody knows how it feels inside
+화려한 필터 뒤에 숨겨둔 my mind
+너 없는 밤거릴 혼자 걷다 보면
+또다시 차가운 바람만 스쳐가, hm-hm
+
+[Instrumental Break: Dreamy synth solo with heavy reverb, 8 bars]
+
+[Chorus: Dreamy and rhythmic vocal hook with emotional ad-libs]
+채워지지 않는 네모난 빈칸
+Always leaving me feeling so blank, yeah
+불 꺼진 방 안에 덩그러니 남아
+혼자서 삼키는 차가운 밤의 잔향
+Can somebody tell me why it hurts so slow?
+채워도 채워지지 않는 feeling hollow`
+      },
+      {
+        title: '새벽 세 시',
+        mood: '은밀한 관계의 텐션과 늦은 밤 드라이브의 몽환적인 그루브',
+        metaInfo: {
+          vocal: 'mid 20s male vocal, slurred drunken nasal tone, heavy sticky voice',
+          genre: 'Late-Night Chill Trap R&B',
+          mood: 'Subtle Romantic Tension, Sensual Groove',
+          bpm: '85 BPM',
+          targetLength: '3:12'
+        },
+        style: `Chill trap R&B, late-night drive aesthetic, subtle tension, nocturnal vibe, deep sub 808 pulse, warm Rhodes chords, filtered vocal chops, lazy trap snare, mid 20s male vocal, slurred drunken nasal tone, heavy and sticky voice, clear vocal presence, dry vocal mix, front-and-center vocals, modern Korean R&B production, 85 bpm`,
+        lyrics: `[Verse 1: Murmured sing-rap over warm Rhodes and deep 808]
+새벽 세 시, 차창 밖은 온통 푸른빛
+가라앉은 공기 속에 울리는 beat
+너는 조수석에 기대어 고갤 돌려
+미묘한 눈빛으로 날 빤히 쳐다봐
+Yeah, unspoken words hanging in the air
+우리 둘 사이 흐르는 strange tension, right?
+신호등은 깜빡이고 우린 말이 없어
+핸들을 잡은 손끝이 조금 떨려와
+
+[Pre-Chorus: Tightening vocal flow with rolling hi-hats]
+어디로 가야 할지 묻지 마
+오늘 밤은 그냥 흘러가는 대로 가
+Don't say a word, just feel this ride
+아슬아슬한 이 텐션 속에 빠져들어
+
+[Chorus: Sensual melodic hook with smooth vocal layering]
+Late night 3 AM, we're drifting away
+어둠 속에 번지는 subtle grey
+아무도 모르게 나눈 은밀한 vibe
+이 밤이 끝나지 않길 원해, just you and I
+Catching this feeling, nowhere to hide
+달빛 아래 번져가는 midnight ride
+
+[Verse 2: Conversational casual delivery with ad-libs]
+라디오에선 익숙한 melody가 나와
+괜히 볼륨을 키워 어색함을 지워
+너의 향기가 시트 가득 스밀 때
+I swear I'm losing all my control
+Yeah, 툭 던진 한마디에 심장이 뛰어
+"오늘 밤은 조금 더 같이 있고 싶어"
+
+[Instrumental Break: Reverb-soaked electric piano and 808 groove, 8 bars]
+
+[Chorus: Full melodic release with layered ad-libs]
+Late night 3 AM, we're drifting away
+어둠 속에 번지는 subtle grey
+아무도 모르게 나눈 은밀한 vibe
+이 밤이 끝나지 않길 원해, just you and I
+Catching this feeling, nowhere to hide
+달빛 아래 번져가는 midnight ride`
+      }
+    ];
   } else {
     // Dynamic extraction from user SOP for custom registered themes
     const rawSop = theme.sop || '';
@@ -1275,7 +1426,7 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
 
     tracks.push({
       trackNumber: i + 1,
-      title: cleanTitleSingleLanguage(rawTitle, sopSpecs.isEnglishOnly, `Track ${i + 1}`),
+      title: cleanTitleSingleLanguage(rawTitle, sopSpecs.isEnglishOnly, sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title'),
       mood: template.mood,
       metaInfo: template.metaInfo,
       stylePrompt: template.style,
@@ -1292,28 +1443,38 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
 
   const youtubeTitle = sopSpecs.isShellacVintage
     ? `[PLAYLIST] 1940s Vintage Shellac 78 RPM Phonograph | Worn Record Memories for Relaxing & Sleep 📻 ☕️`
+    : sopSpecs.isKoreanHipHopRnb
+    ? `[PLAYLIST] ${theme.name} | 늦은 밤 감각적인 새벽 드라이브 느좋 칠(Chill) 알앤비 힙합 🌙 🎧`
     : sopSpecs.isEnglishOnly
     ? `[PLAYLIST] ${theme.name} | Emotional Ballads for Deep Focus & Heartbreak 🎬 ☕️`
-    : `[PLAYLIST] ${theme.name} | 영화 같은 하루를 선물하는 감성 플레이리스트 🎬 ☕️`;
+    : `[PLAYLIST] ${theme.name} | 감각적인 하루를 선물하는 감성 플레이리스트 🎬 ☕️`;
 
   const youtubeDesc = sopSpecs.isShellacVintage
     ? `Travel back in time to the 1940s. Authentic Type B worn and gritty shellac 78 RPM phonograph recordings with warm needle crackle, nostalgic melodies, and sincere vintage vocals.\n\n[🎧 Tracklist]\n${tracklistText}\n\n[📻 Sound Identity]\n- 1940s shellac 78 RPM record played on an antique wooden phonograph\n- Narrow frequency band, surface crackles & mechanical needle noise\n- Thick warm midrange & analog tube saturation\n\n#PlymasterFactory #Vintage1940s #ShellacRecord #78RPM #Phonograph #SunoAI`
+    : sopSpecs.isKoreanHipHopRnb
+    ? `감각적인 늦은 밤, 몽환적인 칠(Chill) 트랩 비트와 세련된 한영 혼용 보컬/싱랩의 향연.\n${theme.name} 플레이리스트와 함께 새벽 드라이브의 미묘한 텐션과 여유를 즐겨보세요.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #인스타감성 #느좋 #알앤비힙합 #한국알앤비 #새벽드라이브 #SunoAI`
     : sopSpecs.isEnglishOnly
     ? `Immerse yourself in a musical journey. Crafted precisely according to your SOP specifications.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #Playlist #SunoAI`
     : `지친 마음에 깊은 울림을 전하는 ${theme.name} 플레이리스트입니다.\n입력된 SOP 지침을 바탕으로 기획된 감성 사운드로 편안한 힐링과 몰입을 즐겨보세요.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #플레이리스트 #음악추천 #BGM #감성음악`;
 
   const hashtags = sopSpecs.isShellacVintage
     ? '#Vintage1940s #ShellacPhonograph #78RPM #VintagePop #RetroBallad #SunoAI'
+    : sopSpecs.isKoreanHipHopRnb
+    ? '#인스타감성 #느좋 #알앤비 #한국힙합 #칠트랩 #새벽음악 #SunoAI'
     : sopSpecs.isEnglishOnly
     ? '#Playlist #MusicProduction #SunoAI #AudioCards'
     : '#플레이리스트 #음악추천 #감성음악 #SunoAI';
 
   const thumbnailPrompt = sopSpecs.isShellacVintage
     ? '1940s antique wooden phonograph playing a spinning shellac 78 RPM record on a polished mahogany table, soft warm amber incandescent glow, atmospheric dust motes floating in light rays, vintage sepia tone, cinematic 16:9 photorealistic 8k'
+    : sopSpecs.isKoreanHipHopRnb
+    ? '16:9 aesthetic Korean late night mood, rainy city car window reflections, neon bokeh, moody cinema lighting, 35mm film grain, photorealistic 8k'
     : 'Cinematic 16:9 movie still, melancholic beautiful scene, soft warm golden hour light through sheer curtain, 35mm film aesthetic, photorealistic, 8k resolution --ar 16:9';
 
   const backgroundImagePrompt = sopSpecs.isShellacVintage
     ? '16:9 seamless vintage room loop: antique 1940s gramophone with brass horn, gentle spinning record, warm amber fireplace glow, slow cozy dust particles, relaxing vintage aesthetic'
+    : sopSpecs.isKoreanHipHopRnb
+    ? '16:9 seamless loop: late night neon city lights reflecting through car windshield, slow ambient motion, moody aesthetic atmosphere'
     : '16:9 seamless film loop background: warm vintage cinema aesthetic, slow ambient light rays, soft floating dust particles, emotional cozy atmosphere';
 
   return {

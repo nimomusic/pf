@@ -437,10 +437,10 @@ export async function generatePlaylist(params: {
   }
 
   if (data.result && Array.isArray(data.result.tracks)) {
-    const isEng = parseClientSopSpecs(params.theme).isEnglishOnly;
+    const specs = parseClientSopSpecs(params.theme);
     data.result.tracks = data.result.tracks.map((tr: any) => ({
       ...tr,
-      title: cleanTitleSingleLanguage(tr.title, isEng, tr.title || 'Track Title')
+      title: cleanTitleSingleLanguage(tr.title, specs.isEnglishOnly, specs.isKoreanTitle ? '새로운 트랙' : (tr.title || 'Track Title'))
     }));
   }
 
@@ -454,21 +454,59 @@ function parseClientSopSpecs(theme: Theme) {
   const engCharCount = (rawSop.match(/[a-zA-Z]/g) || []).length;
   const korCharCount = (rawSop.match(/[\uAC00-\uD7AF]/g) || []).length;
 
-  const isEnglishExplicit = 
-    combined.includes('100% english') ||
-    combined.includes('in 100% english') ||
-    combined.includes('all lyrics must be written in english') ||
-    combined.includes('all lyrics must be written in 100% english') ||
-    combined.includes('english lyrics') ||
-    combined.includes('lyrics must be in english') ||
-    combined.includes('영어로 작성') ||
-    combined.includes('영어 가사') ||
-    combined.includes('영문 가사') ||
-    combined.includes('100% 영문') ||
-    combined.includes('written in english');
+  // Check if Korean or Kor-Eng code-switching is intended in the SOP
+  const hasKoreanDirectives = 
+    combined.includes('한영 혼용') ||
+    combined.includes('한영혼용') ||
+    combined.includes('kor-eng') ||
+    combined.includes('code-switching') ||
+    combined.includes('한국어') ||
+    combined.includes('국문') ||
+    combined.includes('한국 힙합') ||
+    combined.includes('한국 알앤비') ||
+    combined.includes('인스타 감성') ||
+    combined.includes('느좋') ||
+    korCharCount > 30;
 
-  // If explicit keyword OR if SOP text is primarily English (more English letters than Korean)
-  const isEnglishOnly = isEnglishExplicit || (engCharCount > 25 && engCharCount > korCharCount);
+  const isKorEngMixed = 
+    combined.includes('한영 혼용') ||
+    combined.includes('한영혼용') ||
+    combined.includes('kor-eng') ||
+    combined.includes('code-switching') ||
+    (combined.includes('한국어') && (combined.includes('영어') || combined.includes('english')));
+
+  // Strictly check if 100% English is explicitly mandated without Korean mixing
+  const isEnglishExplicit = 
+    (combined.includes('100% english') ||
+     combined.includes('in 100% english') ||
+     combined.includes('all lyrics must be written in 100% english') ||
+     combined.includes('all lyrics must be written in english') ||
+     combined.includes('write lyrics naturally in english') ||
+     combined.includes('100% 영문') ||
+     combined.includes('영어로만 작성') ||
+     combined.includes('written in 100% english')) &&
+    !hasKoreanDirectives;
+
+  const isEnglishOnly = isEnglishExplicit && !hasKoreanDirectives;
+  const isKoreanTitle = hasKoreanDirectives || isKorEngMixed || !isEnglishOnly;
+
+  const isKoreanHipHopRnb = 
+    combined.includes('알앤비') ||
+    combined.includes('힙합') ||
+    combined.includes('r&b') ||
+    combined.includes('hip-hop') ||
+    combined.includes('hiphop') ||
+    combined.includes('인스타 감성') ||
+    combined.includes('느좋') ||
+    combined.includes('트랩');
+
+  const forbidsIntroOutro = 
+    combined.includes('intro]와 [outro] 태그는 절대 사용하지 마라') ||
+    combined.includes('intro]와 [outro] 태그는 사용하지 마라') ||
+    combined.includes('intro와 outro 태그는 절대 사용하지 마라') ||
+    combined.includes('intro는 사용하지 마라') ||
+    combined.includes('intro 태그 금지') ||
+    combined.includes('no intro');
 
   const isShellacVintage = 
     combined.includes('shellac') ||
@@ -484,14 +522,24 @@ function parseClientSopSpecs(theme: Theme) {
     combined.includes('ost') ||
     combined.includes('soundtrack');
 
-  return { isEnglishOnly, isShellacVintage, isCinematic, engCharCount, korCharCount };
+  return { 
+    isEnglishOnly, 
+    isKoreanTitle, 
+    isKorEngMixed, 
+    isKoreanHipHopRnb, 
+    forbidsIntroOutro, 
+    isShellacVintage, 
+    isCinematic, 
+    engCharCount, 
+    korCharCount 
+  };
 }
 
 // Helper: Ensure track title contains ONLY the target language (no bilingual parentheses)
 function cleanTitleSingleLanguage(title: string, isEnglishTarget: boolean, fallbackTitle = 'Track Title'): string {
   if (!title) return fallbackTitle;
   let clean = title.trim();
-  clean = clean.replace(/^["'`]|["'`]$/g, '').trim();
+  clean = clean.replace(/^\[?track\s*\d*\]?:?\s*/i, '').replace(/^["'`]|["'`]$/g, '').trim();
 
   // If title has parentheses e.g. "한국어 (English)" or "English (Korean)"
   const parenMatch = clean.match(/^([^(]+)\s*\(([^)]+)\)$/);
