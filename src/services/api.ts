@@ -440,7 +440,8 @@ export async function generatePlaylist(params: {
     const specs = parseClientSopSpecs(params.theme);
     data.result.tracks = data.result.tracks.map((tr: any) => ({
       ...tr,
-      title: cleanTitleSingleLanguage(tr.title, specs.targetLang, specs.isJapanese ? '新曲' : specs.isKoreanTitle ? '새로운 트랙' : (tr.title || 'Track Title'))
+      title: cleanTitleSingleLanguage(tr.title, specs.targetLang, specs.isJapanese ? '新曲' : specs.isKoreanTitle ? '새로운 트랙' : (tr.title || 'Track Title')),
+      fullLyrics: formatAndCleanLyrics(tr.fullLyrics, specs.isJapanese)
     }));
   }
 
@@ -631,6 +632,119 @@ function cleanTitleSingleLanguage(
   }
 
   return clean || fallbackTitle;
+}
+
+// Helper: Ensure structure tags [Section: Guide] are on their own lines, sections have proper line breaks, and instrumental sections contain NO sung lyrics
+function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean): string {
+  if (!rawLyrics) return '';
+  let text = rawLyrics.trim();
+
+  // Normalize line breaks
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  // Step 1: If a bracketed section tag is followed on the same line by text (e.g., "[Intro: ...] lyrics..."), split them!
+  text = text.replace(/(\[[^\]]+\])[ \t]*([^\n\r]+)/g, (match, tag, rest) => {
+    const trimmedRest = rest.trim();
+    if (!trimmedRest) return tag;
+    return `${tag}\n${trimmedRest}`;
+  });
+
+  // Step 2: Parse into structured sections based on bracket tags
+  const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const sections: Array<{ tag: string; contentLines: string[] }> = [];
+  let currentTag = '';
+  let currentContent: string[] = [];
+
+  for (const line of rawLines) {
+    if (/^\[[^\]]+\]$/.test(line)) {
+      if (currentTag || currentContent.length > 0) {
+        sections.push({ tag: currentTag, contentLines: currentContent });
+      }
+      currentTag = line;
+      currentContent = [];
+    } else {
+      currentContent.push(line);
+    }
+  }
+  if (currentTag || currentContent.length > 0) {
+    sections.push({ tag: currentTag, contentLines: currentContent });
+  }
+
+  // Step 3: Process and clean each section
+  const formattedBlocks: string[] = [];
+  for (let sIdx = 0; sIdx < sections.length; sIdx++) {
+    const sec = sections[sIdx];
+    const tag = sec.tag;
+    const content = sec.contentLines;
+    const tagHeader = tag.replace(/^\[|\].*$/g, '').trim().split(':')[0].trim().toLowerCase();
+    const isInstrumental = /^(intro|outro|instrumental|interlude|break)$/i.test(tagHeader) ||
+      /^\[\s*(intro|outro|instrumental|interlude|instrumental break|instrumental interlude)/i.test(tag);
+    const isPureEnd = /^\[end\]$/i.test(tag);
+
+    if (isPureEnd) {
+      formattedBlocks.push(tag);
+      continue;
+    }
+
+    if (isInstrumental) {
+      const isInterludeOrBreak = /^(instrumental|interlude|break)/i.test(tagHeader) || /instrumental/i.test(tag);
+      const isIntro = /^intro/i.test(tagHeader) || /^\[\s*intro/i.test(tag);
+      const isOutro = /^outro/i.test(tagHeader) || /^\[\s*outro/i.test(tag);
+
+      const cleanedLines: string[] = [];
+      for (const line of content) {
+        if (/^\(.*\)$/.test(line)) {
+          cleanedLines.push(line);
+        } else if (isInterludeOrBreak) {
+          // Strictly NO SUNG LYRICS in Instrumental Interlude/Break!
+          if (sIdx + 1 < sections.length && !/intro|outro|instrumental|interlude|solo|break/i.test(sections[sIdx + 1].tag)) {
+            sections[sIdx + 1].contentLines.unshift(line);
+          }
+        } else if (isIntro) {
+          if (sIdx + 1 < sections.length && /verse/i.test(sections[sIdx + 1].tag)) {
+            sections[sIdx + 1].contentLines.unshift(line);
+          }
+        } else if (isOutro) {
+          if (/^\(.*\)$/.test(line) || /^\[.*\]$/.test(line)) {
+            cleanedLines.push(line);
+          }
+        }
+      }
+
+      // Guarantee instrumental guide exists if empty
+      if (cleanedLines.length === 0) {
+        if (isInterludeOrBreak) {
+          cleanedLines.push('(Glassy synths, subtle guitar fragments and ambient space, 8 bars - Instrumental)');
+        } else if (isIntro) {
+          cleanedLines.push('(Soft ambient room tone, mellow electric piano arpeggios slowly breathing)');
+        } else if (isOutro) {
+          cleanedLines.push('(Mellow electric piano fading gently into room silence)\n[End]');
+        }
+      } else if (isOutro && !cleanedLines.some(l => /\[end\]/i.test(l))) {
+        cleanedLines.push('[End]');
+      }
+
+      formattedBlocks.push(tag ? `${tag}\n${cleanedLines.join('\n')}` : cleanedLines.join('\n'));
+    } else {
+      // Vocal sections: [Verse 1], [Chorus], [Pre-Chorus], [Bridge], etc.
+      // If content was compressed onto 1 or 2 lines with spaces between clauses, split into poetic lines
+      const linesOut: string[] = [];
+      for (const line of content) {
+        if (content.length <= 3 && (line.includes(' ') || line.includes('　'))) {
+          const parts = line.split(/[\s　]+/).map((p: string) => p.trim()).filter(Boolean);
+          if (parts.length >= 2) {
+            linesOut.push(...parts);
+            continue;
+          }
+        }
+        linesOut.push(line);
+      }
+
+      formattedBlocks.push(tag ? `${tag}\n${linesOut.join('\n')}` : linesOut.join('\n'));
+    }
+  }
+
+  return formattedBlocks.join('\n\n').trim();
 }
 
 let lastClientTrackOffset = -1;
@@ -855,7 +969,6 @@ function generateClientSopPlaylist(
 
 [Outro: Mellow electric piano fading to ambient city night silence]
 (Mellow electric piano softly resolving into silence)
-おやすみ、私の光
 [End]`
       },
       {
@@ -931,7 +1044,6 @@ function generateClientSopPlaylist(
 
 [Outro: Soft Fender Rhodes fading to dawn silence]
 (Fender Rhodes fading to soft morning silence)
-夜が明けていく
 [End]`
       },
       {
@@ -974,7 +1086,7 @@ function generateClientSopPlaylist(
 今夜も雨の街に歌を降らせる
 
 [Verse 2: Intimate reflective delivery, rhythmic soft beat]
-濡れた歩道に反射するネ온の文字
+濡れた歩道に反射するネオンの文字
 通り過ぎるタクシーが跳ね上げる水しぶき
 ありふれた景色のひとつひとつが
 なぜかこんなにも愛おしく思える
@@ -1007,7 +1119,6 @@ function generateClientSopPlaylist(
 
 [Outro: Glassy synth keys and rain fading out]
 (Glassy synth keys gently fading into rain ambience)
-街の残響の中に
 [End]`
       }
     ];
@@ -1299,7 +1410,7 @@ Our unforgettable late night drive`
       mood: tmpl.mood,
       metaInfo: tmpl.metaInfo,
       stylePrompt: tmpl.style,
-      fullLyrics: tmpl.lyrics
+      fullLyrics: formatAndCleanLyrics(tmpl.lyrics, specs.isJapanese)
     });
   }
 

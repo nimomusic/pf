@@ -701,6 +701,123 @@ function cleanTitleSingleLanguage(
   return clean || fallbackTitle;
 }
 
+// Helper: Ensure structure tags [Section: Guide] are on their own lines, sections have proper line breaks, and instrumental sections contain NO sung lyrics
+function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean): string {
+  if (!rawLyrics) return '';
+  let text = rawLyrics.trim();
+
+  // Normalize line breaks
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  // Step 1: If a bracketed section tag is followed on the same line by text (e.g., "[Intro: ...] lyrics..."), split them!
+  text = text.replace(/(\[[A-Za-z0-9\s:,\-\.\/]+\])[ \t]*([^\n\r]+)/g, (match, tag, rest) => {
+    const trimmedRest = rest.trim();
+    if (!trimmedRest) return tag;
+    return `${tag}\n${trimmedRest}`;
+  });
+
+  // Step 2: Parse into structured sections based on bracket tags
+  const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const sections: Array<{ tag: string; contentLines: string[] }> = [];
+  let currentTag = '';
+  let currentContent: string[] = [];
+
+  for (const line of rawLines) {
+    if (/^\[[^\]]+\]$/.test(line)) {
+      if (currentTag || currentContent.length > 0) {
+        sections.push({ tag: currentTag, contentLines: currentContent });
+      }
+      currentTag = line;
+      currentContent = [];
+    } else {
+      currentContent.push(line);
+    }
+  }
+  if (currentTag || currentContent.length > 0) {
+    sections.push({ tag: currentTag, contentLines: currentContent });
+  }
+
+  // Step 3: Process and clean each section
+  const formattedBlocks: string[] = [];
+  for (let sIdx = 0; sIdx < sections.length; sIdx++) {
+    const sec = sections[sIdx];
+    const tag = sec.tag;
+    const content = sec.contentLines;
+    const tagHeader = tag.replace(/^\[|\].*$/g, '').trim().split(':')[0].trim().toLowerCase();
+    const isInstrumental = /^(intro|outro|instrumental|interlude|break)$/i.test(tagHeader) ||
+      /^\[\s*(intro|outro|instrumental|interlude|instrumental break|instrumental interlude)/i.test(tag);
+    const isPureEnd = /^\[end\]$/i.test(tag);
+
+    if (isPureEnd) {
+      formattedBlocks.push(tag);
+      continue;
+    }
+
+    if (isInstrumental) {
+      const isInterludeOrBreak = /^(instrumental|interlude|break)/i.test(tagHeader) || /instrumental/i.test(tag);
+      const isIntro = /^intro/i.test(tagHeader) || /^\[\s*intro/i.test(tag);
+      const isOutro = /^outro/i.test(tagHeader) || /^\[\s*outro/i.test(tag);
+
+      const cleanedLines: string[] = [];
+      for (const line of content) {
+        if (/^\(.*\)$/.test(line)) {
+          cleanedLines.push(line);
+        } else if (isInterludeOrBreak) {
+          // Strictly NO SUNG LYRICS in Instrumental Interlude/Break!
+          // If the AI put a sung line like "風の音が静かにささやく", move it to the next vocal section
+          if (sIdx + 1 < sections.length && !/intro|outro|instrumental|interlude|solo|break/i.test(sections[sIdx + 1].tag)) {
+            sections[sIdx + 1].contentLines.unshift(line);
+          } else {
+            cleanedLines.push(`(Ambient soundscape - ${line})`);
+          }
+        } else if (isIntro) {
+          // Intro: opening instrumental. Move erroneously placed sung lyrics to Verse 1 if possible
+          if (sIdx + 1 < sections.length && /verse/i.test(sections[sIdx + 1].tag)) {
+            sections[sIdx + 1].contentLines.unshift(line);
+          } else {
+            cleanedLines.push(`(Opening mood - ${line})`);
+          }
+        } else if (isOutro) {
+          cleanedLines.push(line.startsWith('(') ? line : `(${line})`);
+        } else {
+          cleanedLines.push(line);
+        }
+      }
+
+      // Guarantee instrumental guide exists if empty
+      if (cleanedLines.length === 0) {
+        if (isInterludeOrBreak) {
+          cleanedLines.push('(Glassy synth keys, subtle electric guitar fragments and ambient space, 8 bars - Instrumental)');
+        } else if (isIntro) {
+          cleanedLines.push('(Soft ambient room tone, mellow electric piano arpeggios slowly breathing)');
+        } else if (isOutro) {
+          cleanedLines.push('(Mellow electric piano fading gently into room silence)\n[End]');
+        }
+      }
+
+      formattedBlocks.push(tag ? `${tag}\n${cleanedLines.join('\n')}` : cleanedLines.join('\n'));
+    } else {
+      // Vocal sections: [Verse 1], [Chorus], [Pre-Chorus], [Bridge], etc.
+      // If content was compressed onto 1 or 2 lines with spaces between clauses, split into poetic lines
+      const linesOut: string[] = [];
+      for (const line of content) {
+        if (content.length <= 3 && (line.includes(' ') || line.includes('　'))) {
+          const parts = line.split(/[\s　]+/).map((p: string) => p.trim()).filter(Boolean);
+          if (parts.length >= 2) {
+            linesOut.push(...parts);
+            continue;
+          }
+        }
+        linesOut.push(line);
+      }
+
+      formattedBlocks.push(tag ? `${tag}\n${linesOut.join('\n')}` : linesOut.join('\n'));
+    }
+  }
+
+  return formattedBlocks.join('\n\n').trim();
+}
+
 // Helper to extract JSON safely from AI output
 function extractJsonFromText(rawText: string): any {
   if (!rawText) throw new Error('AI 응답이 비어 있습니다.');
@@ -799,7 +916,7 @@ app.post(['/api/generate', '/generate'], async (req: Request, res: Response) => 
     const languageRule = isJapanese
       ? `[CRITICAL MANDATORY LANGUAGE REQUIREMENT: 100% PURE JAPANESE J-POP (100% 일본어 가사 및 일본어 곡 제목)]
 The user's SOP explicitly mandates Japanese R&B / J-POP with 100% Japanese sung lyrics and a Japanese song title.
-You MUST strictly follow these 4 field rules:
+You MUST strictly follow these 5 field rules:
 
 1. TRACK TITLE ("title"):
    - MUST BE A PURE JAPANESE SONG TITLE (일본어 곡 제목 - 漢字, ひらがな, カタカナ), e.g. "画面の向こう", "夜を泳ぐ", "残響", "微熱", "青い静寂", "街の灯り", "鍵をかけた部屋".
@@ -808,7 +925,8 @@ You MUST strictly follow these 4 field rules:
 
 2. STYLE PROMPT ("stylePrompt") - MANDATORY 750 to 950 CHARACTERS (AIM FOR 800-900 CHARACTERS):
    - MUST BE 100% IN ENGLISH, optimized for Suno / Udio prompt box (Zero Japanese or Korean characters).
-   - Write a rich, multi-sentence prompt covering all core dimensions:
+   - FORMAT: Dense comma-separated keywords and sound design tags (DO NOT write narrative essay sentences like "This track embodies the essence of...").
+   - Dense comma-separated tags covering all 6 dimensions to reach 750~950 characters:
      (1) Genre & Vibe: electronic R&B J-pop, cinematic Japanese alt-pop, philosophical city ballad, intimate, urban, deep, elegant, lonely, quietly devastating, nocturnal city atmosphere
      (2) Tempo, Rhythm & Groove: Exact 90~96 BPM, minimal electronic drums, soft kick, laidback swinging groove, restrained R&B rhythm
      (3) Instrumentation: Mellow vintage electric piano, deep sub bass, glassy synth keys, clean guitar fragments, ambient room texture, foley SFX, space and air
@@ -816,7 +934,10 @@ You MUST strictly follow these 4 field rules:
      (5) Spatial Mix & Mastering: Polished alt-pop mix, wide stereo panorama, bass clean, pristine dynamic headroom, hard stop ending
      (6) Negative Exclusions: Exclude: -over-belting, -nasal vocal, -idol tone, -heavy autotune, -EDM, -trap, -muddy bass, -fadeout, -fast tempo, -harsh highs
 
-3. SECTION TAGS & GUIDES IN "fullLyrics":
+3. CRITICAL SECTION TAG & NEWLINE RULES IN "fullLyrics":
+   - EVERY section bracket tag MUST be on its own line followed by a newline (\\n).
+   - NEVER put sung lyrics on the same line as the bracket tag!
+   - Separate every section with an empty blank line (\\n\\n).
    - Section headers and bracketed sound guides MUST BE IN ENGLISH:
      e.g. [Intro: Mellow electric piano, soft ambient room tone]
           [Verse 1: Intimate low verse, soft kick and clean guitar fragments]
@@ -827,12 +948,25 @@ You MUST strictly follow these 4 field rules:
           [Bridge: Stripped back, philosophical tone, soft ambient pads]
           [Chorus: Final emotional chorus, expansive spatial reverb]
           [Outro: Electric piano fading, quiet room tone, hard stop]
-   - Section tags MUST name the part and the English arrangement/vocal guide in square brackets.
 
-4. SUNG LYRICS BODY IN "fullLyrics" - MANDATORY 100% PURE JAPANESE (28~32 SUNG LINES):
+4. STRICT INSTRUMENTAL SECTION HYGIENE:
+   - [Intro: ...], [Outro: ...], and [Instrumental Interlude: ...] ARE 100% INSTRUMENTAL ONLY AND MUST CONTAIN ZERO SUNG LYRICS!
+   - Inside [Instrumental Interlude: ...], only include arrangement guidance in parentheses, e.g. "(Glassy synths, subtle guitar licks and ambient space, 8 bars - Instrumental)". NEVER put sung vocal lyrics in an Instrumental Interlude!
+   - Inside [Intro: ...], only include ambient guidance, e.g. "(Soft ambient room tone, mellow electric piano arpeggios slowly breathing)".
+   - Inside [Outro: ...], only include ending guidance and [End], e.g. "(Mellow electric piano fading gently into room silence)\\n[End]".
+
+5. SUNG LYRICS BODY IN "fullLyrics" - MANDATORY 100% PURE JAPANESE (28~36 SUNG LINES):
    - ABSOLUTE PROHIBITION: NEVER USE A SINGLE KOREAN CHARACTER OR WORD! KOREAN IS STRICTLY FORBIDDEN IN fullLyrics!
    - ALL SUNG LYRICS MUST BE WRITTEN IN 100% NATURAL, POETIC, AND SOPHISTICATED JAPANESE (漢字, ひらがな, カタカナ).
-   - Write full lyrics of 28 to 32 lines across the full song progression (Intro, Verse 1, Pre-Chorus, Chorus, Verse 2, Interlude, Bridge, Chorus, Outro).
+   - MANDATORY PER-SECTION SUNG LINE DENSITY (Target 28~36 sung lines total):
+     * [Verse 1: ...] (6 to 8 sung lines)
+     * [Pre-Chorus: ...] (4 sung lines)
+     * [Chorus: ...] (6 to 8 sung lines)
+     * [Instrumental Interlude: ...] (0 sung lines - instrumental only)
+     * [Verse 2: ...] (6 to 8 sung lines)
+     * [Bridge: ...] (4 sung lines)
+     * [Chorus: ...] (6 to 8 sung lines)
+     * [Outro: ...] (0 sung lines - instrumental fadeout and [End])
    - Embody urban loneliness, quiet devastation, and poignant inner emotions fitting Japanese R&B (like Utada Hikaru, eill, iri, Friday Night Plans).`
       : isPureEnglish
       ? `[CRITICAL MANDATORY LANGUAGE REQUIREMENT: 100% ENGLISH]
@@ -928,7 +1062,8 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 - Write in English so it can be pasted directly into the Suno / Udio Style Prompt input field.
 - MANDATORY LENGTH & DEPTH TARGET: MUST BE 750 to 950 characters (aim for 800–900 characters)!
 - ABSOLUTE PROHIBITION: NEVER output a short 1-2 sentence prompt of 100-250 characters!
-- In every track's stylePrompt, capture in full multi-sentence depth:
+- FORMAT: Dense comma-separated musical keywords and sound design descriptors. DO NOT write narrative conversational prose like "This track embodies the essence of...".
+- In every track's stylePrompt, capture in comma-separated depth:
   (1) The exact acoustic sound identity, playback texture, and micro-genre defined in the current SOP
   (2) Specific instruments, arrangement progression, and rhythmic groove defined in the current SOP
   (3) Era and emotion-accurate vocal delivery, timbre, age/gender, and dynamics defined in the current SOP
@@ -936,19 +1071,27 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
   (5) Spatial mix character, stereo panorama, and mastering texture
   (6) Negative exclusion keywords (Exclude: -...)
 
-3. [LYRICS GUIDE RULES & SECTION STRUCTURE (fullLyrics)]
-- MANDATORY FULL-SONG PRODUCTION LENGTH: Target 2:50 to 3:30 duration.
-- ABSOLUTE PROHIBITION: DO NOT output a short 12-line snippet! Full lyrics MUST contain AT LEAST 28 to 35 sung lines across all distinct sections!
-- Complete Section Progression:
-  * [Intro: <detailed English guide>]
-  * [Verse 1: <detailed English guide>]
-  * [Pre-Chorus: <detailed English guide>]
-  * [Chorus: <detailed English guide>]
-  * [Instrumental Interlude: <detailed English guide>] or [Verse 2: <detailed English guide>]
-  * [Verse 2: <detailed English guide>]
-  * [Bridge: <detailed English guide>]
-  * [Chorus: <detailed English guide>]
-  * [Outro: <detailed English guide>]
+3. [LYRICS GUIDE RULES, SECTION STRUCTURE & HYGIENE (fullLyrics)]
+- MANDATORY FULL-SONG PRODUCTION LENGTH: Target 2:50 to 3:30 duration (AT LEAST 28 to 36 sung lines total).
+- ABSOLUTE PROHIBITION: DO NOT output a short 12-line snippet! DO NOT put 1 line per section!
+- CRITICAL SECTION TAG LINE BREAK DIRECTIVE:
+  * EVERY bracketed section tag [Section: Guide] MUST be placed on its own single line, followed immediately by a newline (\\n).
+  * NEVER put sung lyrics on the same line as a bracket tag!
+  * Separate every section from the next with a clean empty blank line (\\n\\n).
+- STRICT INSTRUMENTAL SECTION HYGIENE:
+  * [Intro: ...], [Outro: ...], and [Instrumental Interlude: ...] ARE 100% INSTRUMENTAL ONLY AND MUST CONTAIN ZERO SUNG LYRICS!
+  * Inside [Instrumental Interlude: ...], only write instrumental sound guidance in parentheses: e.g. "(Glassy synths, subtle guitar licks and ambient space, 8 bars - Instrumental)". NEVER put sung vocal lyrics in an Instrumental Interlude!
+  * Inside [Intro: ...], only write instrumental sound guidance in parentheses: e.g. "(Soft ambient room tone, mellow electric piano arpeggios slowly breathing)".
+  * Inside [Outro: ...], only write instrumental fading guidance and [End]: e.g. "(Mellow electric piano fading gently into room silence)\\n[End]".
+- SUNG LINE COUNT PER SECTION:
+  * [Verse 1: <English guide>] (6 to 8 sung lines)
+  * [Pre-Chorus: <English guide>] (4 sung lines)
+  * [Chorus: <English guide>] (6 to 8 sung lines)
+  * [Instrumental Interlude: <English guide>] (0 sung lines - pure instrumental note)
+  * [Verse 2: <English guide>] (6 to 8 sung lines)
+  * [Bridge: <English guide>] (4 sung lines)
+  * [Chorus: <English guide>] (6 to 8 sung lines)
+  * [Outro: <English guide>] (0 sung lines - ending note + [End])
   ${sopSpecs.forbidsIntroOutro ? `* CRITICAL: Do NOT include [Intro] or [Outro] tags per the SOP instructions! Start directly with [Verse 1] and finish with [Final Chorus]!` : `* Include appropriate bracketed section tags.`}
 - Guide prompts MUST be enclosed in square brackets [ ] to distinguish them from lyrics.
 - Do NOT output narrative sentences without brackets (such as "A soft piano begins...").
@@ -982,8 +1125,8 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
         "targetLength": "e.g. 3:15"
       },
       "mood": "Core emotion keyword",
-      "stylePrompt": "Expansive, comprehensive 750 to 950 character 100% English Suno prompt embedding: (1) micro-genre & vibe, (2) tempo & groove (BPM), (3) detailed instrumentation & sound design, (4) vocal texture (original Japanese female lead, low clear tone, delivery), (5) spatial mix & mastering, (6) Exclude terms.",
-      "fullLyrics": ${isJapanese ? '"100% pure Japanese lyrics (漢字・ひらがな・カタカナ, 28-32 lines) with English bracketed section tags [Intro: ...], [Verse 1: ...], [Chorus: ...]. ZERO Korean words."' : isPureEnglish ? '"Full 100% English lyrics of 36-50 lines with English section tags"' : isKorEng ? '"Full lyrics with English bracketed section tags followed by Korean-English code-switching sung lines (75% Korean + 25% English)."' : '"Full lyrics with English bracketed section tags followed by sung lyrics in the SOP language."'}
+      "stylePrompt": "Dense comma-separated 750 to 950 character 100% English Suno prompt embedding: (1) micro-genre & vibe, (2) tempo & groove (BPM), (3) detailed instrumentation & sound design, (4) vocal texture (original Japanese female lead, low clear tone, delivery), (5) spatial mix & mastering, (6) Exclude terms.",
+      "fullLyrics": ${isJapanese ? '"[Intro: Mellow electric piano, soft ambient room tone]\\n(Soft ambient room tone, mellow electric piano arpeggios slowly breathing)\\n\\n[Verse 1: Intimate low verse, soft kick and clean guitar fragments]\\n(6-8 Japanese sung lines with newline after each)\\n\\n[Pre-Chorus: Glassy synth keys entering]\\n(4 Japanese sung lines)\\n\\n[Chorus: Wide emotional delivery, restrained vibrato, full bass lift]\\n(6-8 Japanese sung lines)\\n\\n[Instrumental Interlude: Glassy synths, subtle guitar licks and ambient space]\\n(Glassy synths, subtle guitar licks and ambient space, 8 bars - Instrumental)\\n\\n[Verse 2: Intimate storytelling]\\n(6-8 Japanese sung lines)\\n\\n[Bridge: Stripped back acoustic piano]\\n(4 Japanese sung lines)\\n\\n[Chorus: Maximum emotional release]\\n(6-8 Japanese sung lines)\\n\\n[Outro: Mellow electric piano fading]\\n(Mellow electric piano fading gently into room silence)\\n[End]"' : isPureEnglish ? '"Full 100% English lyrics of 36-50 lines with English section tags on own lines separated by blank lines"' : isKorEng ? '"Full lyrics with English bracketed section tags on own lines followed by Korean-English code-switching sung lines (75% Korean + 25% English, 36-50 lines total)."' : '"Full lyrics with English bracketed section tags on own lines followed by sung lyrics in the SOP language."'}
     }
   ],
   "youtube": {
@@ -996,7 +1139,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
   }
 }`;
 
-    const standardSystemInstruction = 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY RULES: (1) Style prompts MUST be comprehensive, rich, and detailed (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries). (2) When SOP specifies Japanese / J-POP (e.g. Electronic R&B J-pop, City Pop), track titles MUST be in pure Japanese (漢字/ひらがな, e.g. 画面の向こう, 夜を泳ぐ), style prompts in 100% English, section tags in English brackets, and sung lyrics in 100% PURE JAPANESE (漢字/ひらがな/カタカナ, 28-32 lines) with ABSOLUTELY ZERO KOREAN. (3) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용, track titles MUST be in Korean only, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (Korean 75% + English 25%). (4) When SOP specifies 100% English, output 100% English only. (5) Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.';
+    const standardSystemInstruction = 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY RULES: (1) Style prompts MUST be dense, comma-separated musical keywords and sound design tags (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries; DO NOT write narrative sentences like "This track embodies the essence of..."). (2) Tag & Line Break Rule: Every bracketed section tag [Section: Guide] MUST be on its own line followed by \\n. NEVER put sung lyrics on the same line as bracket tags! Separate every section with \\n\\n. (3) Instrumental Sections Hygiene: [Intro: ...], [Outro: ...], and [Instrumental Interlude: ...] are 100% INSTRUMENTAL ONLY and MUST CONTAIN ZERO SUNG LYRICS! (4) When SOP specifies Japanese / J-POP (e.g. Electronic R&B J-pop, City Pop), track titles MUST be in pure Japanese (漢字/ひらがな, e.g. 画面の向こう, 夜を泳ぐ), style prompts in 100% English comma-separated tags (750-950 chars), section tags in English brackets, and sung lyrics in 100% PURE JAPANESE (漢字/ひらがな/カタカナ, 28-36 sung lines: 6-8 per Verse/Chorus, 4 per Pre-Chorus/Bridge) with ABSOLUTELY ZERO KOREAN. (5) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용, track titles MUST be in Korean only, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (36-50 lines). (6) Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.';
 
     // 3. Provider execution
 
@@ -1063,7 +1206,8 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
             ...tr,
             trackNumber: tr.trackNumber || (idx + 1),
-            title: cleanTitleSingleLanguage(tr.title, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title')
+            title: cleanTitleSingleLanguage(tr.title, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title'),
+            fullLyrics: formatAndCleanLyrics(tr.fullLyrics, sopSpecs.isJapanese)
           }));
         }
         res.json({
@@ -1169,7 +1313,8 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
             ...tr,
             trackNumber: tr.trackNumber || (idx + 1),
-            title: cleanTitleSingleLanguage(tr.title, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title')
+            title: cleanTitleSingleLanguage(tr.title, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title'),
+            fullLyrics: formatAndCleanLyrics(tr.fullLyrics, sopSpecs.isJapanese)
           }));
         }
         res.json({
@@ -1240,7 +1385,8 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
             ...tr,
             trackNumber: tr.trackNumber || (idx + 1),
-            title: cleanTitleSingleLanguage(tr.title, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title')
+            title: cleanTitleSingleLanguage(tr.title, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title'),
+            fullLyrics: formatAndCleanLyrics(tr.fullLyrics, sopSpecs.isJapanese)
           }));
         }
         res.json({
@@ -1564,7 +1710,6 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
 
 [Outro: Soft Fender Rhodes fading to dawn silence]
 (Fender Rhodes fading to soft morning silence)
-夜が明けていく
 [End]`
       },
       {
@@ -1640,7 +1785,6 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
 
 [Outro: Glassy synth keys and rain fading out]
 (Glassy synth keys gently fading into rain ambience)
-街の残響の中に
 [End]`
       }
     ];
@@ -1934,7 +2078,7 @@ Our unforgettable late night drive`
       mood: template.mood,
       metaInfo: template.metaInfo,
       stylePrompt: template.style,
-      fullLyrics: template.lyrics
+      fullLyrics: formatAndCleanLyrics(template.lyrics, sopSpecs.isJapanese)
     });
   }
 
