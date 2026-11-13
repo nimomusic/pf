@@ -45,6 +45,8 @@ export interface TranslationDict {
   noThemesRegistered: string;
   noThemesAdminPrompt: string;
   addThemeAdmin: string;
+  lyricConceptLabel: string;
+  lyricConceptPlaceholder: string;
   trackCountLabel: string;
   tracksUnit: string;
   vocalLabel: string;
@@ -99,6 +101,8 @@ export const TRANSLATIONS: Record<string, TranslationDict> = {
     noThemesRegistered: '등록된 테마가 없습니다',
     noThemesAdminPrompt: '등록된 테마가 없습니다 (관리자 등록 필요)',
     addThemeAdmin: '+ 새 테마 SOP 직접 등록하기 (Admin)',
+    lyricConceptLabel: '가사 컨셉',
+    lyricConceptPlaceholder: '예: 일하는 중 네 생각이 자꾸나',
     trackCountLabel: '2. 제작 곡 수',
     tracksUnit: '곡',
     vocalLabel: '3. 보컬 설정',
@@ -151,6 +155,8 @@ export const TRANSLATIONS: Record<string, TranslationDict> = {
     noThemesRegistered: 'No themes registered',
     noThemesAdminPrompt: 'No themes registered (Admin setup required)',
     addThemeAdmin: '+ Add New Theme SOP (Admin)',
+    lyricConceptLabel: 'Lyric Concept',
+    lyricConceptPlaceholder: 'e.g., Thinking of you while working',
     trackCountLabel: '2. Number of Tracks',
     tracksUnit: 'Tracks',
     vocalLabel: '3. Vocal Setting',
@@ -203,6 +209,8 @@ export const TRANSLATIONS: Record<string, TranslationDict> = {
     noThemesRegistered: '登録されたテーマがありません',
     noThemesAdminPrompt: 'テーマ未登録 (管理者の登録が必要です)',
     addThemeAdmin: '+ 新規テーマSOP登録 (Admin)',
+    lyricConceptLabel: '歌詞コンセプト',
+    lyricConceptPlaceholder: '例：仕事中に君のことばかり思い出す',
     trackCountLabel: '2. 制作曲数',
     tracksUnit: '曲',
     vocalLabel: '3. ボーカル設定',
@@ -255,6 +263,8 @@ export const TRANSLATIONS: Record<string, TranslationDict> = {
     noThemesRegistered: '暂无已注册的主题',
     noThemesAdminPrompt: '暂无主题 (需管理员注册)',
     addThemeAdmin: '+ 添加新主题SOP (Admin)',
+    lyricConceptLabel: '歌词概念',
+    lyricConceptPlaceholder: '例如：工作时总是不由自主想起你',
     trackCountLabel: '2. 制作曲目数',
     tracksUnit: '首',
     vocalLabel: '3. 人声设置',
@@ -307,6 +317,8 @@ export const TRANSLATIONS: Record<string, TranslationDict> = {
     noThemesRegistered: 'No hay temas registrados',
     noThemesAdminPrompt: 'Sin temas (Registro de admin requerido)',
     addThemeAdmin: '+ Agregar Tema SOP (Admin)',
+    lyricConceptLabel: 'Concepto de Letra',
+    lyricConceptPlaceholder: 'Ej: Pensando en ti mientras trabajo',
     trackCountLabel: '2. Cantidad de Canciones',
     tracksUnit: 'canciones',
     vocalLabel: '3. Voz',
@@ -359,6 +371,8 @@ export const TRANSLATIONS: Record<string, TranslationDict> = {
     noThemesRegistered: 'Aucun thème enregistré',
     noThemesAdminPrompt: 'Aucun thème (admin requis)',
     addThemeAdmin: '+ Ajouter Thème SOP (Admin)',
+    lyricConceptLabel: 'Concept des Paroles',
+    lyricConceptPlaceholder: 'Ex : Penser à toi en travaillant',
     trackCountLabel: '2. Nombre de Pistes',
     tracksUnit: 'pistes',
     vocalLabel: '3. Voix',
@@ -411,6 +425,8 @@ export const TRANSLATIONS: Record<string, TranslationDict> = {
     noThemesRegistered: 'Keine Themen registriert',
     noThemesAdminPrompt: 'Keine Themen (Admin-Registrierung nötig)',
     addThemeAdmin: '+ Neues Thema SOP (Admin)',
+    lyricConceptLabel: 'Songtext-Konzept',
+    lyricConceptPlaceholder: 'z.B. Während der Arbeit an dich denken',
     trackCountLabel: '2. Anzahl der Titel',
     tracksUnit: 'Titel',
     vocalLabel: '3. Gesangseinstellung',
@@ -463,6 +479,8 @@ export const TRANSLATIONS: Record<string, TranslationDict> = {
     noThemesRegistered: 'Nessun tema registrato',
     noThemesAdminPrompt: 'Nessun tema (richiesto admin)',
     addThemeAdmin: '+ Aggiungi Tema SOP (Admin)',
+    lyricConceptLabel: 'Concetto Testo',
+    lyricConceptPlaceholder: 'Es: Pensando a te mentre lavoro',
     trackCountLabel: '2. Numero di Brani',
     tracksUnit: 'brani',
     vocalLabel: '3. Impostazione Voce',
@@ -515,6 +533,8 @@ export const TRANSLATIONS: Record<string, TranslationDict> = {
     noThemesRegistered: 'Geen thema\'s geregistreerd',
     noThemesAdminPrompt: 'Geen thema\'s (admin registratie vereist)',
     addThemeAdmin: '+ Nieuw Thema SOP (Admin)',
+    lyricConceptLabel: 'Tekstconcept',
+    lyricConceptPlaceholder: 'Bijv: Aan je denken tijdens het werk',
     trackCountLabel: '2. Aantal Nummers',
     tracksUnit: 'nummers',
     vocalLabel: '3. Zanginstelling',
@@ -567,6 +587,8 @@ export const TRANSLATIONS: Record<string, TranslationDict> = {
     noThemesRegistered: 'Inga teman registrerade',
     noThemesAdminPrompt: 'Inga teman (kräver admin-registrering)',
     addThemeAdmin: '+ Lägg till Tema SOP (Admin)',
+    lyricConceptLabel: 'Textkoncept',
+    lyricConceptPlaceholder: 'T.ex. Tänker på dig medan jag jobbar',
     trackCountLabel: '2. Antal Låtar',
     tracksUnit: 'låtar',
     vocalLabel: '3. Sånginställning',

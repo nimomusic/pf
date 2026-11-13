@@ -385,6 +385,7 @@ export async function generatePlaylist(params: {
   theme: Theme;
   trackCount: number;
   vocal: VocalType;
+  lyricConcept?: string;
   provider: ProviderType;
   model: string;
   apiKey?: string;
@@ -407,6 +408,7 @@ export async function generatePlaylist(params: {
       theme: params.theme,
       trackCount: params.trackCount,
       vocal: params.vocal,
+      lyricConcept: params.lyricConcept,
       provider: params.provider,
       model: params.model,
       apiKey: params.apiKey,
@@ -438,10 +440,11 @@ export async function generatePlaylist(params: {
 
   if (data.result && Array.isArray(data.result.tracks)) {
     const specs = parseClientSopSpecs(params.theme);
-    data.result.tracks = data.result.tracks.map((tr: any) => ({
+    data.result.tracks = data.result.tracks.map((tr: any, idx: number) => ({
       ...tr,
-      title: cleanTitleSingleLanguage(tr.title, specs.targetLang, specs.isJapanese ? '新曲' : specs.isKoreanTitle ? '새로운 트랙' : (tr.title || 'Track Title')),
-      fullLyrics: formatAndCleanLyrics(tr.fullLyrics, specs.isJapanese)
+      trackNumber: idx + 1,
+      title: cleanTitleSingleLanguage(tr.title, specs.targetLang, specs.isJapanese ? '新曲' : specs.isKoreanTitle ? '새로운 트랙' : (tr.title || `Track ${idx + 1}`)),
+      fullLyrics: formatAndCleanLyrics(tr.fullLyrics, specs.isJapanese, !specs.forbidsIntroOutro)
     }));
   }
 
@@ -635,12 +638,23 @@ function cleanTitleSingleLanguage(
 }
 
 // Helper: Ensure structure tags [Section: Guide] are on their own lines, sections have proper line breaks, and instrumental sections contain NO sung lyrics
-function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean): string {
+function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean, includeEndTag: boolean = true): string {
   if (!rawLyrics) return '';
   let text = rawLyrics.trim();
 
   // Normalize line breaks
   text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  // Strip all duplicate/stray [End] tags before parsing
+  text = text.replace(/\[\s*end\s*\]/gi, '');
+
+  // Step 0: Normalize bracket tags [ ... ]
+  // Transform curly braces or mixed braces into square brackets:
+  // e.g. {Verse 1: ...} -> [Verse 1: ...]
+  // e.g. [Tag: (Description)] -> [Tag: Description]
+  text = text.replace(/\{([^{}\n\r]+)\}/g, '[$1]');
+  text = text.replace(/\[\s*([^:\]]+)\s*:\s*[\({]([^\)}]+)[\)}]\s*\]/g, '[$1: $2]');
+  text = text.replace(/[\{\}]/g, '');
 
   // Step 1: If a bracketed section tag is followed on the same line by text (e.g., "[Intro: ...] lyrics..."), split them!
   text = text.replace(/(\[[^\]]+\])[ \t]*([^\n\r]+)/g, (match, tag, rest) => {
@@ -656,6 +670,9 @@ function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean): string {
   let currentContent: string[] = [];
 
   for (const line of rawLines) {
+    if (/^\[\s*end\s*\]$/i.test(line)) {
+      continue;
+    }
     if (/^\[[^\]]+\]$/.test(line)) {
       if (currentTag || currentContent.length > 0) {
         sections.push({ tag: currentTag, contentLines: currentContent });
@@ -674,30 +691,39 @@ function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean): string {
   const formattedBlocks: string[] = [];
   for (let sIdx = 0; sIdx < sections.length; sIdx++) {
     const sec = sections[sIdx];
-    const tag = sec.tag;
+    let tag = sec.tag;
     const content = sec.contentLines;
-    const tagHeader = tag.replace(/^\[|\].*$/g, '').trim().split(':')[0].trim().toLowerCase();
-    const isInstrumental = /^(intro|outro|instrumental|interlude|break)$/i.test(tagHeader) ||
-      /^\[\s*(intro|outro|instrumental|interlude|instrumental break|instrumental interlude)/i.test(tag);
-    const isPureEnd = /^\[end\]$/i.test(tag);
 
-    if (isPureEnd) {
-      formattedBlocks.push(tag);
-      continue;
-    }
+    // Normalize tag: ensure clean [Section: Guide] without nested brackets
+    tag = tag.replace(/\[\s*([^:\]]+)\s*:\s*[\({]([^\)}]+)[\)}]\s*\]/g, '[$1: $2]');
+    tag = tag.replace(/[\{\}]/g, '');
+
+    const tagHeader = tag.replace(/^\[|\].*$/g, '').trim().split(':')[0].trim().toLowerCase();
+    const isInstrumental = /^(intro|outro|instrumental|interlude|break|piano solo|guitar solo|solo)$/i.test(tagHeader) ||
+      /^\[\s*(intro|outro|instrumental|interlude|break|solo)/i.test(tag);
 
     if (isInstrumental) {
-      const isInterludeOrBreak = /^(instrumental|interlude|break)/i.test(tagHeader) || /instrumental/i.test(tag);
+      const isInterludeOrBreak = /^(instrumental|interlude|break|piano solo|guitar solo|solo)/i.test(tagHeader) || /instrumental|solo/i.test(tag);
       const isIntro = /^intro/i.test(tagHeader) || /^\[\s*intro/i.test(tag);
       const isOutro = /^outro/i.test(tagHeader) || /^\[\s*outro/i.test(tag);
+
+      // Check if tag already describes the instrument after colon, e.g. [Outro: Mellow piano fading...]
+      const tagDescMatch = tag.match(/^\[[^:]+:\s*([^\]]+)\]$/);
+      const tagDesc = tagDescMatch ? tagDescMatch[1].trim() : '';
 
       const cleanedLines: string[] = [];
       for (const line of content) {
         if (/^\(.*\)$/.test(line)) {
-          cleanedLines.push(line);
+          // If the tag itself already has an arrangement prompt ([Outro: ...] or [Instrumental Interlude: ...]),
+          // suppress redundant parenthesized guide lines underneath to avoid double prompts!
+          if (!tagDesc) {
+            cleanedLines.push(line);
+          }
         } else if (isInterludeOrBreak) {
-          // Strictly NO SUNG LYRICS in Instrumental Interlude/Break!
-          if (sIdx + 1 < sections.length && !/intro|outro|instrumental|interlude|solo|break/i.test(sections[sIdx + 1].tag)) {
+          // Strictly NO SUNG LYRICS in Instrumental section!
+          if (sIdx + 1 < sections.length && !/^(intro|outro|instrumental|interlude|break|piano solo|guitar solo|solo)$/i.test(
+            sections[sIdx + 1].tag.replace(/^\[|\].*$/g, '').trim().split(':')[0].trim().toLowerCase()
+          )) {
             sections[sIdx + 1].contentLines.unshift(line);
           }
         } else if (isIntro) {
@@ -705,33 +731,27 @@ function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean): string {
             sections[sIdx + 1].contentLines.unshift(line);
           }
         } else if (isOutro) {
-          if (/^\(.*\)$/.test(line) || /^\[.*\]$/.test(line)) {
-            cleanedLines.push(line);
-          }
+          // Discard sung lyrics from Outro (instrumental fade only)
         }
       }
 
-      // Guarantee instrumental guide exists if empty
-      if (cleanedLines.length === 0) {
+      if (!tagDesc && cleanedLines.length === 0) {
         if (isInterludeOrBreak) {
-          cleanedLines.push('(Glassy synths, subtle guitar fragments and ambient space, 8 bars - Instrumental)');
+          cleanedLines.push('(Instrumental motif, rhythm section swells)');
         } else if (isIntro) {
-          cleanedLines.push('(Soft ambient room tone, mellow electric piano arpeggios slowly breathing)');
+          cleanedLines.push('(Atmospheric instrumental opening)');
         } else if (isOutro) {
-          cleanedLines.push('(Mellow electric piano fading gently into room silence)\n[End]');
+          cleanedLines.push('(Gentle instrumental fadeout)');
         }
-      } else if (isOutro && !cleanedLines.some(l => /\[end\]/i.test(l))) {
-        cleanedLines.push('[End]');
       }
 
-      formattedBlocks.push(tag ? `${tag}\n${cleanedLines.join('\n')}` : cleanedLines.join('\n'));
+      formattedBlocks.push(tag ? (cleanedLines.length > 0 ? `${tag}\n${cleanedLines.join('\n')}` : tag) : cleanedLines.join('\n'));
     } else {
-      // Vocal sections: [Verse 1], [Chorus], [Pre-Chorus], [Bridge], etc.
-      // If content was compressed onto 1 or 2 lines with spaces between clauses, split into poetic lines
+      // Vocal sections: NEVER split regular English/Korean lines by single space!
       const linesOut: string[] = [];
       for (const line of content) {
-        if (content.length <= 3 && (line.includes(' ') || line.includes('　'))) {
-          const parts = line.split(/[\s　]+/).map((p: string) => p.trim()).filter(Boolean);
+        if (isJapanese && content.length <= 4 && (line.includes('\u3000') || line.includes('  '))) {
+          const parts = line.split(/[\u3000]|\s{2,}/).map((p: string) => p.trim()).filter(Boolean);
           if (parts.length >= 2) {
             linesOut.push(...parts);
             continue;
@@ -744,7 +764,13 @@ function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean): string {
     }
   }
 
-  return formattedBlocks.join('\n\n').trim();
+  let result = formattedBlocks.filter(Boolean).join('\n\n').trim();
+  result = result.replace(/\[\s*end\s*\]/gi, '').trim();
+  if (includeEndTag) {
+    result += '\n\n[End]';
+  }
+
+  return result;
 }
 
 let lastClientTrackOffset = -1;
@@ -763,7 +789,8 @@ function generateClientSopPlaylist(
   trackCount: number,
   vocal: VocalType,
   provider: ProviderType,
-  model: string
+  model: string,
+  lyricConcept?: string
 ) {
   const specs = parseClientSopSpecs(theme);
 
@@ -1404,13 +1431,18 @@ Our unforgettable late night drive`
       ? `${tmpl.title} Part ${Math.floor(i / templates.length) + 1}`
       : tmpl.title;
 
+    const cleanConcept = (lyricConcept || '').trim();
+    const effectiveMood = cleanConcept
+      ? `${tmpl.mood} · 컨셉: ${cleanConcept}`
+      : tmpl.mood;
+
     tracks.push({
       trackNumber: i + 1,
       title: cleanTitleSingleLanguage(rawTitle, specs.targetLang, specs.isJapanese ? '新曲' : (specs.isKoreanTitle ? '새로운 트랙' : `Track ${i + 1}`)),
-      mood: tmpl.mood,
+      mood: effectiveMood,
       metaInfo: tmpl.metaInfo,
       stylePrompt: tmpl.style,
-      fullLyrics: formatAndCleanLyrics(tmpl.lyrics, specs.isJapanese)
+      fullLyrics: formatAndCleanLyrics(tmpl.lyrics, specs.isJapanese, !specs.forbidsIntroOutro)
     });
   }
 

@@ -29,6 +29,9 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
     let full = `========================================\n`;
     full += `[PLYMASTER FACTORY] 유튜브 플레이리스트 제작 결과\n`;
     full += `테마: ${data.themeName}\n`;
+    if (data.lyricConcept) {
+      full += `가사 컨셉: ${data.lyricConcept}\n`;
+    }
     full += `사용 모델: ${data.modelUsed}\n`;
     full += `생성 일시: ${new Date(data.generatedAt).toLocaleString('ko-KR')}\n`;
     full += `========================================\n\n`;
@@ -91,8 +94,13 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                   {data.modelUsed}
                 </span>
               </div>
-              <p className="text-xs text-slate-600 font-medium flex items-center gap-2">
+              <p className="text-xs text-slate-600 font-medium flex flex-wrap items-center gap-2">
                 <span>선택 테마: <strong className="text-blue-900">{data.themeName}</strong></span>
+                {data.lyricConcept && (
+                  <span className="text-[11px] bg-blue-100/80 text-blue-900 font-semibold px-2 py-0.5 rounded-md border border-blue-200">
+                    가사 컨셉: {data.lyricConcept}
+                  </span>
+                )}
                 {data.modelUsed.includes('시뮬레이션') && (
                   <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded">
                     로컬 시뮬레이션 모드
@@ -168,15 +176,16 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
           {/* TAB 1: TRACKS */}
           {activeTab === 'tracks' && (
             <div className="space-y-6">
-              {data.tracks.map((track: TrackItem) => {
+              {data.tracks.map((track: TrackItem, idx: number) => {
+                const trackNum = idx + 1;
                 const metaStr = track.metaInfo
                   ? `Meta Info\nVocal: ${track.metaInfo.vocal || 'Female'}\nGenre: ${track.metaInfo.genre || 'Vintage Pop'}\nMood: ${track.metaInfo.mood || track.mood || 'Nostalgic'}\nBPM: ${track.metaInfo.bpm || '80 BPM'}\nTarget Length: ${track.metaInfo.targetLength || '3:05'}\n\n`
                   : '';
-                const trackFullText = `Track ${track.trackNumber} — ${track.title}\n\n${metaStr}Title\n${track.title}\n\nStyle Prompt\n${track.stylePrompt}\n\nLyrics\n${track.fullLyrics}`;
+                const trackFullText = `Track ${trackNum} — ${track.title}\n\n${metaStr}Title\n${track.title}\n\nStyle Prompt\n${track.stylePrompt}\n\nLyrics\n${track.fullLyrics}`;
 
                 return (
                   <div
-                    key={track.trackNumber}
+                    key={`${trackNum}-${idx}`}
                     className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden"
                   >
                     {/* Track Header */}

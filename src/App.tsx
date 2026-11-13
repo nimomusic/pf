@@ -53,7 +53,9 @@ export default function App() {
   const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
   const themeDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Track Count & Vocal Settings - Default track count is 1, default vocal is random
+  // Track Count, Lyric Concept & Vocal Settings - Default track count is 1, default vocal is random
+  const [useLyricConcept, setUseLyricConcept] = useState<boolean>(false);
+  const [lyricConcept, setLyricConcept] = useState<string>('');
   const [trackCount, setTrackCount] = useState<number>(1);
   const [vocal, setVocal] = useState<VocalType>('random');
 
@@ -244,11 +246,14 @@ export default function App() {
       setCurrentStep('create');
       setStatusMessage(`02 CREATE: 트랙별 무드, Suno/Udio 스타일 프롬프트 및 완성형 가사 작성 중... (총 ${trackCount}곡)`);
 
+      const activeLyricConcept = useLyricConcept && lyricConcept.trim() ? lyricConcept.trim() : '';
+
       // Call API
       const apiResult = await generatePlaylist({
         theme: selectedTheme,
         trackCount,
         vocal,
+        lyricConcept: activeLyricConcept || undefined,
         provider,
         model: isAutoModel ? PROVIDER_AUTO_MODELS[provider] : model,
         apiKey: apiKeys[provider],
@@ -276,6 +281,7 @@ export default function App() {
       const finalData: PlaylistResult = {
         themeId: selectedTheme.id,
         themeName: selectedTheme.name,
+        lyricConcept: activeLyricConcept || undefined,
         modelUsed: apiResult.modelUsed,
         vocal,
         generatedAt: new Date().toISOString(),
@@ -592,6 +598,40 @@ export default function App() {
                     <strong className="text-purple-700">[SOP 요약]</strong> {selectedTheme.sop}
                   </p>
                 )}
+
+                {/* 가사 컨셉 (Lyric Concept) 입력 */}
+                <div className="mt-3.5 flex items-center gap-2.5">
+                  <label className="inline-flex items-center gap-2 cursor-pointer select-none shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={useLyricConcept}
+                      onChange={(e) => setUseLyricConcept(e.target.checked)}
+                      className="w-5 h-5 rounded-md border-2 border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer accent-blue-600"
+                    />
+                    <span className="text-sm font-semibold text-slate-700">
+                      {t.lyricConceptLabel}:
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={lyricConcept}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setLyricConcept(val);
+                      if (val.trim().length > 0) {
+                        setUseLyricConcept(true);
+                      } else {
+                        setUseLyricConcept(false);
+                      }
+                    }}
+                    placeholder={t.lyricConceptPlaceholder}
+                    className={`flex-1 px-3.5 py-2 text-sm rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      useLyricConcept
+                        ? 'border-blue-400 bg-white text-slate-900 font-medium shadow-2xs'
+                        : 'border-slate-300 bg-slate-50/70 text-slate-600'
+                    }`}
+                  />
+                </div>
               </div>
 
               {/* 2. 제작 곡 수 - Clean input as in screenshot without quick pills */}

@@ -51,6 +51,7 @@ export interface YoutubePackage {
 export interface PlaylistResult {
   themeId: string;
   themeName: string;
+  lyricConcept?: string;
   modelUsed: string;
   vocal: VocalType;
   generatedAt: string;

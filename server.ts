@@ -702,15 +702,26 @@ function cleanTitleSingleLanguage(
 }
 
 // Helper: Ensure structure tags [Section: Guide] are on their own lines, sections have proper line breaks, and instrumental sections contain NO sung lyrics
-function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean): string {
+function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean, includeEndTag: boolean = true): string {
   if (!rawLyrics) return '';
   let text = rawLyrics.trim();
 
   // Normalize line breaks
   text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
+  // Strip all duplicate/stray [End] tags before parsing
+  text = text.replace(/\[\s*end\s*\]/gi, '');
+
+  // Step 0: Normalize bracket tags [ ... ]
+  // Transform curly braces or mixed braces into square brackets:
+  // e.g. {Verse 1: ...} -> [Verse 1: ...]
+  // e.g. [Tag: (Description)] -> [Tag: Description]
+  text = text.replace(/\{([^{}\n\r]+)\}/g, '[$1]');
+  text = text.replace(/\[\s*([^:\]]+)\s*:\s*[\({]([^\)}]+)[\)}]\s*\]/g, '[$1: $2]');
+  text = text.replace(/[\{\}]/g, '');
+
   // Step 1: If a bracketed section tag is followed on the same line by text (e.g., "[Intro: ...] lyrics..."), split them!
-  text = text.replace(/(\[[A-Za-z0-9\s:,\-\.\/]+\])[ \t]*([^\n\r]+)/g, (match, tag, rest) => {
+  text = text.replace(/(\[[^\]]+\])[ \t]*([^\n\r]+)/g, (match, tag, rest) => {
     const trimmedRest = rest.trim();
     if (!trimmedRest) return tag;
     return `${tag}\n${trimmedRest}`;
@@ -723,6 +734,9 @@ function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean): string {
   let currentContent: string[] = [];
 
   for (const line of rawLines) {
+    if (/^\[\s*end\s*\]$/i.test(line)) {
+      continue;
+    }
     if (/^\[[^\]]+\]$/.test(line)) {
       if (currentTag || currentContent.length > 0) {
         sections.push({ tag: currentTag, contentLines: currentContent });
@@ -741,68 +755,67 @@ function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean): string {
   const formattedBlocks: string[] = [];
   for (let sIdx = 0; sIdx < sections.length; sIdx++) {
     const sec = sections[sIdx];
-    const tag = sec.tag;
+    let tag = sec.tag;
     const content = sec.contentLines;
-    const tagHeader = tag.replace(/^\[|\].*$/g, '').trim().split(':')[0].trim().toLowerCase();
-    const isInstrumental = /^(intro|outro|instrumental|interlude|break)$/i.test(tagHeader) ||
-      /^\[\s*(intro|outro|instrumental|interlude|instrumental break|instrumental interlude)/i.test(tag);
-    const isPureEnd = /^\[end\]$/i.test(tag);
 
-    if (isPureEnd) {
-      formattedBlocks.push(tag);
-      continue;
-    }
+    // Normalize tag: ensure clean [Section: Guide] without nested brackets
+    tag = tag.replace(/\[\s*([^:\]]+)\s*:\s*[\({]([^\)}]+)[\)}]\s*\]/g, '[$1: $2]');
+    tag = tag.replace(/[\{\}]/g, '');
+
+    const tagHeader = tag.replace(/^\[|\].*$/g, '').trim().split(':')[0].trim().toLowerCase();
+    const isInstrumental = /^(intro|outro|instrumental|interlude|break|piano solo|guitar solo|solo)$/i.test(tagHeader) ||
+      /^\[\s*(intro|outro|instrumental|interlude|break|solo)/i.test(tag);
 
     if (isInstrumental) {
-      const isInterludeOrBreak = /^(instrumental|interlude|break)/i.test(tagHeader) || /instrumental/i.test(tag);
+      const isInterludeOrBreak = /^(instrumental|interlude|break|piano solo|guitar solo|solo)/i.test(tagHeader) || /instrumental|solo/i.test(tag);
       const isIntro = /^intro/i.test(tagHeader) || /^\[\s*intro/i.test(tag);
       const isOutro = /^outro/i.test(tagHeader) || /^\[\s*outro/i.test(tag);
+
+      // Check if tag already describes the instrument after colon, e.g. [Outro: Mellow piano fading...]
+      const tagDescMatch = tag.match(/^\[[^:]+:\s*([^\]]+)\]$/);
+      const tagDesc = tagDescMatch ? tagDescMatch[1].trim() : '';
 
       const cleanedLines: string[] = [];
       for (const line of content) {
         if (/^\(.*\)$/.test(line)) {
-          cleanedLines.push(line);
+          // If the tag itself already has an arrangement prompt ([Outro: ...] or [Instrumental Interlude: ...]),
+          // suppress redundant parenthesized guide lines underneath to avoid double prompts!
+          if (!tagDesc) {
+            cleanedLines.push(line);
+          }
         } else if (isInterludeOrBreak) {
-          // Strictly NO SUNG LYRICS in Instrumental Interlude/Break!
-          // If the AI put a sung line like "風の音が静かにささやく", move it to the next vocal section
-          if (sIdx + 1 < sections.length && !/intro|outro|instrumental|interlude|solo|break/i.test(sections[sIdx + 1].tag)) {
+          // Strictly NO SUNG LYRICS in Instrumental section!
+          if (sIdx + 1 < sections.length && !/^(intro|outro|instrumental|interlude|break|piano solo|guitar solo|solo)$/i.test(
+            sections[sIdx + 1].tag.replace(/^\[|\].*$/g, '').trim().split(':')[0].trim().toLowerCase()
+          )) {
             sections[sIdx + 1].contentLines.unshift(line);
-          } else {
-            cleanedLines.push(`(Ambient soundscape - ${line})`);
           }
         } else if (isIntro) {
-          // Intro: opening instrumental. Move erroneously placed sung lyrics to Verse 1 if possible
           if (sIdx + 1 < sections.length && /verse/i.test(sections[sIdx + 1].tag)) {
             sections[sIdx + 1].contentLines.unshift(line);
-          } else {
-            cleanedLines.push(`(Opening mood - ${line})`);
           }
         } else if (isOutro) {
-          cleanedLines.push(line.startsWith('(') ? line : `(${line})`);
-        } else {
-          cleanedLines.push(line);
+          // Discard sung lyrics from Outro (instrumental fade only)
         }
       }
 
-      // Guarantee instrumental guide exists if empty
-      if (cleanedLines.length === 0) {
+      if (!tagDesc && cleanedLines.length === 0) {
         if (isInterludeOrBreak) {
-          cleanedLines.push('(Glassy synth keys, subtle electric guitar fragments and ambient space, 8 bars - Instrumental)');
+          cleanedLines.push('(Instrumental motif, rhythm section swells)');
         } else if (isIntro) {
-          cleanedLines.push('(Soft ambient room tone, mellow electric piano arpeggios slowly breathing)');
+          cleanedLines.push('(Atmospheric instrumental opening)');
         } else if (isOutro) {
-          cleanedLines.push('(Mellow electric piano fading gently into room silence)\n[End]');
+          cleanedLines.push('(Gentle instrumental fadeout)');
         }
       }
 
-      formattedBlocks.push(tag ? `${tag}\n${cleanedLines.join('\n')}` : cleanedLines.join('\n'));
+      formattedBlocks.push(tag ? (cleanedLines.length > 0 ? `${tag}\n${cleanedLines.join('\n')}` : tag) : cleanedLines.join('\n'));
     } else {
-      // Vocal sections: [Verse 1], [Chorus], [Pre-Chorus], [Bridge], etc.
-      // If content was compressed onto 1 or 2 lines with spaces between clauses, split into poetic lines
+      // Vocal sections: NEVER split regular English/Korean lines by single space!
       const linesOut: string[] = [];
       for (const line of content) {
-        if (content.length <= 3 && (line.includes(' ') || line.includes('　'))) {
-          const parts = line.split(/[\s　]+/).map((p: string) => p.trim()).filter(Boolean);
+        if (isJapanese && content.length <= 4 && (line.includes('\u3000') || line.includes('  '))) {
+          const parts = line.split(/[\u3000]|\s{2,}/).map((p: string) => p.trim()).filter(Boolean);
           if (parts.length >= 2) {
             linesOut.push(...parts);
             continue;
@@ -815,7 +828,13 @@ function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean): string {
     }
   }
 
-  return formattedBlocks.join('\n\n').trim();
+  let result = formattedBlocks.filter(Boolean).join('\n\n').trim();
+  result = result.replace(/\[\s*end\s*\]/gi, '').trim();
+  if (includeEndTag) {
+    result += '\n\n[End]';
+  }
+
+  return result;
 }
 
 // Helper to extract JSON safely from AI output
@@ -840,7 +859,7 @@ function extractJsonFromText(rawText: string): any {
 app.post(['/api/generate', '/generate'], async (req: Request, res: Response) => {
   try {
     const body = req.body || {};
-    const { theme, trackCount = 1, vocal = 'random', provider = 'gemini', model, apiKey, mode } = body;
+    const { theme, trackCount = 1, vocal = 'random', lyricConcept = '', provider = 'gemini', model, apiKey, mode } = body;
 
     if (!theme || !theme.name) {
       res.status(400).json({ success: false, message: '테마 정보가 필요합니다.' });
@@ -848,6 +867,7 @@ app.post(['/api/generate', '/generate'], async (req: Request, res: Response) => 
     }
 
     const effectiveTrackCount = Math.min(Math.max(Number(trackCount) || 1, 1), 10);
+    const cleanLyricConcept = typeof lyricConcept === 'string' ? lyricConcept.trim() : '';
     const vocalLabel = 
       vocal === 'female' ? '여성 보컬 (Female Vocal)' :
       vocal === 'male' ? '남성 보컬 (Male Vocal)' :
@@ -857,7 +877,7 @@ app.post(['/api/generate', '/generate'], async (req: Request, res: Response) => 
 
     // 1. Explicit Simulation Mode (Offline testing without API key)
     if (mode === 'simulation') {
-      const simResult = generateCreativePlaylistData(theme, effectiveTrackCount, vocal);
+      const simResult = generateCreativePlaylistData(theme, effectiveTrackCount, vocal, cleanLyricConcept);
       res.json({
         success: true,
         modelUsed: '로컬 SOP 시뮬레이션 엔진 (오프라인 모드)',
@@ -1025,6 +1045,17 @@ The user's SOP explicitly specifies Korean R&B / Hip-Hop with Korean-English Cod
 - Style prompts MUST be comprehensive (750-950 characters) and written in 100% English for Suno/Udio.
 - Full lyrics MUST be a complete 3-minute song (at least 36-50 lines across at least 7 structural sections).`;
 
+    const lyricConceptSection = cleanLyricConcept
+      ? `
+================================================================================
+MANDATORY LYRIC CONCEPT / STORYTELLING FOCUS (가사 컨셉):
+================================================================================
+The user explicitly specified the following lyric concept/storyline for ALL tracks in this playlist:
+"${cleanLyricConcept}"
+- EVERY track's sung lyrics, narrative arc, emotional hook, imagery, and song title MUST revolve around and faithfully express this concept ("${cleanLyricConcept}").
+- When generating multiple tracks, write a fresh angle, scene, and distinct song title for each track around "${cleanLyricConcept}" while strictly respecting the SOP's genre, language rules, vocal style, and acoustic criteria!`
+      : '';
+
     const systemPrompt = `You are "Plymaster", a world-class AI executive music producer and Suno/Udio prompt engineer.
 
 ${languageRule}
@@ -1042,12 +1073,17 @@ ${theme.sop || ''}
 [PROJECT PARAMETERS]
 - Theme Name: ${theme.name}
 - Theme Category: ${theme.category || 'Music'}
-- Target Track Count: ${effectiveTrackCount} track(s)
-- Vocal Setup: ${vocalLabel}
+- Target Track Count: EXACTLY ${effectiveTrackCount} track(s) (You MUST generate ALL ${effectiveTrackCount} distinct tracks numbered sequentially 1 to ${effectiveTrackCount}!)
+- Vocal Setup: ${vocalLabel}${cleanLyricConcept ? `\n- Lyric Concept (가사 컨셉): ${cleanLyricConcept}` : ''}
+${lyricConceptSection}
 
 ================================================================================
 STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 ================================================================================
+
+0. [EXACT TRACK COUNT GUARANTEE]
+- The "tracks" array in your JSON response MUST contain EXACTLY ${effectiveTrackCount} distinct track objects with "trackNumber": 1 through "trackNumber": ${effectiveTrackCount}.
+- NEVER return only 1 track when ${effectiveTrackCount} > 1, and NEVER skip trackNumber 1!
 
 1. [SOUND IDENTITY & ACOUSTIC CRITERIA]
 - Carefully inspect the SOP's Sound Identity, Acoustic Criteria, Genre, and Production Directives.
@@ -1073,27 +1109,28 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 
 3. [LYRICS GUIDE RULES, SECTION STRUCTURE & HYGIENE (fullLyrics)]
 - MANDATORY FULL-SONG PRODUCTION LENGTH: Target 2:50 to 3:30 duration (AT LEAST 28 to 36 sung lines total).
-- ABSOLUTE PROHIBITION: DO NOT output a short 12-line snippet! DO NOT put 1 line per section!
-- CRITICAL SECTION TAG LINE BREAK DIRECTIVE:
+- ABSOLUTE PROHIBITION: DO NOT output a short 12-line snippet! DO NOT put 1 line per section! DO NOT split single words onto separate lines!
+- CRITICAL SECTION TAG LINE BREAK & BRACKET HYGIENE:
+  * EVERY section tag MUST be enclosed strictly in SINGLE SQUARE BRACKETS with NO nested braces or parentheses inside the brackets: e.g. [Verse 1: Warm nostalgic vocal, lead jazz piano with soft brushed swing]
+  * NEVER use curly braces { }!
+  * NEVER nest parentheses inside brackets like [Piano Solo: (Soft piano interlude)]! Write [Piano Solo: Soft piano interlude] instead!
   * EVERY bracketed section tag [Section: Guide] MUST be placed on its own single line, followed immediately by a newline (\\n).
   * NEVER put sung lyrics on the same line as a bracket tag!
   * Separate every section from the next with a clean empty blank line (\\n\\n).
 - STRICT INSTRUMENTAL SECTION HYGIENE:
-  * [Intro: ...], [Outro: ...], and [Instrumental Interlude: ...] ARE 100% INSTRUMENTAL ONLY AND MUST CONTAIN ZERO SUNG LYRICS!
-  * Inside [Instrumental Interlude: ...], only write instrumental sound guidance in parentheses: e.g. "(Glassy synths, subtle guitar licks and ambient space, 8 bars - Instrumental)". NEVER put sung vocal lyrics in an Instrumental Interlude!
-  * Inside [Intro: ...], only write instrumental sound guidance in parentheses: e.g. "(Soft ambient room tone, mellow electric piano arpeggios slowly breathing)".
-  * Inside [Outro: ...], only write instrumental fading guidance and [End]: e.g. "(Mellow electric piano fading gently into room silence)\\n[End]".
+  * [Intro: ...], [Outro: ...], [Piano Solo: ...], and [Instrumental Interlude: ...] ARE 100% INSTRUMENTAL ONLY AND MUST CONTAIN ZERO SUNG LYRICS!
+  * When [Outro: ...] or [Instrumental Interlude: ...] already includes the arrangement guide after the colon inside the brackets, DO NOT write a second parenthesized description line underneath it!
+  * Put [End] AT MOST ONCE at the very end of the track (never repeat [End][End][End]).
 - SUNG LINE COUNT PER SECTION:
   * [Verse 1: <English guide>] (6 to 8 sung lines)
   * [Pre-Chorus: <English guide>] (4 sung lines)
   * [Chorus: <English guide>] (6 to 8 sung lines)
-  * [Instrumental Interlude: <English guide>] (0 sung lines - pure instrumental note)
+  * [Instrumental Interlude: <English guide>] (0 sung lines - pure instrumental tag only)
   * [Verse 2: <English guide>] (6 to 8 sung lines)
-  * [Bridge: <English guide>] (4 sung lines)
+  * [Bridge: <English guide>] (4 sung lines, normal complete lyric phrases on each line)
   * [Chorus: <English guide>] (6 to 8 sung lines)
-  * [Outro: <English guide>] (0 sung lines - ending note + [End])
-  ${sopSpecs.forbidsIntroOutro ? `* CRITICAL: Do NOT include [Intro] or [Outro] tags per the SOP instructions! Start directly with [Verse 1] and finish with [Final Chorus]!` : `* Include appropriate bracketed section tags.`}
-- Guide prompts MUST be enclosed in square brackets [ ] to distinguish them from lyrics.
+  * [Outro: <English guide>] (0 sung lines - pure tag + single [End])
+  ${sopSpecs.forbidsIntroOutro ? `* CRITICAL: Do NOT include [Intro], [Outro], or [End] tags per the SOP instructions! Start directly with [Verse 1] and finish with [Final Chorus]!` : `* Include appropriate bracketed section tags and end with a single [End].`}
 - Do NOT output narrative sentences without brackets (such as "A soft piano begins...").
 
 4. [TRACK TITLES (title)]
@@ -1111,7 +1148,8 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
   - targetLength: e.g. "3:15"
 
 [OUTPUT FORMAT - PURE JSON ONLY]
-Respond ONLY with a valid JSON object matching this schema (no markdown fences, no conversational text):
+Respond ONLY with a valid JSON object matching this schema (no markdown fences, no conversational text).
+CRITICAL: "tracks" MUST contain EXACTLY ${effectiveTrackCount} track objects ("trackNumber": 1 .. ${effectiveTrackCount}):
 {
   "tracks": [
     {
@@ -1125,12 +1163,12 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
         "targetLength": "e.g. 3:15"
       },
       "mood": "Core emotion keyword",
-      "stylePrompt": "Dense comma-separated 750 to 950 character 100% English Suno prompt embedding: (1) micro-genre & vibe, (2) tempo & groove (BPM), (3) detailed instrumentation & sound design, (4) vocal texture (original Japanese female lead, low clear tone, delivery), (5) spatial mix & mastering, (6) Exclude terms.",
-      "fullLyrics": ${isJapanese ? '"[Intro: Mellow electric piano, soft ambient room tone]\\n(Soft ambient room tone, mellow electric piano arpeggios slowly breathing)\\n\\n[Verse 1: Intimate low verse, soft kick and clean guitar fragments]\\n(6-8 Japanese sung lines with newline after each)\\n\\n[Pre-Chorus: Glassy synth keys entering]\\n(4 Japanese sung lines)\\n\\n[Chorus: Wide emotional delivery, restrained vibrato, full bass lift]\\n(6-8 Japanese sung lines)\\n\\n[Instrumental Interlude: Glassy synths, subtle guitar licks and ambient space]\\n(Glassy synths, subtle guitar licks and ambient space, 8 bars - Instrumental)\\n\\n[Verse 2: Intimate storytelling]\\n(6-8 Japanese sung lines)\\n\\n[Bridge: Stripped back acoustic piano]\\n(4 Japanese sung lines)\\n\\n[Chorus: Maximum emotional release]\\n(6-8 Japanese sung lines)\\n\\n[Outro: Mellow electric piano fading]\\n(Mellow electric piano fading gently into room silence)\\n[End]"' : isPureEnglish ? '"Full 100% English lyrics of 36-50 lines with English section tags on own lines separated by blank lines"' : isKorEng ? '"Full lyrics with English bracketed section tags on own lines followed by Korean-English code-switching sung lines (75% Korean + 25% English, 36-50 lines total)."' : '"Full lyrics with English bracketed section tags on own lines followed by sung lyrics in the SOP language."'}
+      "stylePrompt": "Dense comma-separated 750 to 950 character 100% English Suno prompt embedding: (1) micro-genre & vibe, (2) tempo & groove (BPM), (3) detailed instrumentation & sound design, (4) vocal texture (age, gender, delivery), (5) spatial mix & mastering, (6) Exclude terms.",
+      "fullLyrics": ${isJapanese ? '"[Intro: Mellow electric piano, soft ambient room tone]\\n\\n[Verse 1: Intimate low verse, soft kick and clean guitar fragments]\\n(6-8 Japanese sung lines with newline after each)\\n\\n[Pre-Chorus: Glassy synth keys entering]\\n(4 Japanese sung lines)\\n\\n[Chorus: Wide emotional delivery, restrained vibrato, full bass lift]\\n(6-8 Japanese sung lines)\\n\\n[Instrumental Interlude: Glassy synths, subtle guitar licks and ambient space]\\n\\n[Verse 2: Intimate storytelling]\\n(6-8 Japanese sung lines)\\n\\n[Bridge: Stripped back acoustic piano]\\n(4 Japanese sung lines)\\n\\n[Chorus: Maximum emotional release]\\n(6-8 Japanese sung lines)\\n\\n[Outro: Mellow electric piano fading gently into room silence]\\n\\n[End]"' : isPureEnglish ? '"Full 100% English lyrics of 36-50 lines with clean [Section: Guide] tags on own lines separated by blank lines, ending with a single [End]"' : isKorEng ? '"Full lyrics with clean [Section: Guide] tags on own lines followed by Korean-English code-switching sung lines (75% Korean + 25% English, 36-50 lines total)."' : '"Full lyrics with clean [Section: Guide] tags on own lines followed by sung lyrics in the SOP language."'}
     }
   ],
   "youtube": {
-    "title": "Catchy YouTube playlist video title matching theme and concept",
+    "title": "Catchy YouTube playlist video title matching theme and lyric concept",
     "description": "Full YouTube video description with tracklist timestamps and background story",
     "tracklist": "01. Title (00:00)...",
     "hashtags": "#Playlist #SunoAI",
@@ -1139,7 +1177,89 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
   }
 }`;
 
-    const standardSystemInstruction = 'You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY RULES: (1) Style prompts MUST be dense, comma-separated musical keywords and sound design tags (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries; DO NOT write narrative sentences like "This track embodies the essence of..."). (2) Tag & Line Break Rule: Every bracketed section tag [Section: Guide] MUST be on its own line followed by \\n. NEVER put sung lyrics on the same line as bracket tags! Separate every section with \\n\\n. (3) Instrumental Sections Hygiene: [Intro: ...], [Outro: ...], and [Instrumental Interlude: ...] are 100% INSTRUMENTAL ONLY and MUST CONTAIN ZERO SUNG LYRICS! (4) When SOP specifies Japanese / J-POP (e.g. Electronic R&B J-pop, City Pop), track titles MUST be in pure Japanese (漢字/ひらがな, e.g. 画面の向こう, 夜を泳ぐ), style prompts in 100% English comma-separated tags (750-950 chars), section tags in English brackets, and sung lyrics in 100% PURE JAPANESE (漢字/ひらがな/カタカナ, 28-36 sung lines: 6-8 per Verse/Chorus, 4 per Pre-Chorus/Bridge) with ABSOLUTELY ZERO KOREAN. (5) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용, track titles MUST be in Korean only, style prompts in 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (36-50 lines). (6) Strictly respect tag prohibitions such as omitting [Intro] and [Outro] when forbidden in the SOP. Respond strictly in valid JSON.';
+    const standardSystemInstruction = `You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY RULES: (1) ALWAYS generate the EXACT number of tracks requested in Target Track Count (e.g., if ${effectiveTrackCount} tracks are requested, the "tracks" JSON array MUST contain all ${effectiveTrackCount} distinct tracks numbered 1 through ${effectiveTrackCount}, never just 1 track!). (2) Style prompts MUST be dense, comma-separated musical keywords and sound design tags (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries; DO NOT write narrative sentences like "This track embodies the essence of..."). (3) Tag & Line Break Hygiene: Every section tag MUST use single square brackets [Section: Guide] (NEVER curly braces {}, NEVER nested parentheses [(...)]). Put every tag on its own line followed by \\n, separate sections with \\n\\n, NEVER split single words onto separate lines, NEVER repeat parenthesized guides underneath [Outro: ...] or [Instrumental Interlude: ...], and emit [End] AT MOST ONCE at the very end. (4) Instrumental Sections Hygiene: [Intro: ...], [Outro: ...], [Piano Solo: ...], and [Instrumental Interlude: ...] MUST CONTAIN ZERO SUNG LYRICS! (5) When SOP specifies Japanese / J-POP, track titles MUST be pure Japanese (漢字/ひらがな), style prompts 100% English, section tags in English brackets, and sung lyrics 100% PURE JAPANESE (ZERO Korean). (6) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용, track titles MUST be Korean only, style prompts 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (36-50 lines). (7) Strictly respect tag prohibitions such as omitting [Intro], [Outro], and [End] when forbidden in the SOP.${cleanLyricConcept ? ` (8) MANDATORY LYRIC CONCEPT: ALL tracks and lyrics MUST focus on the user concept: "${cleanLyricConcept}".` : ''} Respond strictly in valid JSON.`;
+
+    // Shared post-processor: guarantees exact track count (with AI continuation if AI returned fewer),
+    // sequential 1..N numbering, clean titles, clean lyrics, and synchronized YouTube tracklist.
+    const buildContinuationPrompt = (missingCount: number, startNumber: number, existingTitles: string[]) => `
+You previously generated ${startNumber - 1} track(s) for this playlist, but the user requested EXACTLY ${effectiveTrackCount} tracks.
+Generate the remaining ${missingCount} NEW, DISTINCT track(s) (trackNumber ${startNumber} to ${effectiveTrackCount}) following the exact same SOP, language rules, 750-950 character stylePrompt requirement, and full 3-minute lyrics structure.
+Do NOT repeat these existing song titles: ${existingTitles.map(t => `"${t}"`).join(', ') || '(none)'}.${cleanLyricConcept ? `\nALL new tracks MUST also faithfully express the Lyric Concept: "${cleanLyricConcept}".` : ''}
+
+[USER SOP SPECIFICATION]
+${theme.sop || ''}
+
+Respond ONLY with valid JSON:
+{
+  "tracks": [
+    {
+      "trackNumber": ${startNumber},
+      "title": "...",
+      "metaInfo": { "vocal": "...", "genre": "...", "mood": "...", "bpm": "...", "targetLength": "..." },
+      "mood": "...",
+      "stylePrompt": "750-950 character dense comma-separated English Suno prompt",
+      "fullLyrics": "Complete multi-section full song lyrics with clean [Section: Guide] tags"
+    }
+  ]
+}`;
+
+    const finalizeAndCompleteTracks = async (
+      parsed: any,
+      requestAdditionalTracks: (contPrompt: string) => Promise<any[]>
+    ) => {
+      const safeResult: any = parsed && typeof parsed === 'object' ? { ...parsed } : {};
+      let rawTracks: any[] = Array.isArray(safeResult.tracks) ? [...safeResult.tracks] : [];
+
+      for (let attempt = 0; attempt < 2 && rawTracks.length < effectiveTrackCount; attempt++) {
+        const missing = effectiveTrackCount - rawTracks.length;
+        const startNumber = rawTracks.length + 1;
+        const existingTitles = rawTracks.map((t: any) => String(t?.title || '')).filter(Boolean);
+        console.warn(`[Plymaster] AI returned ${rawTracks.length}/${effectiveTrackCount} tracks. Requesting ${missing} additional track(s) (attempt ${attempt + 1})...`);
+        try {
+          const extra = await requestAdditionalTracks(buildContinuationPrompt(missing, startNumber, existingTitles));
+          if (Array.isArray(extra) && extra.length > 0) {
+            rawTracks.push(...extra);
+          } else {
+            break;
+          }
+        } catch (contErr: any) {
+          console.warn(`[Plymaster] Track completion attempt ${attempt + 1} failed:`, contErr.message);
+          break;
+        }
+      }
+
+      if (rawTracks.length > effectiveTrackCount) {
+        rawTracks = rawTracks.slice(0, effectiveTrackCount);
+      }
+
+      safeResult.tracks = rawTracks.map((tr: any, idx: number) => ({
+        ...tr,
+        trackNumber: idx + 1,
+        title: cleanTitleSingleLanguage(
+          tr?.title,
+          sopSpecs.targetLang,
+          sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : `Track ${idx + 1}`
+        ),
+        fullLyrics: formatAndCleanLyrics(tr?.fullLyrics || '', sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro)
+      }));
+
+      const builtTracklist = safeResult.tracks.map((t: any, idx: number) => {
+        const min = Math.floor(idx * 3 + (idx * 20) / 60);
+        const sec = ((idx * 24) % 60).toString().padStart(2, '0');
+        return `${String(idx + 1).padStart(2, '0')}. ${t.title} (${min}:${sec})`;
+      }).join('\n');
+
+      safeResult.youtube = {
+        title: safeResult.youtube?.title || `[PLAYLIST] ${theme.name}${cleanLyricConcept ? ` | ${cleanLyricConcept}` : ''}`,
+        description: safeResult.youtube?.description || `${theme.name} 플레이리스트`,
+        tracklist: builtTracklist || safeResult.youtube?.tracklist || '',
+        hashtags: safeResult.youtube?.hashtags || '#Playlist #SunoAI',
+        thumbnailPrompt: safeResult.youtube?.thumbnailPrompt || '16:9 cinematic still, photorealistic 8k',
+        backgroundImagePrompt: safeResult.youtube?.backgroundImagePrompt || '16:9 seamless loop background'
+      };
+
+      return safeResult;
+    };
 
     // 3. Provider execution
 
@@ -1164,35 +1284,35 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           setTimeout(() => reject(new Error('AI 응답 대기 시간 초과 (90초)')), 90000)
         );
 
+        const callGemini = async (promptContent: string, outputTokens = effectiveTrackCount > 1 ? 16384 : 8192) => {
+          return await ai.models.generateContent({
+            model: targetModel,
+            contents: promptContent,
+            config: {
+              responseMimeType: 'application/json',
+              maxOutputTokens: outputTokens,
+              systemInstruction: standardSystemInstruction
+            }
+          });
+        };
+
         let geminiResponse;
         try {
           geminiResponse = await Promise.race([
-            ai.models.generateContent({
-              model: targetModel,
-              contents: systemPrompt,
-              config: {
-                responseMimeType: 'application/json',
-                maxOutputTokens: 8192,
-                systemInstruction: standardSystemInstruction
-              }
-            }),
+            callGemini(systemPrompt),
             timeoutPromise
           ]);
         } catch (firstErr: any) {
-          // If gemini-3.8-flash or heavy model failed with 503/timeout, fallback to ultra-fast gemini-3.1-flash-lite
           if (targetModel !== 'gemini-3.1-flash-lite') {
             console.warn(`Gemini model ${targetModel} failed (${firstErr.message}), falling back to gemini-3.1-flash-lite`);
             targetModel = 'gemini-3.1-flash-lite';
             geminiResponse = await Promise.race([
-              ai.models.generateContent({
-                model: targetModel,
-                contents: systemPrompt,
-                config: {
-                  responseMimeType: 'application/json',
-                  maxOutputTokens: 8192,
-                  systemInstruction: standardSystemInstruction
-                }
-              }),
+              callGemini(systemPrompt, 8192),
+              timeoutPromise
+            ]);
+          } else if (effectiveTrackCount > 1) {
+            geminiResponse = await Promise.race([
+              callGemini(systemPrompt, 8192),
               timeoutPromise
             ]);
           } else {
@@ -1201,15 +1321,16 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
         }
 
         const rawText = geminiResponse.text?.trim() || '';
-        const parsed = extractJsonFromText(rawText);
-        if (parsed && Array.isArray(parsed.tracks)) {
-          parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
-            ...tr,
-            trackNumber: tr.trackNumber || (idx + 1),
-            title: cleanTitleSingleLanguage(tr.title, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title'),
-            fullLyrics: formatAndCleanLyrics(tr.fullLyrics, sopSpecs.isJapanese)
-          }));
-        }
+        const initialParsed = extractJsonFromText(rawText);
+        const parsed = await finalizeAndCompleteTracks(initialParsed, async (contPrompt) => {
+          const contRes = await Promise.race([
+            callGemini(contPrompt, 8192),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Continuation timeout')), 60000))
+          ]);
+          const contJson = extractJsonFromText(contRes.text?.trim() || '{}');
+          return Array.isArray(contJson?.tracks) ? contJson.tracks : [];
+        });
+
         res.json({
           success: true,
           modelUsed: `Gemini - ${targetModel}`,
@@ -1232,10 +1353,7 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
     // 3-2. OpenAI GPT
     if (provider === 'gpt') {
       const requestedModel = (model || 'gpt-5.4-mini').trim();
-      
-      // OpenAI engine resolution:
-      // Map preview/catalog aliases (gpt-5.4-mini, gpt-4.1-mini) directly to OpenAI's high-speed production mini engine ('gpt-4o-mini')
-      // This eliminates the 404 delay and prevents hitting the request timeout.
+
       let targetEngine = requestedModel;
       const lower = requestedModel.toLowerCase();
       if (lower.includes('5.4') || lower.includes('4.1') || (lower.includes('mini') && !lower.includes('o1') && !lower.includes('o3'))) {
@@ -1247,7 +1365,8 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
       }
 
       try {
-        const fetchGpt = async (engine: string) => {
+        const maxTokensForEngine = targetEngine.includes('gpt-4-turbo') ? 4096 : 16384;
+        const fetchGpt = async (engine: string, userContent: string) => {
           return await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             signal: AbortSignal.timeout(90000),
@@ -1259,21 +1378,22 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
               model: engine,
               messages: [
                 { role: 'system', content: standardSystemInstruction },
-                { role: 'user', content: `${systemPrompt}\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
+                { role: 'user', content: `${userContent}\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
               ],
               response_format: { type: 'json_object' },
               temperature: 0.7,
-              max_tokens: 6000
+              max_tokens: maxTokensForEngine
             })
           });
         };
 
-        let openaiRes = await fetchGpt(targetEngine);
+        let activeEngine = targetEngine;
+        let openaiRes = await fetchGpt(activeEngine, systemPrompt);
 
-        // Emergency fallback if custom engine not available (404)
-        if (!openaiRes.ok && openaiRes.status === 404 && targetEngine !== 'gpt-4o-mini') {
-          console.warn(`OpenAI model ${targetEngine} not available on this endpoint (404), falling back to gpt-4o-mini`);
-          openaiRes = await fetchGpt('gpt-4o-mini');
+        if (!openaiRes.ok && openaiRes.status === 404 && activeEngine !== 'gpt-4o-mini') {
+          console.warn(`OpenAI model ${activeEngine} not available on this endpoint (404), falling back to gpt-4o-mini`);
+          activeEngine = 'gpt-4o-mini';
+          openaiRes = await fetchGpt(activeEngine, systemPrompt);
         }
 
         if (!openaiRes.ok) {
@@ -1308,15 +1428,15 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
 
         const gptData = await openaiRes.json();
         const content = gptData.choices?.[0]?.message?.content || '{}';
-        const parsed = extractJsonFromText(content);
-        if (parsed && Array.isArray(parsed.tracks)) {
-          parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
-            ...tr,
-            trackNumber: tr.trackNumber || (idx + 1),
-            title: cleanTitleSingleLanguage(tr.title, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title'),
-            fullLyrics: formatAndCleanLyrics(tr.fullLyrics, sopSpecs.isJapanese)
-          }));
-        }
+        const initialParsed = extractJsonFromText(content);
+        const parsed = await finalizeAndCompleteTracks(initialParsed, async (contPrompt) => {
+          const contRes = await fetchGpt(activeEngine, contPrompt);
+          if (!contRes.ok) return [];
+          const contData = await contRes.json();
+          const contJson = extractJsonFromText(contData.choices?.[0]?.message?.content || '{}');
+          return Array.isArray(contJson?.tracks) ? contJson.tracks : [];
+        });
+
         res.json({
           success: true,
           modelUsed: `GPT - ${requestedModel}`,
@@ -1341,8 +1461,8 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
     // 3-3. Anthropic Claude
     if (provider === 'claude') {
       const claudeModel = model || 'claude-3-5-haiku-20241022';
-      try {
-        const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+      const callClaude = async (userContent: string, maxTokens = 8192) => {
+        return await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           signal: AbortSignal.timeout(90000),
           headers: {
@@ -1352,13 +1472,21 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
           },
           body: JSON.stringify({
             model: claudeModel,
-            max_tokens: 6000,
+            max_tokens: maxTokens,
             system: standardSystemInstruction,
             messages: [
-              { role: 'user', content: `${systemPrompt}\n\n반드시 JSON 형식으로만 응답하세요.\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
+              { role: 'user', content: `${userContent}\n\n반드시 JSON 형식으로만 응답하세요.\n\n[Creation Random Seed: ${Date.now()}_${Math.random().toString(36).substring(7)}]` }
             ]
           })
         });
+      };
+
+      try {
+        let claudeRes = await callClaude(systemPrompt, 8192);
+        if (!claudeRes.ok && claudeRes.status === 400) {
+          // Fallback to 4096 if an older Claude 3 model rejects 8192 max_tokens
+          claudeRes = await callClaude(systemPrompt, 4096);
+        }
 
         if (!claudeRes.ok) {
           const errDetail = await claudeRes.text();
@@ -1380,15 +1508,15 @@ Respond ONLY with a valid JSON object matching this schema (no markdown fences, 
 
         const claudeData = await claudeRes.json();
         const textBlock = claudeData.content?.[0]?.text || '';
-        const parsed = extractJsonFromText(textBlock);
-        if (parsed && Array.isArray(parsed.tracks)) {
-          parsed.tracks = parsed.tracks.map((tr: any, idx: number) => ({
-            ...tr,
-            trackNumber: tr.trackNumber || (idx + 1),
-            title: cleanTitleSingleLanguage(tr.title, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title'),
-            fullLyrics: formatAndCleanLyrics(tr.fullLyrics, sopSpecs.isJapanese)
-          }));
-        }
+        const initialParsed = extractJsonFromText(textBlock);
+        const parsed = await finalizeAndCompleteTracks(initialParsed, async (contPrompt) => {
+          const contRes = await callClaude(contPrompt, 4096);
+          if (!contRes.ok) return [];
+          const contData = await contRes.json();
+          const contJson = extractJsonFromText(contData.content?.[0]?.text || '{}');
+          return Array.isArray(contJson?.tracks) ? contJson.tracks : [];
+        });
+
         res.json({
           success: true,
           modelUsed: `Claude - ${claudeModel}`,
@@ -1432,8 +1560,9 @@ function getNonRepeatingServerOffset(max: number): number {
 }
 
 // Helper: Smart SOP-Aware Playlist Generator (Randomized & Procedurally Unique Every Run)
-function generateCreativePlaylistData(theme: any, trackCount: number, vocal: string) {
+function generateCreativePlaylistData(theme: any, trackCount: number, vocal: string, lyricConcept: string = '') {
   const sopSpecs = parseSopSpecs(theme);
+  const cleanConcept = (lyricConcept || '').trim();
 
   const vocalTag = 
     vocal === 'female' ? 'sincere expressive female vocal, emotional delivery' :
@@ -2072,13 +2201,26 @@ Our unforgettable late night drive`
       ? `${template.title} Part ${Math.floor(i / trackTemplates.length) + 1}`
       : template.title;
 
+    const effectiveMood = cleanConcept
+      ? `${template.mood} · 가사 컨셉: ${cleanConcept}`
+      : template.mood;
+
+    // When simulation runs for a Korean theme with a Lyric Concept, weave the concept naturally into lyrics
+    let templateLyrics = template.lyrics;
+    if (cleanConcept && sopSpecs.targetLang === 'korean') {
+      templateLyrics = templateLyrics.replace(
+        /(\[Verse 1[^\]]*\])/,
+        `$1\n(${cleanConcept} — 그 감정으로 시작되는 이야기)`
+      );
+    }
+
     tracks.push({
       trackNumber: i + 1,
-      title: cleanTitleSingleLanguage(rawTitle, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : 'Track Title'),
-      mood: template.mood,
+      title: cleanTitleSingleLanguage(rawTitle, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : `Track ${i + 1}`),
+      mood: effectiveMood,
       metaInfo: template.metaInfo,
       stylePrompt: template.style,
-      fullLyrics: formatAndCleanLyrics(template.lyrics, sopSpecs.isJapanese)
+      fullLyrics: formatAndCleanLyrics(templateLyrics, sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro)
     });
   }
 
@@ -2089,25 +2231,27 @@ Our unforgettable late night drive`
     return `${(idx + 1).toString().padStart(2, '0')}. ${t.title} (${min}:${sec})`;
   }).join('\n');
 
+  const conceptSuffix = cleanConcept ? ` | ${cleanConcept}` : '';
+
   const youtubeTitle = sopSpecs.isShellacVintage
-    ? `[PLAYLIST] 1940s Vintage Shellac 78 RPM Phonograph | Worn Record Memories for Relaxing & Sleep 📻 ☕️`
+    ? `[PLAYLIST] 1940s Vintage Shellac 78 RPM Phonograph${conceptSuffix} | Worn Record Memories for Relaxing & Sleep 📻 ☕️`
     : sopSpecs.isJapanese
-    ? `[PLAYLIST] ${theme.name} | 深夜の都市と孤独を包む洗練されたオルタナティブ R&B J-POP 🌙 🎧`
+    ? `[PLAYLIST] ${theme.name}${conceptSuffix} | 深夜の都市と孤独を包む洗練されたオルタナティブ R&B J-POP 🌙 🎧`
     : sopSpecs.isKoreanHipHopRnb
-    ? `[PLAYLIST] ${theme.name} | 늦은 밤 감각적인 새벽 드라이브 느좋 칠(Chill) 알앤비 힙합 🌙 🎧`
+    ? `[PLAYLIST] ${theme.name}${conceptSuffix} | 늦은 밤 감각적인 새벽 드라이브 느좋 칠(Chill) 알앤비 힙합 🌙 🎧`
     : sopSpecs.isEnglishOnly
-    ? `[PLAYLIST] ${theme.name} | Emotional Ballads for Deep Focus & Heartbreak 🎬 ☕️`
-    : `[PLAYLIST] ${theme.name} | 감각적인 하루를 선물하는 감성 플레이리스트 🎬 ☕️`;
+    ? `[PLAYLIST] ${theme.name}${conceptSuffix} | Emotional Ballads for Deep Focus & Heartbreak 🎬 ☕️`
+    : `[PLAYLIST] ${theme.name}${conceptSuffix} | 감각적인 하루를 선물하는 감성 플레이리스트 🎬 ☕️`;
 
   const youtubeDesc = sopSpecs.isShellacVintage
-    ? `Travel back in time to the 1940s. Authentic Type B worn and gritty shellac 78 RPM phonograph recordings with warm needle crackle, nostalgic melodies, and sincere vintage vocals.\n\n[🎧 Tracklist]\n${tracklistText}\n\n[📻 Sound Identity]\n- 1940s shellac 78 RPM record played on an antique wooden phonograph\n- Narrow frequency band, surface crackles & mechanical needle noise\n- Thick warm midrange & analog tube saturation\n\n#PlymasterFactory #Vintage1940s #ShellacRecord #78RPM #Phonograph #SunoAI`
+    ? `Travel back in time to the 1940s.${cleanConcept ? ` Theme Concept: ${cleanConcept}.` : ''} Authentic Type B worn and gritty shellac 78 RPM phonograph recordings with warm needle crackle, nostalgic melodies, and sincere vintage vocals.\n\n[🎧 Tracklist]\n${tracklistText}\n\n[📻 Sound Identity]\n- 1940s shellac 78 RPM record played on an antique wooden phonograph\n- Narrow frequency band, surface crackles & mechanical needle noise\n- Thick warm midrange & analog tube saturation\n\n#PlymasterFactory #Vintage1940s #ShellacRecord #78RPM #Phonograph #SunoAI`
     : sopSpecs.isJapanese
-    ? `都会の夜と静寂に溶け込む洗練されたオルタナティブ R&B J-POP。\n${theme.name}のSOPに基づき、心に染み渡るサウンドと日本語歌詞でお届けします。\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #JPOP #ElectronicRnB #CityPop #AltPop #SunoAI`
+    ? `都会の夜と静寂に溶け込む洗練されたオルタナティブ R&B J-POP。${cleanConcept ? `\nテーマコンセプト: ${cleanConcept}` : ''}\n${theme.name}のSOPに基づき、心に染み渡るサウンドと日本語歌詞でお届けします。\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #JPOP #ElectronicRnB #CityPop #AltPop #SunoAI`
     : sopSpecs.isKoreanHipHopRnb
-    ? `감각적인 늦은 밤, 몽환적인 칠(Chill) 트랩 비트와 세련된 한영 혼용 보컬/싱랩의 향연.\n${theme.name} 플레이리스트와 함께 새벽 드라이브의 미묘한 텐션과 여유를 즐겨보세요.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #인스타감성 #느좋 #알앤비힙합 #한국알앤비 #새벽드라이브 #SunoAI`
+    ? `감각적인 늦은 밤, 몽환적인 칠(Chill) 트랩 비트와 세련된 한영 혼용 보컬/싱랩의 향연.${cleanConcept ? `\n가사 컨셉: ${cleanConcept}` : ''}\n${theme.name} 플레이리스트와 함께 새벽 드라이브의 미묘한 텐션과 여유를 즐겨보세요.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #인스타감성 #느좋 #알앤비힙합 #한국알앤비 #새벽드라이브 #SunoAI`
     : sopSpecs.isEnglishOnly
-    ? `Immerse yourself in a musical journey. Crafted precisely according to your SOP specifications.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #Playlist #SunoAI`
-    : `지친 마음에 깊은 울림을 전하는 ${theme.name} 플레이리스트입니다.\n입력된 SOP 지침을 바탕으로 기획된 감성 사운드로 편안한 힐링과 몰입을 즐겨보세요.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #플레이리스트 #음악추천 #BGM #감성음악`;
+    ? `Immerse yourself in a musical journey.${cleanConcept ? ` Lyric Concept: ${cleanConcept}.` : ''} Crafted precisely according to your SOP specifications.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #Playlist #SunoAI`
+    : `지친 마음에 깊은 울림을 전하는 ${theme.name} 플레이리스트입니다.${cleanConcept ? `\n가사 컨셉: ${cleanConcept}` : ''}\n입력된 SOP 지침을 바탕으로 기획된 감성 사운드로 편안한 힐링과 몰입을 즐겨보세요.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #플레이리스트 #음악추천 #BGM #감성음악`;
 
   const hashtags = sopSpecs.isShellacVintage
     ? '#Vintage1940s #ShellacPhonograph #78RPM #VintagePop #RetroBallad #SunoAI'
