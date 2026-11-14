@@ -876,28 +876,38 @@ function parseClientSopSpecs(theme: Theme) {
     .replace(/금지[^\n\r]*/g, '')
     .replace(/제외[^\n\r]*/g, '');
 
+  const sopForLangCheck = sopWithoutExcludes
+    .replace(/\(\s*예\s*:[^)\n\r]*(?:한국어|영어|한영)[^)\n\r]*\)/g, '')
+    .replace(/한국어\s*\/\s*영어\s*사용\s*비율/g, '')
+    .replace(/가사\s*구조\s*및\s*한영\s*비율\s*복제/g, '')
+    .replace(/한영\s*(?:언어\s*)?비율/g, '');
+
   const hasExplicitEnglishLyrics =
-    /\b(100%\s*english|in\s+100%\s*english|lyrics\s*(?:must\s*be\s*)?(?:written\s*)?in\s*(?:100%\s*)?english|write\s*lyrics\s*(?:naturally\s*)?in\s*english|english\s*lyrics\s*only|sing\s*in\s*english|all\s+lyrics\s+in\s+english|english\s+title)\b/i.test(sopWithoutExcludes) ||
-    sopWithoutExcludes.includes('100% 영문') ||
-    sopWithoutExcludes.includes('영어로만 작성') ||
-    sopWithoutExcludes.includes('영어로 작사') ||
-    sopWithoutExcludes.includes('영어 작사') ||
-    sopWithoutExcludes.includes('영어 가사') ||
-    sopWithoutExcludes.includes('영문 가사') ||
-    sopWithoutExcludes.includes('영어 곡 제목') ||
-    sopWithoutExcludes.includes('영문 제목') ||
-    sopWithoutExcludes.includes('가사는 영어');
+    /\b(100%\s*english|in\s+100%\s*english|lyrics\s*(?:must\s*be\s*)?(?:written\s*)?in\s*(?:100%\s*)?english|write\s*lyrics\s*(?:naturally\s*)?in\s*english|english\s*lyrics\s*only|sing\s*in\s*english|all\s+lyrics\s+in\s+english|english\s+title|english\s+groove\s+pop|retail\s+groove\s+pop)\b/i.test(sopForLangCheck) ||
+    sopForLangCheck.includes('100% 영문') ||
+    sopForLangCheck.includes('100% 영어') ||
+    sopForLangCheck.includes('영어 100%') ||
+    sopForLangCheck.includes('영어 그루브 팝') ||
+    sopForLangCheck.includes('영어 팝송') ||
+    sopForLangCheck.includes('영어로만 작성') ||
+    sopForLangCheck.includes('영어로 작사') ||
+    sopForLangCheck.includes('영어 작사') ||
+    sopForLangCheck.includes('영어 가사') ||
+    sopForLangCheck.includes('영문 가사') ||
+    sopForLangCheck.includes('영어 곡 제목') ||
+    sopForLangCheck.includes('영문 제목') ||
+    sopForLangCheck.includes('가사는 영어');
 
   const hasExplicitKoreanLyrics =
-    sopWithoutExcludes.includes('한영 혼용') ||
-    sopWithoutExcludes.includes('한영혼용') ||
-    sopWithoutExcludes.includes('kor-eng') ||
-    sopWithoutExcludes.includes('code-switching') ||
-    sopWithoutExcludes.includes('한국어 가사') ||
-    sopWithoutExcludes.includes('한국어로 작성') ||
-    sopWithoutExcludes.includes('한국어 곡 제목') ||
-    sopWithoutExcludes.includes('오직 한국어로만') ||
-    sopWithoutExcludes.includes('국문 가사');
+    sopForLangCheck.includes('한영 혼용') ||
+    sopForLangCheck.includes('한영혼용') ||
+    sopForLangCheck.includes('korean-english code-switching') ||
+    sopForLangCheck.includes('kor-eng') ||
+    sopForLangCheck.includes('한국어 가사') ||
+    sopForLangCheck.includes('한국어로 작성') ||
+    sopForLangCheck.includes('한국어 곡 제목') ||
+    sopForLangCheck.includes('오직 한국어로만') ||
+    sopForLangCheck.includes('국문 가사');
 
   const titleForcesJapanese =
     titleAndCat.includes('j-pop') ||
@@ -907,16 +917,16 @@ function parseClientSopSpecs(theme: Theme) {
     titleAndCat.includes('japanese');
 
   const sopForcesJapaneseLyrics =
-    sopWithoutExcludes.includes('100% 일본어') ||
-    sopWithoutExcludes.includes('100% japanese') ||
-    sopWithoutExcludes.includes('일본어 가사') ||
-    sopWithoutExcludes.includes('일본어로 작성') ||
-    sopWithoutExcludes.includes('일본어 곡 제목') ||
-    sopWithoutExcludes.includes('일본어 제목') ||
-    sopWithoutExcludes.includes('japanese lyrics') ||
-    sopWithoutExcludes.includes('lyrics in japanese') ||
-    sopWithoutExcludes.includes('electronic r&b j-pop') ||
-    sopWithoutExcludes.includes('alt-pop / electronic r&b');
+    sopForLangCheck.includes('100% 일본어') ||
+    sopForLangCheck.includes('100% japanese') ||
+    sopForLangCheck.includes('일본어 가사') ||
+    sopForLangCheck.includes('일본어로 작성') ||
+    sopForLangCheck.includes('일본어 곡 제목') ||
+    sopForLangCheck.includes('일본어 제목') ||
+    sopForLangCheck.includes('japanese lyrics') ||
+    sopForLangCheck.includes('lyrics in japanese') ||
+    sopForLangCheck.includes('electronic r&b j-pop') ||
+    sopForLangCheck.includes('alt-pop / electronic r&b');
 
   // Strict Japanese detection (never misfire on Chill Groove Pop mentioning city pop or exclude J-pop)
   const isJapanese =
@@ -934,11 +944,11 @@ function parseClientSopSpecs(theme: Theme) {
   );
 
   const isKorEngMixed = !isJapanese && !hasExplicitEnglishLyrics && (
-    combined.includes('한영 혼용') ||
-    combined.includes('한영혼용') ||
-    combined.includes('kor-eng') ||
-    combined.includes('code-switching') ||
-    (combined.includes('한국어') && (combined.includes('영어') || combined.includes('english')))
+    sopForLangCheck.includes('한영 혼용') ||
+    sopForLangCheck.includes('한영혼용') ||
+    sopForLangCheck.includes('korean-english code-switching') ||
+    sopForLangCheck.includes('kor-eng') ||
+    sopForLangCheck.includes('약 70~80%의 감성적인 한국어')
   );
 
   const isEnglishExplicit = !isJapanese && !hasExplicitKoreanLyrics && (
@@ -961,8 +971,11 @@ function parseClientSopSpecs(theme: Theme) {
     combined.includes('한국 힙합') ||
     combined.includes('인스타 감성') ||
     combined.includes('느좋') ||
+    sopForLangCheck.includes('insta aesthetic r&b') ||
+    sopForLangCheck.includes('atmospheric korean r&b') ||
+    sopForLangCheck.includes('chill trap hip-hop') ||
     ((combined.includes('알앤비') || combined.includes('힙합') || combined.includes('hip-hop') || combined.includes('trap')) &&
-     (combined.includes('한영 혼용') || combined.includes('한영혼용') || combined.includes('특수 보컬 질감')))
+     (sopForLangCheck.includes('한영 혼용') || sopForLangCheck.includes('한영혼용')))
   );
 
   const forbidsIntroOutro = 

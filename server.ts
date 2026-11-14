@@ -568,30 +568,42 @@ function parseSopSpecs(theme: any) {
     .replace(/금지[^\n\r]*/g, '')
     .replace(/제외[^\n\r]*/g, '');
 
+  // Strip boilerplate analysis examples (e.g. "(예: 한국어 85% / 영어 15%)" or "한국어/영어 사용 비율")
+  // so generic SOP template explanations never override the active theme's real language!
+  const sopForLangCheck = sopWithoutExcludes
+    .replace(/\(\s*예\s*:[^)\n\r]*(?:한국어|영어|한영)[^)\n\r]*\)/g, '')
+    .replace(/한국어\s*\/\s*영어\s*사용\s*비율/g, '')
+    .replace(/가사\s*구조\s*및\s*한영\s*비율\s*복제/g, '')
+    .replace(/한영\s*(?:언어\s*)?비율/g, '');
+
   // Explicit English lyric/title directive check
   const hasExplicitEnglishLyrics =
-    /\b(100%\s*english|in\s+100%\s*english|lyrics\s*(?:must\s*be\s*)?(?:written\s*)?in\s*(?:100%\s*)?english|write\s*lyrics\s*(?:naturally\s*)?in\s*english|english\s*lyrics\s*only|sing\s*in\s*english|all\s+lyrics\s+in\s+english|english\s+title)\b/i.test(sopWithoutExcludes) ||
-    sopWithoutExcludes.includes('100% 영문') ||
-    sopWithoutExcludes.includes('영어로만 작성') ||
-    sopWithoutExcludes.includes('영어로 작사') ||
-    sopWithoutExcludes.includes('영어 작사') ||
-    sopWithoutExcludes.includes('영어 가사') ||
-    sopWithoutExcludes.includes('영문 가사') ||
-    sopWithoutExcludes.includes('영어 곡 제목') ||
-    sopWithoutExcludes.includes('영문 제목') ||
-    sopWithoutExcludes.includes('가사는 영어');
+    /\b(100%\s*english|in\s+100%\s*english|lyrics\s*(?:must\s*be\s*)?(?:written\s*)?in\s*(?:100%\s*)?english|write\s*lyrics\s*(?:naturally\s*)?in\s*english|english\s*lyrics\s*only|sing\s*in\s*english|all\s+lyrics\s+in\s+english|english\s+title|english\s+groove\s+pop|retail\s+groove\s+pop)\b/i.test(sopForLangCheck) ||
+    sopForLangCheck.includes('100% 영문') ||
+    sopForLangCheck.includes('100% 영어') ||
+    sopForLangCheck.includes('영어 100%') ||
+    sopForLangCheck.includes('영어 그루브 팝') ||
+    sopForLangCheck.includes('영어 팝송') ||
+    sopForLangCheck.includes('영어로만 작성') ||
+    sopForLangCheck.includes('영어로 작사') ||
+    sopForLangCheck.includes('영어 작사') ||
+    sopForLangCheck.includes('영어 가사') ||
+    sopForLangCheck.includes('영문 가사') ||
+    sopForLangCheck.includes('영어 곡 제목') ||
+    sopForLangCheck.includes('영문 제목') ||
+    sopForLangCheck.includes('가사는 영어');
 
   // Explicit Korean lyric/title directive check
   const hasExplicitKoreanLyrics =
-    sopWithoutExcludes.includes('한영 혼용') ||
-    sopWithoutExcludes.includes('한영혼용') ||
-    sopWithoutExcludes.includes('kor-eng') ||
-    sopWithoutExcludes.includes('code-switching') ||
-    sopWithoutExcludes.includes('한국어 가사') ||
-    sopWithoutExcludes.includes('한국어로 작성') ||
-    sopWithoutExcludes.includes('한국어 곡 제목') ||
-    sopWithoutExcludes.includes('오직 한국어로만') ||
-    sopWithoutExcludes.includes('국문 가사');
+    sopForLangCheck.includes('한영 혼용') ||
+    sopForLangCheck.includes('한영혼용') ||
+    sopForLangCheck.includes('korean-english code-switching') ||
+    sopForLangCheck.includes('kor-eng') ||
+    sopForLangCheck.includes('한국어 가사') ||
+    sopForLangCheck.includes('한국어로 작성') ||
+    sopForLangCheck.includes('한국어 곡 제목') ||
+    sopForLangCheck.includes('오직 한국어로만') ||
+    sopForLangCheck.includes('국문 가사');
 
   // 1. Strict Japanese J-POP Detection (never trigger on casual "city pop" / exclude references in Groove Pop or Pop themes)
   const titleForcesJapanese =
@@ -602,16 +614,16 @@ function parseSopSpecs(theme: any) {
     titleAndCat.includes('japanese');
 
   const sopForcesJapaneseLyrics =
-    sopWithoutExcludes.includes('100% 일본어') ||
-    sopWithoutExcludes.includes('100% japanese') ||
-    sopWithoutExcludes.includes('일본어 가사') ||
-    sopWithoutExcludes.includes('일본어로 작성') ||
-    sopWithoutExcludes.includes('일본어 곡 제목') ||
-    sopWithoutExcludes.includes('일본어 제목') ||
-    sopWithoutExcludes.includes('japanese lyrics') ||
-    sopWithoutExcludes.includes('lyrics in japanese') ||
-    sopWithoutExcludes.includes('electronic r&b j-pop') ||
-    sopWithoutExcludes.includes('alt-pop / electronic r&b');
+    sopForLangCheck.includes('100% 일본어') ||
+    sopForLangCheck.includes('100% japanese') ||
+    sopForLangCheck.includes('일본어 가사') ||
+    sopForLangCheck.includes('일본어로 작성') ||
+    sopForLangCheck.includes('일본어 곡 제목') ||
+    sopForLangCheck.includes('일본어 제목') ||
+    sopForLangCheck.includes('japanese lyrics') ||
+    sopForLangCheck.includes('lyrics in japanese') ||
+    sopForLangCheck.includes('electronic r&b j-pop') ||
+    sopForLangCheck.includes('alt-pop / electronic r&b');
 
   const isJapanese =
     titleForcesJapanese ||
@@ -627,12 +639,13 @@ function parseSopSpecs(theme: any) {
     korCharCount > 30
   );
 
+  // Only detect Korean-English code-switching when explicitly requested (never on generic template wording)
   const isKorEngMixed = !isJapanese && !hasExplicitEnglishLyrics && (
-    combined.includes('한영 혼용') ||
-    combined.includes('한영혼용') ||
-    combined.includes('kor-eng') ||
-    combined.includes('code-switching') ||
-    (combined.includes('한국어') && (combined.includes('영어') || combined.includes('english')))
+    sopForLangCheck.includes('한영 혼용') ||
+    sopForLangCheck.includes('한영혼용') ||
+    sopForLangCheck.includes('korean-english code-switching') ||
+    sopForLangCheck.includes('kor-eng') ||
+    sopForLangCheck.includes('약 70~80%의 감성적인 한국어')
   );
 
   // 3. 100% English Explicit Check
@@ -643,14 +656,17 @@ function parseSopSpecs(theme: any) {
 
   const isEnglishOnly = isEnglishExplicit;
 
-  // Korean Hip-Hop & R&B (Strictly excluded when J-POP or English-only Pop!)
+  // Korean Hip-Hop & R&B (Strictly excluded when J-POP or English-only Pop! Never misfire on shared 20-preset database!)
   const isKoreanHipHopRnb = !isJapanese && !isEnglishOnly && (
     combined.includes('한국 알앤비') ||
     combined.includes('한국 힙합') ||
     combined.includes('인스타 감성') ||
     combined.includes('느좋') ||
+    sopForLangCheck.includes('insta aesthetic r&b') ||
+    sopForLangCheck.includes('atmospheric korean r&b') ||
+    sopForLangCheck.includes('chill trap hip-hop') ||
     ((combined.includes('알앤비') || combined.includes('힙합') || combined.includes('hip-hop') || combined.includes('trap')) &&
-     (combined.includes('한영 혼용') || combined.includes('한영혼용') || combined.includes('특수 보컬 질감')))
+     (sopForLangCheck.includes('한영 혼용') || sopForLangCheck.includes('한영혼용')))
   );
 
   const targetLang: 'japanese' | 'english' | 'korean' =
@@ -848,6 +864,11 @@ function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean, includeEnd
       const isInterludeOrBreak = /^(instrumental|interlude|break|piano solo|guitar solo|solo)/i.test(tagHeader) || /instrumental|solo/i.test(tag);
       const isIntro = /^intro/i.test(tagHeader) || /^\[\s*intro/i.test(tag);
       const isOutro = /^outro/i.test(tagHeader) || /^\[\s*outro/i.test(tag);
+
+      // When SOP forbids [Intro] and [Outro] (includeEndTag === false), remove [Intro] and [Outro] blocks cleanly
+      if (!includeEndTag && (isIntro || isOutro)) {
+        continue;
+      }
 
       // Check if tag already describes the instrument after colon, e.g. [Outro: Mellow piano fading...]
       const tagDescMatch = tag.match(/^\[[^:]+:\s*([^\]]+)\]$/);
@@ -1068,10 +1089,12 @@ You MUST strictly follow these 5 field rules:
    - Embody urban loneliness, quiet devastation, and poignant inner emotions fitting Japanese R&B (like Utada Hikaru, eill, iri, Friday Night Plans).`
       : isPureEnglish
       ? `[CRITICAL MANDATORY THEME & LANGUAGE REQUIREMENT: "${theme.name}" (100% ENGLISH)]
-- Active Theme: "${theme.name}" (${theme.category || 'Music'}). Follow ONLY this theme's SOP for genre, BPM, instrumentation, groove, mood, and vocal direction! NEVER bleed in J-POP, Japanese lyrics, Korean R&B trap, or 1940s shellac unless explicitly written in this SOP.
-- Track titles ("title") MUST be 100% natural English only. Never include Korean or Japanese translations or bilingual parentheses.
-- Style prompts ("stylePrompt"), section tags, and section guides MUST be 100% English (750 to 950 characters) reflecting the exact genre, BPM, instruments, and vocal setup (${vocalLabel}) required by "${theme.name}"'s SOP.
-- ALL lyrics in "fullLyrics" MUST be written in 100% pure English (36 to 50 lines across all sections for a 3-minute song).`
+- Active Theme: "${theme.name}" (${theme.category || 'Music'}). Follow ONLY this theme's SOP for genre, BPM, instrumentation, groove, mood, and vocal direction!
+- ABSOLUTE GENRE & LANGUAGE ISOLATION: NEVER bleed in J-POP, Japanese lyrics, Korean R&B/Trap Hip-Hop ("Atmospheric Korean R&B", "chill trap hip-hop", "808 trap snare"), or 1940s shellac unless explicitly written in "${theme.name}"'s SOP!
+- Track titles ("title") MUST be 100% natural English only (2–4 words, never Korean, never Japanese, never bilingual parentheses).
+- Style prompts ("stylePrompt"), section tags, and section guides MUST be 100% English (750 to 950 characters) reflecting the exact genre, BPM, instruments, and vocal setup (${vocalLabel}) required by "${theme.name}"'s SOP. If the SOP provides a 20-preset Vocal Texture list, pick ONE fitting preset and combine its exact English Suno keywords with ${vocalLabel} and the SOP's vocal presence keywords.
+- ALL lyrics in "fullLyrics" MUST be written in 100% pure English (ZERO Korean/Japanese words in sung lines!) across a complete 3-minute song structure (32 to 48 lines).
+${sopSpecs.forbidsIntroOutro ? `- IMPORTANT TAG PROHIBITION: The SOP explicitly forbids [Intro] and [Outro] tags! Start directly with [Verse 1: ...] and finish on [Final Chorus: ...] or [Chorus: ...], with NO [Intro], NO [Outro], and NO [End] tags.` : ''}`
       : isKorEng
       ? `[CRITICAL MANDATORY SPECIFICATIONS: KOREAN R&B HIP-HOP (한영 혼용)]
 The user's SOP explicitly specifies Korean R&B / Hip-Hop with Korean-English Code-switching (한영 혼용) for a complete 3-minute commercial playlist track. Follow these 4 strict field rules:
@@ -2255,13 +2278,13 @@ Our unforgettable late night drive`
     const customStyle = styleMatch && styleMatch[1].trim() && styleMatch[1].trim().length >= 300
       ? styleMatch[1].trim()
       : isGrooveStyle
-      ? `Chill groove pop, warm sun-kissed contemporary pop, breezy cafe lounge groove, ${theme.name}, ${customBpm}, tight live-feeling pocket drums with crisp brushed rimshot and bouncy muted bassline, warm Fender Rhodes electric piano chords, clean funk-inflected rhythm guitar stabs, subtle warm analog synth shimmer, ${vocalTag}, effortless conversational phrasing, sweet melodic chorus hook with smooth vocal harmonies, spacious modern stereo panorama, clean warm low-end punch, sparkling airy highs, polished streaming-ready master, -heavy distortion, -aggressive trap, -dark orchestral, -j-pop, -muddy bass`
+      ? `English groove pop, chill indie R&B, sophisticated retail groove pop, ${theme.name}, ${customBpm}, muted Rhodes electric piano chords, warm analog synth bass, tight dry drum breaks, subtle funky rhythm guitar comping, ${vocalTag}, smooth laid-back phrasing, clear vocal presence, dry vocal mix, raw vocal texture, front-and-center vocals, minimal backing, warm analog saturation, wide stereo field, unintrusive EQ, polished streaming-ready master, -heavy distortion, -aggressive trap, -dark orchestral, -j-pop, -muddy bass`
       : `${theme.category || theme.name}, faithful to ${theme.name} SOP, crisp acoustic and warm electric instrumentation, ${vocalTag}, ${customBpm}, balanced rhythmic pocket groove, clear studio-grade lead vocal presence, wide stereophonic imaging, polished commercial playlist mastering, -harsh distortion, -muddy bass`;
 
     const simVocalLabel =
-      vocal === 'female' ? 'Warm expressive female lead vocal, effortless breezy tone' :
-      vocal === 'male' ? 'Smooth warm male lead vocal, effortless laid-back tone' :
-      vocal === 'none' ? 'Instrumental (No vocals)' : 'Warm expressive lead vocal, effortless tone';
+      vocal === 'female' ? 'Mid-20s female vocal, smooth laid-back vocal, warm chest voice, effortless delivery' :
+      vocal === 'male' ? 'Mid-20s male vocal, smooth laid-back vocal, warm chest voice, effortless delivery' :
+      vocal === 'none' ? 'Instrumental (No vocals)' : 'Mid-20s vocal, smooth laid-back vocal, warm chest voice, effortless delivery';
 
     const useEnglishSimTitle = sopSpecs.isEnglishOnly || isGrooveStyle;
 
@@ -2272,26 +2295,26 @@ Our unforgettable late night drive`
             mood: 'Warm Sunday café sunlight, breezy romantic groove and gentle excitement',
             metaInfo: {
               vocal: simVocalLabel,
-              genre: theme.category || 'Chill Groove Pop',
+              genre: theme.category || 'English Groove Pop, Chill Indie R&B',
               mood: 'Feel-Good Romantic Groove',
               bpm: customBpm,
               targetLength: '3:08'
             },
             style: customStyle,
-            lyrics: `[Intro: Warm Rhodes chords, crisp pocket rimshot and bouncy bass groove]\n\n[Verse 1: Light conversational vocal over clean rhythm guitar]\nSunlight slipping past the corner glass\nWatching every Sunday morning pass\nCoffee steam is curling in the air\nDidn't notice you were sitting there\nWait—you smiled before I looked away\nSuddenly the room felt brighter today\n\n[Pre-Chorus: Subtle tambourine lift, warm bass walkup]\nOne small hello across the wooden floor\nLike we've met a hundred times before\n\n[Chorus: Breezy feel-good groove pop hook with stacked harmonies]\nOh, we're moving to a Sunday groove\nEvery little laugh puts my heart in tune\nTwo warm cups cooling on the sunlit wood\nNever knew a quiet morning felt this good\nStay right here till the afternoon fades\nPromising we'll meet again next weekend day\n\n[Verse 2: Playful rhythmic phrasing, Rhodes fills]\nTalking favorite records side by side\nHours rolling like a golden tide\nShadows stretching softly down the street\nWish this easy rhythm wouldn't leave\n\n[Chorus: Breezy feel-good groove pop hook with stacked harmonies]\nOh, we're moving to a Sunday groove\nEvery little laugh puts my heart in tune\nTwo warm cups cooling on the sunlit wood\nNever knew a quiet morning felt this good\n\n[Bridge: Stripped back Rhodes and finger snaps, sweet anticipation]\nEvening lights are turning amber gold\nJust a sweet new story left untold\n"Same time next week?" smiling at the door\nAlready counting days till Sunday morning more\n\n[Outro: Rhodes and clean guitar riff fading into warm café groove]\n[End]`
+            lyrics: `${sopSpecs.forbidsIntroOutro ? '' : '[Intro: Warm Rhodes chords, crisp pocket rimshot and bouncy bass groove]\n\n'}[Verse 1: Smooth laid-back vocal, muted Rhodes piano and subtle hi-hats]\nSunlight slipping past the corner glass\nWatching every quiet morning pass\nHeartbeat settling in an easy pace\nSmiling softly in this warm bright space\n\n[Pre-Chorus: Gentle falsetto lift, warm analog synth bass enters]\nEvery glance feels effortless and true\nFinding steady rhythm next to you\nNothing rushing how the moment moves\nSettling deeper in this easy groove\n\n[Chorus: Full chest voice, tight dry drum breaks and funky guitar comping]\nCaught inside a Sunday groove with you\nTurning quiet mornings bright and new\nEvery little laugh feels light and free\nMoving in the sweetest harmony\nHold this easy frequency tonight\nEverything feels balanced in the light\n\n[Verse 2: Rhythmic delivery, bouncy bassline and clean guitar]\nTalking softly as the hours slide\nNothing hidden, nothing left to hide\nEven silence carries warmth between\nSoftest pulse that we have ever seen\n\n[Chorus: Full chest voice, tight dry drum breaks and funky guitar comping]\nCaught inside a Sunday groove with you\nTurning quiet mornings bright and new\nEvery little laugh feels light and free\nMoving in the sweetest harmony\n\n[Bridge: Stripped-down Rhodes chords, intimate close-mic vocal]\nEvening light is glowing amber gold\nStories waiting gently to unfold\nPromising another weekend soon\nHumming softly to the same sweet tune\n\n[Final Chorus: Warm stacked harmonies, full groove arrangement]\nCaught inside a Sunday groove with you\nTurning quiet mornings bright and new\nEvery little laugh feels light and free\nMoving in the sweetest harmony${sopSpecs.forbidsIntroOutro ? '' : '\n\n[Outro: Rhodes and clean guitar riff fading gently]\n[End]'}`
           },
           {
             title: useEnglishSimTitle ? 'See You Next Sunday' : `${theme.name} - 2번 트랙`,
             mood: 'Sweet sunset farewell with warm anticipation for next weekend',
             metaInfo: {
               vocal: simVocalLabel,
-              genre: theme.category || 'Chill Groove Pop',
+              genre: theme.category || 'English Groove Pop, Chill Indie R&B',
               mood: 'Sunny Warmth & Sweet Anticipation',
               bpm: customBpm,
               targetLength: '3:12'
             },
             style: customStyle,
-            lyrics: `[Intro: Bouncy clean guitar riff and warm electric piano shimmer]\n\n[Verse 1: Relaxed warm vocal, tight brushed drum pocket]\nGolden hour painting down the avenue\nEvery word feels effortless with you\nUsed to keep my headphones on alone\nNow I hate to walk the evening home\n\n[Pre-Chorus: Bassline climbs smoothly, airy harmonies]\nWaiting at the corner neon sign\nNeither of us wants to say goodbye\n\n[Chorus: Catchy uplifting pop chorus with rich vocal warmth]\nSee you next Sunday when the sun comes round\nBest kind of feeling in this quiet town\nFrom a shy glance over morning tea\nTo the sweetest melody inside of me\nKeep that smile until the week goes through\nSunday morning belongs to me and you\n\n[Verse 2: Warm groove, delicate synth sparkle]\nTexting on the train back through the glow\nFunny how a single spark can grow\nCalendar is circled bright and clear\nSix more days till you are standing here\n\n[Outro: Mellow Rhodes chords and clean guitar resolving gently]\n[End]`
+            lyrics: `${sopSpecs.forbidsIntroOutro ? '' : '[Intro: Bouncy clean guitar riff and warm electric piano shimmer]\n\n'}[Verse 1: Relaxed warm vocal, tight brushed drum pocket]\nGolden hour drifting through the street\nEvery word feels warm and softly sweet\nUsed to walk these quiet blocks alone\nNow I hate to see the evening go\n\n[Pre-Chorus: Smooth analog bass walkup, airy vocal harmony]\nLingering beneath the corner light\nNeither of us wants to say goodnight\n\n[Chorus: Crisp pop vocal, funky guitar stabs and steady bass groove]\nSee you next Sunday when the sun comes round\nBest kind of feeling in this quiet town\nFrom a shy glance in the morning haze\nTo the brightest part of all my days\nKeep that smile until the week runs through\nSunday belongs to me and you\n\n[Verse 2: Warm neo-soul phrasing, soft Rhodes shimmer]\nCounting down the days till we rewind\nEvery passing memory shines bright\nSimple moments turning into gold\nSweetest feeling we could ever hold\n\n[Final Chorus: Uplifting chorus with smooth layered harmonies]\nSee you next Sunday when the sun comes round\nBest kind of feeling in this quiet town\nFrom a shy glance in the morning haze\nTo the brightest part of all my days${sopSpecs.forbidsIntroOutro ? '' : '\n\n[Outro: Mellow Rhodes chords resolving gently]\n[End]'}`
           }
         ]
       : [
