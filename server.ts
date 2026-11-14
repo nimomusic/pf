@@ -4,6 +4,7 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import seedThemes from './data/themes.json' with { type: 'json' };
+import { buildCuratedYoutubePackage } from './src/utils/youtubePackageBuilder';
 
 dotenv.config();
 
@@ -1188,6 +1189,21 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
   - bpm: e.g. ${isJapanese ? '"94 BPM"' : '"82 BPM"'}
   - targetLength: e.g. "3:15"
 
+6. [YOUTUBE UPLOAD PACKAGE (youtube)]
+- Produce a high-CTR editorial YouTube playlist upload package matching the theme, lyric concept, season, mood, and tracks:
+  - "titleKo": Korean viral playlist title crafted in the style of top curated YouTube music channels—adapt season, city/place, vibe, emojis, and pipe subtitle dynamically to fit the planned music concept. Reference phrasing & rhythm styles:
+    * "지금 계절에 딱 맞는 뉴욕 분위기 🗽🍂 기분 좋아지는 그루브 팝 모음 🎧 | Good Day Pop"
+    * "🎧 𝐩𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 햇살 좋은 날, 여유롭고 편안한 어쿠스틱 플리 ☀️"
+    * "크리스마스가 가까워질수록, 이런 뉴욕이 더 좋아지잖아 🎄🗽 첫 곡부터 기분 좋아지는 그루브 팝 모음 🎧 | Christmas Pop Playlist"
+    * "가을 공기 좋다, 오늘은 어디든 놀러 가자 🐶🍂 듣는 순간 기분 좋아지는 팝송 모음 🎧 | Good Day Pop"
+    * "𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 너와 걷던 그 거리 🍁🌧️ 가을비 내린 날 하루 종일 듣고 싶은 감성 플리 𝐅𝐞𝐞𝐥-𝐆𝐨𝐨𝐝 𝐀𝐮𝐭𝐮𝐦𝐧 𝐏𝐨𝐩 | 카페음악 • 노동요"
+  - "titleEn": A natural, emotionally resonant English adaptation of "titleKo" keeping the same vibe, seasonal imagery, emojis, and clean subtitle (e.g., "The Closer Christmas Gets, The Better New York Feels 🎄🗽 Feel-Good Groove Pop 🎧 | Christmas Pop Playlist").
+  - "descriptionKo": Warm, engaging Korean playlist introduction tailored to the theme & track story, including the formatted [🎧 Tracklist] with timestamps and closing call-to-action.
+  - "descriptionEn": Smooth, idiomatic English adaptation of "descriptionKo" carrying the same narrative tone and including the formatted [🎧 Tracklist] with timestamps.
+  - "hashtags": EXACTLY 5 curated lowercase SEO hashtags mixing playlist tag, genre, mood/season, and setting separated by spaces (e.g., "#playlist #groovepop #autumnpop #gooddaypop #cafe").
+  - "thumbnailPrompt": 100% English photorealistic editorial photography prompt STRICTLY AT LEAST 2,200 CHARACTERS (aim 2,200–2,600 chars!). Explicitly describe: (a) season, weather & exact architectural/street/café setting matched to the playlist concept, (b) 16:9 widescreen composition & rule-of-thirds depth, (c) detailed foreground props (ceramic coffee cup, condensation, falling maple/ginkgo leaves, glass reflections, etc.), (d) human subject(s) — clothing fabric textures, pose, hand gesture, candid facial expression & gaze, (e) directional lighting, reflections & warm-vs-cool bokeh balance, (f) real camera/film stock specs (e.g. Leica SL2-S 35mm f/1.8, Kodak Portra 400 / Cinestill 800T, zero CGI plastic skin), and (g) minimalist white editorial serif cover typography placement in clean negative space (e.g., "Christmas Pop", "AUTUMN MOOD", "playlist") without blocking faces or hero props.
+  - "backgroundImagePrompt": 100% English 16:9 seamless loop visual backdrop prompt STRICTLY AT LEAST 2,200 CHARACTERS (aim 2,200–2,600 chars!). Engineered for a locked-off tripod shot with ZERO camera cuts/pans/zooms, matching the same curated photographic world as the thumbnail, specifying continuous gentle ambient loop physics (drifting autumn leaves, rising coffee steam, raindrop ripples, softly breathing fairy-light bokeh), detailed material micro-textures, film grain, and STRICTLY NO TEXT, NO TITLES, NO LOGOS, and NO WATERMARKS anywhere in frame.
+
 [OUTPUT FORMAT - PURE JSON ONLY]
 Respond ONLY with a valid JSON object matching this schema (no markdown fences, no conversational text).
 CRITICAL: "tracks" MUST contain EXACTLY ${effectiveTrackCount} track objects ("trackNumber": 1 .. ${effectiveTrackCount}):
@@ -1209,16 +1225,18 @@ CRITICAL: "tracks" MUST contain EXACTLY ${effectiveTrackCount} track objects ("t
     }
   ],
   "youtube": {
-    "title": "Catchy YouTube playlist video title matching theme and lyric concept",
-    "description": "Full YouTube video description with tracklist timestamps and background story",
-    "tracklist": "01. Title (00:00)...",
-    "hashtags": "#Playlist #SunoAI",
-    "thumbnailPrompt": "16:9 cinematic still matching current theme aesthetic, photorealistic 8k",
-    "backgroundImagePrompt": "16:9 seamless loop video prompt matching current theme"
+    "titleKo": "Curated Korean playlist YouTube title matching theme/season/vibe/emoji + | Subtitle pattern",
+    "titleEn": "Natural English adaptation of titleKo",
+    "descriptionKo": "Detailed Korean YouTube video description including story, listening context, and [🎧 Tracklist] timestamps",
+    "descriptionEn": "Matching English YouTube video description adapted from descriptionKo including [🎧 Tracklist] timestamps",
+    "tracklist": "01. Title (0:00)...",
+    "hashtags": "#playlist #groovepop #autumnpop #gooddaypop #cafe",
+    "thumbnailPrompt": "Minimum 2,200-character ultra-detailed 16:9 photorealistic editorial photography prompt with season, setting, framing, foreground objects, subject pose/expression/wardrobe, lighting, film lens specs, and minimalist white serif cover text placement",
+    "backgroundImagePrompt": "Minimum 2,200-character ultra-detailed 16:9 locked-off tripod seamless loop cinematic photography prompt with gentle ambient loop motion, film texture, and zero text/logos"
   }
 }`;
 
-    const standardSystemInstruction = `You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY RULES: (1) ALWAYS generate the EXACT number of tracks requested in Target Track Count (e.g., if ${effectiveTrackCount} tracks are requested, the "tracks" JSON array MUST contain all ${effectiveTrackCount} distinct tracks numbered 1 through ${effectiveTrackCount}, never just 1 track!). (2) Style prompts MUST be dense, comma-separated musical keywords and sound design tags (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries; DO NOT write narrative sentences like "This track embodies the essence of..."). (3) Tag & Line Break Hygiene: Every section tag MUST use single square brackets [Section: Guide] (NEVER curly braces {}, NEVER nested parentheses [(...)]). Put every tag on its own line followed by \\n, separate sections with \\n\\n, NEVER split single words onto separate lines, NEVER repeat parenthesized guides underneath [Outro: ...] or [Instrumental Interlude: ...], and emit [End] AT MOST ONCE at the very end. (4) Instrumental Sections Hygiene: [Intro: ...], [Outro: ...], [Piano Solo: ...], and [Instrumental Interlude: ...] MUST CONTAIN ZERO SUNG LYRICS! (5) When SOP specifies Japanese / J-POP, track titles MUST be pure Japanese (漢字/ひらがな), style prompts 100% English, section tags in English brackets, and sung lyrics 100% PURE JAPANESE (ZERO Korean). (6) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용, track titles MUST be Korean only, style prompts 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (36-50 lines). (7) Strictly respect tag prohibitions such as omitting [Intro], [Outro], and [End] when forbidden in the SOP.${cleanLyricConcept ? ` (8) MANDATORY LYRIC CONCEPT: ALL tracks and lyrics MUST focus on the user concept: "${cleanLyricConcept}".` : ''} Respond strictly in valid JSON.`;
+    const standardSystemInstruction = `You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY RULES: (1) ALWAYS generate the EXACT number of tracks requested in Target Track Count (e.g., if ${effectiveTrackCount} tracks are requested, the "tracks" JSON array MUST contain all ${effectiveTrackCount} distinct tracks numbered 1 through ${effectiveTrackCount}, never just 1 track!). (2) Style prompts MUST be dense, comma-separated musical keywords and sound design tags (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries; DO NOT write narrative sentences like "This track embodies the essence of..."). (3) Tag & Line Break Hygiene: Every section tag MUST use single square brackets [Section: Guide] (NEVER curly braces {}, NEVER nested parentheses [(...)]). Put every tag on its own line followed by \\n, separate sections with \\n\\n, NEVER split single words onto separate lines, NEVER repeat parenthesized guides underneath [Outro: ...] or [Instrumental Interlude: ...], and emit [End] AT MOST ONCE at the very end. (4) Instrumental Sections Hygiene: [Intro: ...], [Outro: ...], [Piano Solo: ...], and [Instrumental Interlude: ...] MUST CONTAIN ZERO SUNG LYRICS! (5) When SOP specifies Japanese / J-POP, track titles MUST be pure Japanese (漢字/ひらがな), style prompts 100% English, section tags in English brackets, and sung lyrics 100% PURE JAPANESE (ZERO Korean). (6) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용, track titles MUST be Korean only, style prompts 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (36-50 lines). (7) Strictly respect tag prohibitions such as omitting [Intro], [Outro], and [End] when forbidden in the SOP. (8) For the YouTube Upload Package ("youtube"), ALWAYS provide BOTH Korean ("titleKo", "descriptionKo") and natural English ("titleEn", "descriptionEn") versions, EXACTLY 5 SEO hashtags mixing playlist/genre/season/setting, and make BOTH "thumbnailPrompt" and "backgroundImagePrompt" rich, realistic English editorial photography prompts of AT LEAST 2,200 characters each.${cleanLyricConcept ? ` (9) MANDATORY LYRIC CONCEPT: ALL tracks, lyrics, and YouTube visuals MUST focus on the user concept: "${cleanLyricConcept}".` : ''} Respond strictly in valid JSON.`;
 
     // Shared post-processor: guarantees exact track count (with AI continuation if AI returned fewer),
     // sequential 1..N numbering, clean titles, clean lyrics, and synchronized YouTube tracklist.
@@ -1290,14 +1308,13 @@ Respond ONLY with valid JSON:
         return `${String(idx + 1).padStart(2, '0')}. ${t.title} (${min}:${sec})`;
       }).join('\n');
 
-      safeResult.youtube = {
-        title: safeResult.youtube?.title || `[PLAYLIST] ${theme.name}${cleanLyricConcept ? ` | ${cleanLyricConcept}` : ''}`,
-        description: safeResult.youtube?.description || `${theme.name} 플레이리스트`,
-        tracklist: builtTracklist || safeResult.youtube?.tracklist || '',
-        hashtags: safeResult.youtube?.hashtags || '#Playlist #SunoAI',
-        thumbnailPrompt: safeResult.youtube?.thumbnailPrompt || '16:9 cinematic still, photorealistic 8k',
-        backgroundImagePrompt: safeResult.youtube?.backgroundImagePrompt || '16:9 seamless loop background'
-      };
+      safeResult.youtube = buildCuratedYoutubePackage(
+        safeResult.youtube,
+        safeResult.tracks,
+        theme,
+        cleanLyricConcept,
+        builtTracklist || safeResult.youtube?.tracklist || ''
+      );
 
       return safeResult;
     };
@@ -1325,7 +1342,7 @@ Respond ONLY with valid JSON:
           setTimeout(() => reject(new Error('AI 응답 대기 시간 초과 (90초)')), 90000)
         );
 
-        const callGemini = async (promptContent: string, outputTokens = effectiveTrackCount > 1 ? 16384 : 8192) => {
+        const callGemini = async (promptContent: string, outputTokens = 16384) => {
           return await ai.models.generateContent({
             model: targetModel,
             contents: promptContent,
@@ -1348,12 +1365,12 @@ Respond ONLY with valid JSON:
             console.warn(`Gemini model ${targetModel} failed (${firstErr.message}), falling back to gemini-3.1-flash-lite`);
             targetModel = 'gemini-3.1-flash-lite';
             geminiResponse = await Promise.race([
-              callGemini(systemPrompt, 8192),
+              callGemini(systemPrompt, 12288),
               timeoutPromise
             ]);
           } else if (effectiveTrackCount > 1) {
             geminiResponse = await Promise.race([
-              callGemini(systemPrompt, 8192),
+              callGemini(systemPrompt, 12288),
               timeoutPromise
             ]);
           } else {
@@ -2272,64 +2289,17 @@ Our unforgettable late night drive`
     return `${(idx + 1).toString().padStart(2, '0')}. ${t.title} (${min}:${sec})`;
   }).join('\n');
 
-  const conceptSuffix = cleanConcept ? ` | ${cleanConcept}` : '';
-
-  const youtubeTitle = sopSpecs.isShellacVintage
-    ? `[PLAYLIST] 1940s Vintage Shellac 78 RPM Phonograph${conceptSuffix} | Worn Record Memories for Relaxing & Sleep 📻 ☕️`
-    : sopSpecs.isJapanese
-    ? `[PLAYLIST] ${theme.name}${conceptSuffix} | 深夜の都市と孤独を包む洗練されたオルタナティブ R&B J-POP 🌙 🎧`
-    : sopSpecs.isKoreanHipHopRnb
-    ? `[PLAYLIST] ${theme.name}${conceptSuffix} | 늦은 밤 감각적인 새벽 드라이브 느좋 칠(Chill) 알앤비 힙합 🌙 🎧`
-    : sopSpecs.isEnglishOnly
-    ? `[PLAYLIST] ${theme.name}${conceptSuffix} | Emotional Ballads for Deep Focus & Heartbreak 🎬 ☕️`
-    : `[PLAYLIST] ${theme.name}${conceptSuffix} | 감각적인 하루를 선물하는 감성 플레이리스트 🎬 ☕️`;
-
-  const youtubeDesc = sopSpecs.isShellacVintage
-    ? `Travel back in time to the 1940s.${cleanConcept ? ` Theme Concept: ${cleanConcept}.` : ''} Authentic Type B worn and gritty shellac 78 RPM phonograph recordings with warm needle crackle, nostalgic melodies, and sincere vintage vocals.\n\n[🎧 Tracklist]\n${tracklistText}\n\n[📻 Sound Identity]\n- 1940s shellac 78 RPM record played on an antique wooden phonograph\n- Narrow frequency band, surface crackles & mechanical needle noise\n- Thick warm midrange & analog tube saturation\n\n#PlymasterFactory #Vintage1940s #ShellacRecord #78RPM #Phonograph #SunoAI`
-    : sopSpecs.isJapanese
-    ? `都会の夜と静寂に溶け込む洗練されたオルタナティブ R&B J-POP。${cleanConcept ? `\nテーマコンセプト: ${cleanConcept}` : ''}\n${theme.name}のSOPに基づき、心に染み渡るサウンドと日本語歌詞でお届けします。\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #JPOP #ElectronicRnB #CityPop #AltPop #SunoAI`
-    : sopSpecs.isKoreanHipHopRnb
-    ? `감각적인 늦은 밤, 몽환적인 칠(Chill) 트랩 비트와 세련된 한영 혼용 보컬/싱랩의 향연.${cleanConcept ? `\n가사 컨셉: ${cleanConcept}` : ''}\n${theme.name} 플레이리스트와 함께 새벽 드라이브의 미묘한 텐션과 여유를 즐겨보세요.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #인스타감성 #느좋 #알앤비힙합 #한국알앤비 #새벽드라이브 #SunoAI`
-    : sopSpecs.isEnglishOnly
-    ? `Immerse yourself in a musical journey.${cleanConcept ? ` Lyric Concept: ${cleanConcept}.` : ''} Crafted precisely according to your SOP specifications.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #Playlist #SunoAI`
-    : `지친 마음에 깊은 울림을 전하는 ${theme.name} 플레이리스트입니다.${cleanConcept ? `\n가사 컨셉: ${cleanConcept}` : ''}\n입력된 SOP 지침을 바탕으로 기획된 감성 사운드로 편안한 힐링과 몰입을 즐겨보세요.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #플레이리스트 #음악추천 #BGM #감성음악`;
-
-  const hashtags = sopSpecs.isShellacVintage
-    ? '#Vintage1940s #ShellacPhonograph #78RPM #VintagePop #RetroBallad #SunoAI'
-    : sopSpecs.isJapanese
-    ? '#JPOP #ElectronicRnB #CityPop #AltPop #SunoAI #Playlist'
-    : sopSpecs.isKoreanHipHopRnb
-    ? '#인스타감성 #느좋 #알앤비 #한국힙합 #칠트랩 #새벽음악 #SunoAI'
-    : sopSpecs.isEnglishOnly
-    ? '#Playlist #MusicProduction #SunoAI #AudioCards'
-    : '#플레이리스트 #음악추천 #감성음악 #SunoAI';
-
-  const thumbnailPrompt = sopSpecs.isShellacVintage
-    ? '1940s antique wooden phonograph playing a spinning shellac 78 RPM record on a polished mahogany table, soft warm amber incandescent glow, atmospheric dust motes floating in light rays, vintage sepia tone, cinematic 16:9 photorealistic 8k'
-    : sopSpecs.isJapanese
-    ? '16:9 Tokyo rainy night view through high-rise apartment window, soft neon reflections on wet glass, warm interior desk lamp, sophisticated urban loneliness, cinematic 35mm photography 8k'
-    : sopSpecs.isKoreanHipHopRnb
-    ? '16:9 aesthetic Korean late night mood, rainy city car window reflections, neon bokeh, moody cinema lighting, 35mm film grain, photorealistic 8k'
-    : 'Cinematic 16:9 movie still, melancholic beautiful scene, soft warm golden hour light through sheer curtain, 35mm film aesthetic, photorealistic, 8k resolution --ar 16:9';
-
-  const backgroundImagePrompt = sopSpecs.isShellacVintage
-    ? '16:9 seamless vintage room loop: antique 1940s gramophone with brass horn, gentle spinning record, warm amber fireplace glow, slow cozy dust particles, relaxing vintage aesthetic'
-    : sopSpecs.isJapanese
-    ? '16:9 seamless loop: Tokyo midnight city lights through raindrop glass window, slow ambient reflections, calm urban atmosphere'
-    : sopSpecs.isKoreanHipHopRnb
-    ? '16:9 seamless loop: late night neon city lights reflecting through car windshield, slow ambient motion, moody aesthetic atmosphere'
-    : '16:9 seamless film loop background: warm vintage cinema aesthetic, slow ambient light rays, soft floating dust particles, emotional cozy atmosphere';
+  const youtube = buildCuratedYoutubePackage(
+    undefined,
+    tracks,
+    theme,
+    cleanConcept,
+    tracklistText
+  );
 
   return {
     tracks,
-    youtube: {
-      title: youtubeTitle,
-      description: youtubeDesc,
-      tracklist: tracklistText,
-      hashtags,
-      thumbnailPrompt,
-      backgroundImagePrompt
-    }
+    youtube
   };
 }
 

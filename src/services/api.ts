@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { ensureFirebaseInitialized, handleFirestoreError, OperationType } from '../firebase';
 import { Theme, PlaylistResult, VocalType, ProviderType } from '../types';
+import { buildCuratedYoutubePackage } from '../utils/youtubePackageBuilder';
 
 const THEMES_STORAGE_KEY = 'plymaster_custom_themes';
 const DELETED_THEMES_STORAGE_KEY = 'plymaster_deleted_theme_ids';
@@ -843,6 +844,22 @@ export async function generatePlaylist(params: {
       title: cleanTitleSingleLanguage(tr.title, specs.targetLang, specs.isJapanese ? '新曲' : specs.isKoreanTitle ? '새로운 트랙' : (tr.title || `Track ${idx + 1}`)),
       fullLyrics: formatAndCleanLyrics(tr.fullLyrics, specs.isJapanese, !specs.forbidsIntroOutro)
     }));
+
+    const fallbackTracklist = data.result.tracks
+      .map((t: any, idx: number) => {
+        const min = Math.floor(idx * 3 + (idx * 20) / 60);
+        const sec = ((idx * 24) % 60).toString().padStart(2, '0');
+        return `${String(idx + 1).padStart(2, '0')}. ${t.title} (${min}:${sec})`;
+      })
+      .join('\n');
+
+    data.result.youtube = buildCuratedYoutubePackage(
+      data.result.youtube,
+      data.result.tracks,
+      params.theme,
+      params.lyricConcept || '',
+      data.result.youtube?.tracklist || fallbackTracklist
+    );
   }
 
   return data;
@@ -1849,64 +1866,19 @@ Our unforgettable late night drive`
     return `${(idx + 1).toString().padStart(2, '0')}. ${t.title} (${min}:${sec})`;
   }).join('\n');
 
-  const youtubeTitle = specs.isShellacVintage
-    ? `[PLAYLIST] 1940s Vintage Shellac 78 RPM Phonograph | Worn Record Memories for Relaxing & Sleep 📻 ☕️`
-    : specs.isJapanese
-    ? `[PLAYLIST] ${theme.name} | 深夜の都市と孤独を包む洗練されたオルタナティブ R&B J-POP 🌙 🎧`
-    : specs.isKoreanHipHopRnb
-    ? `[PLAYLIST] ${theme.name} | 늦은 밤 감각적인 새벽 드라이브 느좋 칠(Chill) 알앤비 힙합 🌙 🎧`
-    : specs.isEnglishOnly
-    ? `[PLAYLIST] ${theme.name} | Emotional Ballads for Deep Focus & Heartbreak 🎬 ☕️`
-    : `[PLAYLIST] ${theme.name} | 영화 같은 하루를 선물하는 감성 플레이리스트 🎬 ☕️`;
-
-  const youtubeDesc = specs.isShellacVintage
-    ? `Travel back in time to the 1940s. Authentic Type B worn and gritty shellac 78 RPM phonograph recordings with warm needle crackle, nostalgic melodies, and sincere vintage vocals.\n\n[🎧 Tracklist]\n${tracklistText}\n\n[📻 Sound Identity]\n- 1940s shellac 78 RPM record played on an antique wooden phonograph\n- Narrow frequency band, surface crackles & mechanical needle noise\n- Thick warm midrange & analog tube saturation\n\n#PlymasterFactory #Vintage1940s #ShellacRecord #78RPM #Phonograph #SunoAI`
-    : specs.isJapanese
-    ? `都会の夜と静寂に溶け込む洗練されたオルタナティブ R&B J-POP。\n${theme.name}のSOPに基づき、心に染み渡るサウンドと日本語歌詞でお届けします。\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #JPOP #ElectronicRnB #CityPop #AltPop #SunoAI`
-    : specs.isKoreanHipHopRnb
-    ? `감각적인 늦은 밤, 몽환적인 칠(Chill) 트랩 비트와 세련된 한영 혼용 보컬/싱랩의 향연.\n${theme.name} 플레이리스트와 함께 새벽 드라이브의 미묘한 텐션과 여유를 즐겨보세요.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #인스타감성 #느좋 #알앤비힙합 #한국알앤비 #새벽드라이브 #SunoAI`
-    : specs.isEnglishOnly
-    ? `Immerse yourself in a musical journey. Crafted precisely according to your SOP specifications.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #Playlist #SunoAI`
-    : `지친 마음에 깊은 울림을 전하는 ${theme.name} 플레이리스트입니다.\n입력된 SOP 지침을 바탕으로 기획된 감성 사운드로 편안한 힐링과 몰입을 즐겨보세요.\n\n[🎧 Tracklist]\n${tracklistText}\n\n#PlymasterFactory #플레이리스트 #음악추천 #BGM #감성음악`;
-
-  const hashtags = specs.isShellacVintage
-    ? '#Vintage1940s #ShellacPhonograph #78RPM #VintagePop #RetroBallad #SunoAI'
-    : specs.isJapanese
-    ? '#JPOP #ElectronicRnB #CityPop #AltPop #SunoAI #Playlist'
-    : specs.isKoreanHipHopRnb
-    ? '#인스타감성 #느좋 #알앤비 #한국힙합 #칠트랩 #새벽음악 #SunoAI'
-    : specs.isEnglishOnly
-    ? '#Playlist #MusicProduction #SunoAI #AudioCards'
-    : '#플레이리스트 #음악추천 #감성음악 #SunoAI';
-
-  const thumbnailPrompt = specs.isShellacVintage
-    ? '1940s antique wooden phonograph playing a spinning shellac 78 RPM record on a polished mahogany table, soft warm amber incandescent glow, atmospheric dust motes floating in light rays, vintage sepia tone, cinematic 16:9 photorealistic 8k'
-    : specs.isJapanese
-    ? '16:9 Tokyo rainy night view through high-rise apartment window, soft neon reflections on wet glass, warm interior desk lamp, sophisticated urban loneliness, cinematic 35mm photography 8k'
-    : specs.isKoreanHipHopRnb
-    ? '16:9 aesthetic Korean late night mood, rainy city car window reflections, neon bokeh, moody cinema lighting, 35mm film grain, photorealistic 8k'
-    : 'Cinematic 16:9 movie still, melancholic beautiful scene, soft warm golden hour light through sheer curtain, 35mm film aesthetic, photorealistic, 8k resolution --ar 16:9';
-
-  const backgroundImagePrompt = specs.isShellacVintage
-    ? '16:9 seamless vintage room loop: antique 1940s gramophone with brass horn, gentle spinning record, warm amber fireplace glow, slow cozy dust particles, relaxing vintage aesthetic'
-    : specs.isJapanese
-    ? '16:9 seamless loop: Tokyo midnight city lights through raindrop glass window, slow ambient reflections, calm urban atmosphere'
-    : specs.isKoreanHipHopRnb
-    ? '16:9 seamless loop: late night neon city lights reflecting through car windshield, slow ambient motion, moody aesthetic atmosphere'
-    : '16:9 seamless film loop background: warm vintage cinema aesthetic, slow ambient light rays, soft floating dust particles, emotional cozy atmosphere';
+  const youtube = buildCuratedYoutubePackage(
+    undefined,
+    tracks,
+    theme,
+    lyricConcept || '',
+    tracklistText
+  );
 
   return {
     modelUsed: `${provider.toUpperCase()} - ${model || 'SOP Analyzer'}`,
     result: {
       tracks,
-      youtube: {
-        title: youtubeTitle,
-        description: youtubeDesc,
-        tracklist: tracklistText,
-        hashtags,
-        thumbnailPrompt: 'Cinematic 16:9 movie still, melancholic beautiful film scene, soft warm golden hour light, 35mm film aesthetic, 8k --ar 16:9',
-        backgroundImagePrompt: '16:9 seamless film loop background: warm vintage cinema aesthetic, slow ambient light rays'
-      }
+      youtube
     }
   };
 }

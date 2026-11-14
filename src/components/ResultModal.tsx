@@ -53,9 +53,20 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
       full += `Lyrics\n${t.fullLyrics}\n\n`;
     });
 
+    const titleKo = data.youtube.titleKo || data.youtube.title;
+    const titleEn = data.youtube.titleEn || '';
+    const descKo = data.youtube.descriptionKo || data.youtube.description;
+    const descEn = data.youtube.descriptionEn || '';
+
     full += `\n### 2. 유튜브 업로드 패키지\n\n`;
-    full += `[영상 제목]\n${data.youtube.title}\n\n`;
-    full += `[영상 설명]\n${data.youtube.description}\n\n`;
+    full += `[영상 제목 - 한국어]\n${titleKo}\n\n`;
+    if (titleEn) {
+      full += `[영상 제목 - English]\n${titleEn}\n\n`;
+    }
+    full += `[영상 설명 - 한국어]\n${descKo}\n\n`;
+    if (descEn) {
+      full += `[영상 설명 - English]\n${descEn}\n\n`;
+    }
     full += `[트랙리스트]\n${data.youtube.tracklist}\n\n`;
     full += `[해시태그]\n${data.youtube.hashtags}\n\n`;
     full += `[썸네일 프롬프트]\n${data.youtube.thumbnailPrompt}\n\n`;
@@ -360,152 +371,228 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
           )}
 
           {/* TAB 2: YOUTUBE UPLOAD PACKAGE */}
-          {activeTab === 'youtube' && (
-            <div className="space-y-4">
-              <div className="p-4 bg-rose-50/60 border border-rose-200/70 rounded-2xl flex items-center justify-between">
-                <div>
-                  <h3 className="font-extrabold text-rose-900 text-sm flex items-center gap-2">
-                    <Youtube className="w-5 h-5 text-rose-600" />
-                    유튜브 플레이리스트 업로드 원스톱 패키지
-                  </h3>
-                  <p className="text-xs text-rose-700">
-                    조회수를 이끄는 제목, 상세 설명문, 타임스탬프 트랙리스트, SEO 해시태그 및 AI 이미지 생성 프롬프트
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    const pkgText = `[영상 제목]\n${data.youtube.title}\n\n[영상 설명]\n${data.youtube.description}\n\n[트랙리스트]\n${data.youtube.tracklist}\n\n[해시태그]\n${data.youtube.hashtags}\n\n[썸네일 프롬프트]\n${data.youtube.thumbnailPrompt}\n\n[배경 이미지 프롬프트]\n${data.youtube.backgroundImagePrompt}`;
-                    handleCopy(pkgText, 'youtube_all');
-                  }}
-                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
-                >
-                  {copiedKey === 'youtube_all' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedKey === 'youtube_all' ? '패키지 전체 복사됨' : '유튜브 패키지 일괄 복사'}</span>
-                </button>
-              </div>
+          {activeTab === 'youtube' && (() => {
+            const titleKo = data.youtube.titleKo || data.youtube.title;
+            const titleEn = data.youtube.titleEn || '';
+            const descKo = data.youtube.descriptionKo || data.youtube.description;
+            const descEn = data.youtube.descriptionEn || '';
 
-              {/* 1. Video Title */}
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                    영상 제목 (YouTube Title)
-                  </span>
+            const buildYoutubeAllText = () => {
+              const parts = [
+                `[영상 제목 - 한국어]\n${titleKo}`,
+                titleEn ? `[영상 제목 - English]\n${titleEn}` : '',
+                `[영상 설명 - 한국어]\n${descKo}`,
+                descEn ? `[영상 설명 - English]\n${descEn}` : '',
+                `[트랙리스트]\n${data.youtube.tracklist}`,
+                `[해시태그]\n${data.youtube.hashtags}`,
+                `[썸네일 프롬프트]\n${data.youtube.thumbnailPrompt}`,
+                `[배경 이미지 프롬프트]\n${data.youtube.backgroundImagePrompt}`,
+              ].filter(Boolean);
+              return parts.join('\n\n');
+            };
+
+            return (
+              <div className="space-y-4">
+                <div className="p-4 bg-rose-50/60 border border-rose-200/70 rounded-2xl flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-extrabold text-rose-900 text-sm flex items-center gap-2">
+                      <Youtube className="w-5 h-5 text-rose-600" />
+                      유튜브 플레이리스트 업로드 원스톱 패키지
+                    </h3>
+                    <p className="text-xs text-rose-700">
+                      한국어/영어 듀얼 제목·설명문, 타임스탬프 트랙리스트, SEO 해시태그 5종 및 실사 사진급 2,000자+ AI 이미지 프롬프트
+                    </p>
+                  </div>
                   <button
-                    onClick={() => handleCopy(data.youtube.title, 'yt_title')}
-                    className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
+                    onClick={() => handleCopy(buildYoutubeAllText(), 'youtube_all')}
+                    className="shrink-0 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
                   >
-                    {copiedKey === 'yt_title' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedKey === 'yt_title' ? '복사됨' : '복사'}</span>
+                    {copiedKey === 'youtube_all' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedKey === 'youtube_all' ? '패키지 전체 복사됨' : '유튜브 패키지 일괄 복사'}</span>
                   </button>
                 </div>
-                <div className="font-bold text-slate-900 text-sm sm:text-base bg-slate-50 p-3 rounded-lg border border-slate-100 select-all">
-                  {data.youtube.title}
-                </div>
-              </div>
 
-              {/* 2. Video Description */}
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                    영상 설명 (Description)
-                  </span>
-                  <button
-                    onClick={() => handleCopy(data.youtube.description, 'yt_desc')}
-                    className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
-                  >
-                    {copiedKey === 'yt_desc' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedKey === 'yt_desc' ? '설명 복사됨' : '설명 복사'}</span>
-                  </button>
-                </div>
-                <div className="font-mono text-xs text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-line leading-relaxed max-h-52 overflow-y-auto">
-                  {data.youtube.description}
-                </div>
-              </div>
+                {/* 1. Video Title (Korean & English) */}
+                <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                      영상 제목 (YouTube Title — 한국어 / English)
+                    </span>
+                  </div>
 
-              {/* 3. Tracklist */}
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                    트랙리스트 (Tracklist with Timestamps)
-                  </span>
-                  <button
-                    onClick={() => handleCopy(data.youtube.tracklist, 'yt_tracklist')}
-                    className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
-                  >
-                    {copiedKey === 'yt_tracklist' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedKey === 'yt_tracklist' ? '복사됨' : '복사'}</span>
-                  </button>
-                </div>
-                <div className="font-mono text-xs text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-line">
-                  {data.youtube.tracklist}
-                </div>
-              </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-500">🇰🇷 한국어 버전</span>
+                      <button
+                        onClick={() => handleCopy(titleKo, 'yt_title_ko')}
+                        className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
+                      >
+                        {copiedKey === 'yt_title_ko' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedKey === 'yt_title_ko' ? '한국어 제목 복사됨' : '한국어 제목 복사'}</span>
+                      </button>
+                    </div>
+                    <div className="font-bold text-slate-900 text-sm sm:text-base bg-slate-50 p-3 rounded-lg border border-slate-100 select-all">
+                      {titleKo}
+                    </div>
+                  </div>
 
-              {/* 4. Hashtags */}
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                    해시태그 (Hashtags)
-                  </span>
-                  <button
-                    onClick={() => handleCopy(data.youtube.hashtags, 'yt_hashtags')}
-                    className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
-                  >
-                    {copiedKey === 'yt_hashtags' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedKey === 'yt_hashtags' ? '복사됨' : '복사'}</span>
-                  </button>
+                  {titleEn && (
+                    <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-500">🇺🇸 English Version</span>
+                        <button
+                          onClick={() => handleCopy(titleEn, 'yt_title_en')}
+                          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
+                        >
+                          {copiedKey === 'yt_title_en' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedKey === 'yt_title_en' ? '영문 제목 복사됨' : '영문 제목 복사'}</span>
+                        </button>
+                      </div>
+                      <div className="font-bold text-slate-800 text-sm sm:text-base bg-slate-50 p-3 rounded-lg border border-slate-100 select-all">
+                        {titleEn}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="font-semibold text-blue-700 text-xs bg-slate-50 p-3 rounded-lg border border-slate-100">
-                  {data.youtube.hashtags}
-                </div>
-              </div>
 
-              {/* 5. Thumbnail Prompt & 6. Background Image Prompt */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 2. Video Description (Korean & English) */}
+                <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                      영상 설명 (Description — 한국어 / English)
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-500">🇰🇷 한국어 버전</span>
+                      <button
+                        onClick={() => handleCopy(descKo, 'yt_desc_ko')}
+                        className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
+                      >
+                        {copiedKey === 'yt_desc_ko' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedKey === 'yt_desc_ko' ? '한국어 설명 복사됨' : '한국어 설명 복사'}</span>
+                      </button>
+                    </div>
+                    <div className="font-mono text-xs text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-line leading-relaxed max-h-52 overflow-y-auto select-all">
+                      {descKo}
+                    </div>
+                  </div>
+
+                  {descEn && (
+                    <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-500">🇺🇸 English Version</span>
+                        <button
+                          onClick={() => handleCopy(descEn, 'yt_desc_en')}
+                          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
+                        >
+                          {copiedKey === 'yt_desc_en' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedKey === 'yt_desc_en' ? '영문 설명 복사됨' : '영문 설명 복사'}</span>
+                        </button>
+                      </div>
+                      <div className="font-mono text-xs text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-line leading-relaxed max-h-52 overflow-y-auto select-all">
+                        {descEn}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Tracklist */}
                 <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                      썸네일 프롬프트 (Thumbnail Prompt)
+                      <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                      트랙리스트 (Tracklist with Timestamps)
                     </span>
                     <button
-                      onClick={() => handleCopy(data.youtube.thumbnailPrompt, 'yt_thumb')}
+                      onClick={() => handleCopy(data.youtube.tracklist, 'yt_tracklist')}
                       className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
                     >
-                      {copiedKey === 'yt_thumb' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedKey === 'yt_thumb' ? '복사됨' : '복사'}</span>
+                      {copiedKey === 'yt_tracklist' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedKey === 'yt_tracklist' ? '복사됨' : '복사'}</span>
                     </button>
                   </div>
-                  <div className="font-mono text-[11px] text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-100 leading-relaxed select-all">
-                    {data.youtube.thumbnailPrompt}
+                  <div className="font-mono text-xs text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-line">
+                    {data.youtube.tracklist}
                   </div>
                 </div>
 
+                {/* 4. Hashtags */}
                 <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-                      배경 이미지 프롬프트 (16:9 Loop Visual)
+                      <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                      해시태그 (5 Core SEO Hashtags)
                     </span>
                     <button
-                      onClick={() => handleCopy(data.youtube.backgroundImagePrompt, 'yt_bg')}
+                      onClick={() => handleCopy(data.youtube.hashtags, 'yt_hashtags')}
                       className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
                     >
-                      {copiedKey === 'yt_bg' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedKey === 'yt_bg' ? '복사됨' : '복사'}</span>
+                      {copiedKey === 'yt_hashtags' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedKey === 'yt_hashtags' ? '복사됨' : '복사'}</span>
                     </button>
                   </div>
-                  <div className="font-mono text-[11px] text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-100 leading-relaxed select-all">
-                    {data.youtube.backgroundImagePrompt}
+                  <div className="font-semibold text-blue-700 text-xs bg-slate-50 p-3 rounded-lg border border-slate-100 select-all">
+                    {data.youtube.hashtags}
+                  </div>
+                </div>
+
+                {/* 5. Thumbnail Prompt & 6. Background Image Prompt */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                        썸네일 프롬프트 (Thumbnail Prompt)
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                          {data.youtube.thumbnailPrompt.length.toLocaleString()}자
+                        </span>
+                        <button
+                          onClick={() => handleCopy(data.youtube.thumbnailPrompt, 'yt_thumb')}
+                          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
+                        >
+                          {copiedKey === 'yt_thumb' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedKey === 'yt_thumb' ? '복사됨' : '복사'}</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="font-mono text-[11px] text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 leading-relaxed max-h-64 overflow-y-auto select-all">
+                      {data.youtube.thumbnailPrompt}
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                        배경 이미지 프롬프트 (16:9 Loop Visual)
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                          {data.youtube.backgroundImagePrompt.length.toLocaleString()}자
+                        </span>
+                        <button
+                          onClick={() => handleCopy(data.youtube.backgroundImagePrompt, 'yt_bg')}
+                          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
+                        >
+                          {copiedKey === 'yt_bg' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedKey === 'yt_bg' ? '복사됨' : '복사'}</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="font-mono text-[11px] text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 leading-relaxed max-h-64 overflow-y-auto select-all">
+                      {data.youtube.backgroundImagePrompt}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* TAB 3: ALL IN ONE */}
           {activeTab === 'all' && (

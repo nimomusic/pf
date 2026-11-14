@@ -41,7 +41,11 @@ export interface TrackItem {
 
 export interface YoutubePackage {
   title: string;
+  titleKo?: string;
+  titleEn?: string;
   description: string;
+  descriptionKo?: string;
+  descriptionEn?: string;
   tracklist: string;
   hashtags: string;
   thumbnailPrompt: string;
