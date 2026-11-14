@@ -1,7 +1,33 @@
-import React, { useState } from 'react';
-import { X, Plus, Trash2, Edit3, Check, RefreshCw, FolderKanban, Sparkles, FileText, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  X,
+  Plus,
+  Trash2,
+  Edit3,
+  Check,
+  RefreshCw,
+  FolderKanban,
+  Sparkles,
+  FileText,
+  Cloud,
+  CloudOff,
+  Download,
+  Upload,
+  LogIn,
+  LogOut
+} from 'lucide-react';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth, signInWithGoogleForAdmin, signOutFirebase } from '../firebase';
 import { Theme } from '../types';
-import { createTheme, updateTheme, deleteTheme, resetThemesToDefault } from '../services/api';
+import {
+  createTheme,
+  updateTheme,
+  deleteTheme,
+  resetThemesToDefault,
+  syncThemesToFirestore,
+  fetchThemes,
+  importThemesBulk
+} from '../services/api';
 
 interface ThemeManagerModalProps {
   isOpen: boolean;
@@ -27,9 +53,116 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
   const [formCategory, setFormCategory] = useState('');
   const [formSop, setFormSop] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [cloudUser, setCloudUser] = useState<User | null>(auth.currentUser);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setCloudUser(user);
+    });
+    return () => unsub();
+  }, []);
 
   if (!isOpen) return null;
+
+  const formatErrorForUi = (err: any, fallback: string) => {
+    const raw = err?.message || '';
+    if (raw.includes('Missing or insufficient permissions') || raw.includes('PERMISSION_DENIED')) {
+      return '클라우드 DB 쓰기 권한이 없습니다. 관리자 Google 계정으로 로그인했는지 확인해 주세요.';
+    }
+    return raw || fallback;
+  };
+
+  const handleGoogleCloudConnect = async () => {
+    setIsSyncing(true);
+    setErrorMsg(null);
+    setSyncNotice(null);
+    try {
+      const cred = await signInWithGoogleForAdmin();
+      const res = await syncThemesToFirestore(themes);
+      const refreshed = await fetchThemes();
+      onThemesUpdated(refreshed);
+      if (refreshed.length > 0 && !refreshed.some((t) => t.id === currentThemeId)) {
+        onSelectTheme(refreshed[0]);
+      } else {
+        const updatedCur = refreshed.find((t) => t.id === currentThemeId);
+        if (updatedCur) onSelectTheme(updatedCur);
+      }
+      setSyncNotice(
+        `${cred.user.email} 계정으로 클라우드 DB가 연결되었습니다. (${res.syncedCount}개 항목 동기화 완료)`
+      );
+    } catch (err: any) {
+      setErrorMsg(formatErrorForUi(err, 'Google 클라우드 로그인에 실패했습니다.'));
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    setErrorMsg(null);
+    setSyncNotice(null);
+    try {
+      const res = await syncThemesToFirestore(themes);
+      const refreshed = await fetchThemes();
+      onThemesUpdated(refreshed);
+      const updatedCur = refreshed.find((t) => t.id === currentThemeId);
+      if (updatedCur) onSelectTheme(updatedCur);
+      setSyncNotice(`클라우드 DB 동기화 완료 (${res.syncedCount}건 반영, 총 ${refreshed.length}개 테마)`);
+    } catch (err: any) {
+      setErrorMsg(formatErrorForUi(err, '클라우드 동기화 중 오류가 발생했습니다.'));
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleGoogleCloudDisconnect = async () => {
+    try {
+      await signOutFirebase();
+      setSyncNotice('Google 클라우드 연결이 해제되었습니다.');
+    } catch (err: any) {
+      setErrorMsg(err?.message || '로그아웃 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleExportJson = () => {
+    const blob = new Blob([JSON.stringify(themes, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `plymaster-themes-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportJson = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsSyncing(true);
+    setErrorMsg(null);
+    setSyncNotice(null);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!Array.isArray(parsed)) {
+        throw new Error('올바른 테마 JSON 배열 형식이 아닙니다.');
+      }
+      const updated = await importThemesBulk(parsed);
+      onThemesUpdated(updated);
+      if (updated.length > 0) {
+        onSelectTheme(updated[0]);
+      }
+      setSyncNotice(`JSON 백업에서 ${parsed.length}개 테마를 복원했습니다.`);
+    } catch (err: any) {
+      setErrorMsg(formatErrorForUi(err, '백업 파일 가져오기에 실패했습니다.'));
+    } finally {
+      setIsSyncing(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
 
   const handleStartAdd = () => {
     setIsEditing(true);
@@ -78,7 +211,6 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
 
     try {
       if (editingId) {
-        // Update existing theme
         const updated = await updateTheme(editingId, {
           name: formName,
           category: formCategory,
@@ -90,7 +222,6 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
         setIsEditing(false);
         onClose();
       } else {
-        // Create new theme
         const created = await createTheme({
           id: formId,
           name: formName,
@@ -104,7 +235,7 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
         onClose();
       }
     } catch (err: any) {
-      setErrorMsg(err.message || '저장 중 오류가 발생했습니다.');
+      setErrorMsg(formatErrorForUi(err, '저장 중 오류가 발생했습니다.'));
     } finally {
       setIsSaving(false);
     }
@@ -112,6 +243,7 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`'${name}' 테마를 삭제하시겠습니까?`)) return;
+    setErrorMsg(null);
     try {
       await deleteTheme(id);
       const remaining = themes.filter((t) => t.id !== id);
@@ -120,18 +252,19 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
         onSelectTheme(remaining[0]);
       }
     } catch (err: any) {
-      alert(err.message || '삭제에 실패했습니다.');
+      setErrorMsg(formatErrorForUi(err, '삭제에 실패했습니다.'));
     }
   };
 
   const handleClearAllThemes = async () => {
     if (!confirm('등록된 모든 테마를 초기화(전체 삭제)하시겠습니까?')) return;
+    setErrorMsg(null);
     try {
       const restored = await resetThemesToDefault();
       onThemesUpdated(restored);
       onSelectTheme(null as any);
     } catch (err: any) {
-      alert('초기화 실패: ' + err.message);
+      setErrorMsg(formatErrorForUi(err, '초기화에 실패했습니다.'));
     }
   };
 
@@ -147,7 +280,7 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
             <div>
               <h2 className="text-lg font-bold text-slate-800">테마 관리자 (Theme Manager)</h2>
               <p className="text-xs text-slate-500">
-                개발자가 직접 테마 아이디, 이름, SOP내용을 등록 및 관리하며 데이터베이스에 영구 저장됩니다
+                테마 아이디, 이름, SOP 내용을 등록·수정하며 클라우드 데이터베이스(Firestore)에 영구 저장됩니다
               </p>
             </div>
           </div>
@@ -159,8 +292,99 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
           </button>
         </div>
 
+        {/* Cloud DB Connection & Backup Status Bar */}
+        <div className="px-6 py-2.5 border-b border-slate-100 bg-slate-50/70 flex flex-wrap items-center justify-between gap-2 text-xs">
+          {cloudUser ? (
+            <div className="flex items-center gap-2 text-emerald-700">
+              <Cloud className="w-4 h-4 shrink-0" />
+              <span className="font-semibold">
+                클라우드 영구 저장 연결됨 ({cloudUser.email})
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-amber-700">
+              <CloudOff className="w-4 h-4 shrink-0" />
+              <span className="font-medium">
+                클라우드 DB 미연결 (현재 브라우저 저장소에만 임시 보관됨)
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {cloudUser ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleManualSync}
+                  disabled={isSyncing}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold cursor-pointer disabled:opacity-60"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? '동기화 중...' : '클라우드 동기화'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGoogleCloudDisconnect}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 cursor-pointer"
+                  title="Google 클라우드 연결 해제"
+                >
+                  <LogOut className="w-3 h-3" />
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={handleGoogleCloudConnect}
+                disabled={isSyncing}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-xs cursor-pointer disabled:opacity-60"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>{isSyncing ? '연결 중...' : 'Google 로그인으로 클라우드 영구 저장 연동'}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleExportJson}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-medium cursor-pointer"
+              title="테마 목록 JSON 백업 다운로드"
+            >
+              <Download className="w-3 h-3" />
+              <span>백업</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => importInputRef.current?.click()}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-medium cursor-pointer"
+              title="백업된 JSON 파일에서 복원"
+            >
+              <Upload className="w-3 h-3" />
+              <span>복원</span>
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={handleImportJson}
+              className="hidden"
+            />
+          </div>
+        </div>
+
         {/* Content area */}
         <div className="p-6 overflow-y-auto flex-1">
+          {syncNotice && (
+            <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl font-medium">
+              {syncNotice}
+            </div>
+          )}
+
+          {errorMsg && !isEditing && (
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium">
+              {errorMsg}
+            </div>
+          )}
+
           {isEditing ? (
             /* Theme Add / Edit Form */
             <form onSubmit={handleSaveForm} className="space-y-4">
@@ -197,7 +421,7 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
                     placeholder="예: THEME_XMAS_01"
                     className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
                   />
-                  <p className="text-[10px] text-slate-400 mt-0.5">시스템 내부 고유 식별자</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">영문/숫자/언더스코어(_) 고유 식별자</p>
                 </div>
 
                 <div>
@@ -389,7 +613,7 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
 
         {/* Footer */}
         <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
-          <span>* 등록된 테마는 서버 DB(themes.json)에 안전하게 영구 보관됩니다.</span>
+          <span>* 등록·수정된 테마는 Firebase Firestore 클라우드 DB에 영구 보관됩니다.</span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold cursor-pointer"

@@ -24,6 +24,8 @@ import { ThemeManagerModal } from './components/ThemeManagerModal';
 import { ResultModal } from './components/ResultModal';
 import { ExpiredPaymentModal } from './components/ExpiredPaymentModal';
 import { getTranslation } from './i18n/translations';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './firebase';
 import { Theme, VocalType, ProviderType, PlaylistResult, StepId } from './types';
 import { fetchThemes, generatePlaylist, verifyLicenseKey } from './services/api';
 import { PROVIDER_AUTO_MODELS, PROVIDER_LABELS } from './constants/models';
@@ -121,22 +123,37 @@ export default function App() {
     }
   }, []);
 
-  // Fetch Themes on load
+  // Fetch Themes on load & re-sync when Firebase Auth state settles
   useEffect(() => {
+    let cancelled = false;
     const loadThemes = async () => {
       try {
         const loaded = await fetchThemes();
+        if (cancelled) return;
         setThemes(loaded);
-        if (loaded.length > 0) {
-          setSelectedTheme(loaded[0]);
-        } else {
-          setSelectedTheme(null);
-        }
+        setSelectedTheme((prev) => {
+          if (prev) {
+            const refreshedMatch = loaded.find((t) => t.id === prev.id);
+            if (refreshedMatch) return refreshedMatch;
+          }
+          return loaded.length > 0 ? loaded[0] : null;
+        });
       } catch (err) {
         console.error('Failed to load themes:', err);
       }
     };
     loadThemes();
+
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        loadThemes();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, []);
 
   // Close dropdown on outside click

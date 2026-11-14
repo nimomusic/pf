@@ -1,0 +1,81 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == 'nimomusicceo@gmail.com' && request.auth.token.email_verified == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidTheme(data) {
+      return data.keys().hasAll(['id', 'name', 'category', 'sop', 'isDefault', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'name', 'category', 'sop', 'isDefault', 'createdAt', 'updatedAt'])
+        && data.id is string
+        && isValidId(data.id)
+        && data.name is string
+        && data.name.size() >= 1
+        && data.name.size() <= 200
+        && data.category is string
+        && data.category.size() <= 100
+        && data.sop is string
+        && data.sop.size() >= 1
+        && data.sop.size() <= 100000
+        && data.isDefault is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /themes/{themeId} {
+      allow get: if isValidId(themeId);
+      allow list: if resource.data.isDefault in [true, false];
+
+      allow create: if isAdmin()
+        && isValidId(themeId)
+        && isValidTheme(incoming())
+        && incoming().id == themeId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isAdmin()
+        && isValidId(themeId)
+        && isValidTheme(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'category', 'sop', 'isDefault', 'updatedAt']);
+
+      allow delete: if isAdmin() && isValidId(themeId);
+    }
+
+    match /admins/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow list, create, update, delete: if false;
+    }
+
+    match /test/connection {
+      allow get: if true;
+    }
+  }
+}

@@ -1,6 +1,54 @@
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  getDocsFromServer,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where
+} from 'firebase/firestore';
+import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { Theme, PlaylistResult, VocalType, ProviderType } from '../types';
 
 const THEMES_STORAGE_KEY = 'plymaster_custom_themes';
+const DELETED_THEMES_STORAGE_KEY = 'plymaster_deleted_theme_ids';
+const THEMES_CLEARED_KEY = 'plymaster_themes_cleared';
+const THEMES_COLLECTION = 'themes';
+
+function sanitizeThemeId(rawId?: string): string {
+  const cleaned = (rawId || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_\-]/g, '_')
+    .slice(0, 128);
+  return cleaned || `THEME_${Date.now().toString().slice(-6)}`;
+}
+
+function sanitizeThemeFields(themeData: {
+  id?: string;
+  name?: string;
+  category?: string;
+  sop?: string;
+  isDefault?: boolean;
+}) {
+  const id = sanitizeThemeId(themeData.id);
+  const name = (themeData.name || '무제 테마').trim().slice(0, 200) || '무제 테마';
+  const category = (themeData.category ?? '일반').trim().slice(0, 100);
+  const sop = (themeData.sop || '').trim().slice(0, 100000);
+  const isDefault = Boolean(themeData.isDefault);
+  return { id, name, category, sop, isDefault };
+}
+
+function getThemeTimestampMs(theme: Partial<Theme> | undefined): number {
+  if (!theme) return 0;
+  const raw = theme.updatedAt || theme.createdAt;
+  if (!raw) return 0;
+  const ms = Date.parse(raw);
+  return Number.isNaN(ms) ? 0 : ms;
+}
 
 function getLocalThemes(): Theme[] {
   try {
@@ -23,40 +71,317 @@ function saveLocalThemes(themes: Theme[]): void {
   }
 }
 
+function getDeletedThemeIds(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(DELETED_THEMES_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return {};
+}
+
+function markThemeDeletedLocally(id: string): void {
+  try {
+    const map = getDeletedThemeIds();
+    map[id] = Date.now();
+    localStorage.setItem(DELETED_THEMES_STORAGE_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+function unmarkThemeDeletedLocally(id: string): void {
+  try {
+    const map = getDeletedThemeIds();
+    if (id in map) {
+      delete map[id];
+      localStorage.setItem(DELETED_THEMES_STORAGE_KEY, JSON.stringify(map));
+    }
+    localStorage.removeItem(THEMES_CLEARED_KEY);
+  } catch {}
+}
+
+function mapFirestoreDocToTheme(docData: Record<string, any>, docId: string): Theme {
+  const createdIso =
+    typeof docData.createdAt?.toDate === 'function'
+      ? docData.createdAt.toDate().toISOString()
+      : typeof docData.createdAt === 'string'
+      ? docData.createdAt
+      : new Date().toISOString();
+  const updatedIso =
+    typeof docData.updatedAt?.toDate === 'function'
+      ? docData.updatedAt.toDate().toISOString()
+      : typeof docData.updatedAt === 'string'
+      ? docData.updatedAt
+      : createdIso;
+
+  return {
+    id: String(docData.id || docId),
+    name: String(docData.name || ''),
+    category: String(docData.category || '일반'),
+    sop: String(docData.sop || ''),
+    isDefault: Boolean(docData.isDefault),
+    createdAt: createdIso,
+    updatedAt: updatedIso,
+  };
+}
+
+function mergeThemeLists(
+  primary: Theme[],
+  secondary: Theme[],
+  deletedMap: Record<string, number>
+): Theme[] {
+  const byId = new Map<string, Theme>();
+  const order: string[] = [];
+
+  const addOrMerge = (t: Theme, preferIncomingOnTie: boolean) => {
+    if (!t || !t.id) return;
+    const deletedAt = deletedMap[t.id] || 0;
+    const tMs = getThemeTimestampMs(t);
+    if (deletedAt > 0 && tMs <= deletedAt) {
+      return;
+    }
+
+    const existing = byId.get(t.id);
+    if (!existing) {
+      byId.set(t.id, t);
+      order.push(t.id);
+      return;
+    }
+
+    const existingMs = getThemeTimestampMs(existing);
+    if (tMs > existingMs || (tMs === existingMs && preferIncomingOnTie)) {
+      byId.set(t.id, { ...existing, ...t });
+    }
+  };
+
+  for (const t of primary) addOrMerge(t, true);
+  for (const t of secondary) addOrMerge(t, false);
+
+  const merged = order.map((id) => byId.get(id)!).filter(Boolean);
+  // Keep user-created / more recently modified themes at top, preserving relative order on ties
+  return merged.sort((a, b) => {
+    if (Boolean(a.isDefault) !== Boolean(b.isDefault)) {
+      return a.isDefault ? 1 : -1;
+    }
+    return getThemeTimestampMs(b) - getThemeTimestampMs(a);
+  });
+}
+
+async function fetchFirestoreThemes(): Promise<Theme[] | null> {
+  try {
+    const q = query(
+      collection(db, THEMES_COLLECTION),
+      where('isDefault', 'in', [true, false])
+    );
+    let snap;
+    try {
+      snap = await getDocsFromServer(q);
+    } catch {
+      snap = await getDocs(q);
+    }
+    return snap.docs.map((d) => mapFirestoreDocToTheme(d.data(), d.id));
+  } catch (error: any) {
+    const msg = error?.message || '';
+    if (msg.includes('permission') || msg.includes('Missing or insufficient permissions')) {
+      console.warn('Firestore themes read permission notice:', msg);
+    } else {
+      console.warn('Firestore fetchThemes unavailable, using merged fallback:', msg);
+    }
+    return null;
+  }
+}
+
+async function upsertThemeInFirestore(theme: {
+  id: string;
+  name: string;
+  category: string;
+  sop: string;
+  isDefault: boolean;
+}): Promise<boolean> {
+  if (!auth.currentUser) return false;
+  const clean = sanitizeThemeFields(theme);
+  const docPath = `${THEMES_COLLECTION}/${clean.id}`;
+  const ref = doc(db, THEMES_COLLECTION, clean.id);
+
+  try {
+    const existingSnap = await getDoc(ref);
+    if (existingSnap.exists()) {
+      await updateDoc(ref, {
+        name: clean.name,
+        category: clean.category,
+        sop: clean.sop,
+        isDefault: clean.isDefault,
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await setDoc(ref, {
+        id: clean.id,
+        name: clean.name,
+        category: clean.category,
+        sop: clean.sop,
+        isDefault: clean.isDefault,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+    return true;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, docPath);
+  }
+}
+
+async function deleteThemeInFirestore(id: string): Promise<boolean> {
+  if (!auth.currentUser) return false;
+  const safeId = sanitizeThemeId(id);
+  const docPath = `${THEMES_COLLECTION}/${safeId}`;
+  try {
+    await deleteDoc(doc(db, THEMES_COLLECTION, safeId));
+    return true;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, docPath);
+  }
+}
+
+export async function syncThemesToFirestore(themesToSync?: Theme[]): Promise<{ syncedCount: number }> {
+  if (!auth.currentUser) {
+    throw new Error('클라우드 동기화를 위해 먼저 Google 계정으로 로그인해 주세요.');
+  }
+
+  const deletedMap = getDeletedThemeIds();
+  const cloudThemes = (await fetchFirestoreThemes()) || [];
+  const cloudById = new Map(cloudThemes.map((t) => [t.id, t]));
+
+  const sourceList = themesToSync || getLocalThemes();
+  let syncedCount = 0;
+
+  // Upload any theme that is missing in Firestore or newer locally
+  for (const theme of sourceList) {
+    const clean = sanitizeThemeFields(theme);
+    const cloudMatch = cloudById.get(clean.id);
+    const localMs = getThemeTimestampMs(theme);
+    const cloudMs = getThemeTimestampMs(cloudMatch);
+
+    if (
+      !cloudMatch ||
+      localMs > cloudMs ||
+      cloudMatch.name !== clean.name ||
+      cloudMatch.category !== clean.category ||
+      cloudMatch.sop !== clean.sop
+    ) {
+      await upsertThemeInFirestore(clean);
+      syncedCount++;
+    }
+  }
+
+  // Propagate any local deletions made while offline/unauthenticated
+  for (const [delId, delTime] of Object.entries(deletedMap)) {
+    const cloudMatch = cloudById.get(delId);
+    if (cloudMatch && getThemeTimestampMs(cloudMatch) <= delTime) {
+      await deleteThemeInFirestore(delId);
+      syncedCount++;
+    }
+  }
+
+  return { syncedCount };
+}
+
 export async function fetchThemes(): Promise<Theme[]> {
+  const localThemes = getLocalThemes();
+  const deletedMap = getDeletedThemeIds();
+  const isLocallyCleared = localStorage.getItem(THEMES_CLEARED_KEY) === 'true';
+
+  // 1. Fetch from Firestore cloud database (authoritative persistent store)
+  const cloudThemes = await fetchFirestoreThemes();
+
+  // 2. Fetch server seed/runtime list as fallback or initial seed source
+  let serverThemes: Theme[] = [];
   try {
     const res = await fetch('/api/themes');
     if (res.ok) {
       const text = await res.text();
-      try {
-        const data = JSON.parse(text);
-        if (data && Array.isArray(data.themes)) {
-          saveLocalThemes(data.themes);
-          return data.themes;
-        }
-      } catch {}
+      const data = JSON.parse(text);
+      if (data && Array.isArray(data.themes)) {
+        serverThemes = data.themes;
+      }
     }
   } catch (err) {
-    console.warn('Backend fetchThemes failed, falling back to local storage cache:', err);
+    console.warn('Backend fetchThemes failed, using cloud/local cache:', err);
   }
-  return getLocalThemes();
+
+  let finalThemes: Theme[] = [];
+
+  if (cloudThemes && cloudThemes.length > 0) {
+    // Cloud DB already populated: merge Cloud (authoritative) + any newer/unsynced local edits,
+    // NEVER letting stale serverThemes overwrite newer cloud or local themes!
+    finalThemes = mergeThemeLists(cloudThemes, localThemes, deletedMap);
+
+    // If signed in and local has unsynced newer themes, push them to Firestore automatically
+    if (auth.currentUser && localThemes.length > 0) {
+      syncThemesToFirestore(finalThemes).catch((e) =>
+        console.warn('Background Firestore sync notice:', e)
+      );
+    }
+  } else if (isLocallyCleared && localThemes.length === 0) {
+    finalThemes = [];
+  } else {
+    // Cloud DB not yet seeded (or offline): non-destructive merge preferring newer local edits over server seed!
+    finalThemes = mergeThemeLists(localThemes, serverThemes, deletedMap);
+
+    // Re-hydrate ephemeral server with any local-only/local-newer themes
+    if (localThemes.length > 0) {
+      const serverById = new Map(serverThemes.map((t) => [t.id, t]));
+      for (const lt of localThemes) {
+        const st = serverById.get(lt.id);
+        if (!st || getThemeTimestampMs(lt) > getThemeTimestampMs(st)) {
+          fetch('/api/themes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(lt),
+          }).catch(() => {});
+        }
+      }
+    }
+
+    // Seed Firestore automatically if admin is already signed in
+    if (auth.currentUser && finalThemes.length > 0 && cloudThemes && cloudThemes.length === 0) {
+      syncThemesToFirestore(finalThemes).catch((e) =>
+        console.warn('Initial Firestore seed notice:', e)
+      );
+    }
+  }
+
+  saveLocalThemes(finalThemes);
+  return finalThemes;
 }
 
 export async function createTheme(themeData: { id?: string; name: string; category?: string; sop: string }): Promise<Theme> {
   const localThemes = getLocalThemes();
-  const themeId = themeData.id && themeData.id.trim() ? themeData.id.trim() : `THEME_${Date.now().toString().slice(-6)}`;
-  
+  const clean = sanitizeThemeFields({
+    id: themeData.id || `THEME_${Date.now().toString().slice(-6)}`,
+    name: themeData.name,
+    category: themeData.category || '일반',
+    sop: themeData.sop,
+    isDefault: false,
+  });
+
+  const nowIso = new Date().toISOString();
   const newTheme: Theme = {
-    id: themeId,
-    name: themeData.name.trim(),
-    category: (themeData.category || '일반').trim(),
-    sop: themeData.sop.trim(),
-    createdAt: new Date().toISOString(),
-    isDefault: false
+    id: clean.id,
+    name: clean.name,
+    category: clean.category,
+    sop: clean.sop,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    isDefault: false,
   };
 
-  // 1. Immediately update client-side localStorage
-  const existingIdx = localThemes.findIndex((t) => t.id === themeId);
+  unmarkThemeDeletedLocally(clean.id);
+
+  // 1. Update client-side localStorage cache immediately
+  const existingIdx = localThemes.findIndex((t) => t.id === clean.id);
   let updatedList: Theme[];
   if (existingIdx >= 0) {
     updatedList = [...localThemes];
@@ -66,77 +391,86 @@ export async function createTheme(themeData: { id?: string; name: string; catego
   }
   saveLocalThemes(updatedList);
 
-  // 2. Safely sync to backend /api/themes in background without failing on error
+  // 2. Persist to Firebase Firestore when signed in as Admin
+  if (auth.currentUser) {
+    await upsertThemeInFirestore(clean);
+  }
+
+  // 3. Sync to backend /api/themes for server-side consistency
   try {
     const res = await fetch('/api/themes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(themeData)
+      body: JSON.stringify(newTheme),
     });
     if (res.ok) {
-      const text = await res.text();
-      try {
-        const data = JSON.parse(text);
-        if (data && data.success && data.theme) {
-          return data.theme;
-        }
-      } catch {
-        // Server returned non-JSON, but local save succeeded
+      const data = await res.json();
+      if (data && data.success && data.theme) {
+        return { ...newTheme, ...data.theme };
       }
     }
   } catch (err) {
-    console.warn('Backend createTheme sync failed (persisted locally):', err);
+    console.warn('Backend createTheme sync failed (persisted in cloud/local):', err);
   }
 
   return newTheme;
 }
 
 export async function updateTheme(id: string, themeData: Partial<Theme>): Promise<Theme> {
+  const safeId = sanitizeThemeId(id);
   const localThemes = getLocalThemes();
-  const existingIdx = localThemes.findIndex((t) => t.id === id);
-  let targetTheme: Theme;
+  const existingIdx = localThemes.findIndex((t) => t.id === safeId || t.id === id);
+  const base = existingIdx >= 0 ? localThemes[existingIdx] : undefined;
+  const nowIso = new Date().toISOString();
+
+  const clean = sanitizeThemeFields({
+    id: safeId,
+    name: themeData.name ?? base?.name ?? '무제 테마',
+    category: themeData.category ?? base?.category ?? '일반',
+    sop: themeData.sop ?? base?.sop ?? '',
+    isDefault: themeData.isDefault ?? base?.isDefault ?? false,
+  });
+
+  const targetTheme: Theme = {
+    ...(base || {}),
+    id: clean.id,
+    name: clean.name,
+    category: clean.category,
+    sop: clean.sop,
+    isDefault: clean.isDefault,
+    createdAt: base?.createdAt || nowIso,
+    updatedAt: nowIso,
+  };
+
+  unmarkThemeDeletedLocally(clean.id);
 
   if (existingIdx >= 0) {
-    targetTheme = {
-      ...localThemes[existingIdx],
-      ...themeData,
-      id,
-      updatedAt: new Date().toISOString()
-    };
     const updatedList = [...localThemes];
     updatedList[existingIdx] = targetTheme;
     saveLocalThemes(updatedList);
   } else {
-    targetTheme = {
-      id,
-      name: themeData.name || '무제 테마',
-      category: themeData.category || '일반',
-      sop: themeData.sop || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
     saveLocalThemes([targetTheme, ...localThemes]);
+  }
+
+  // Persist update to Firebase Firestore when signed in as Admin
+  if (auth.currentUser) {
+    await upsertThemeInFirestore(clean);
   }
 
   try {
     const res = await fetch(`/api/themes/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(themeData)
+      body: JSON.stringify(targetTheme),
     });
     if (res.ok) {
-      const text = await res.text();
-      try {
-        const data = JSON.parse(text);
-        if (data && data.success && data.theme) {
-          return data.theme;
-        }
-      } catch {
-        // Non-JSON response, keep local update
+      const data = await res.json();
+      if (data && data.success && data.theme) {
+        return { ...targetTheme, ...data.theme };
       }
     }
   } catch (err) {
-    console.warn('Backend updateTheme sync failed (persisted locally):', err);
+    console.warn('Backend updateTheme sync failed (persisted in cloud/local):', err);
   }
 
   return targetTheme;
@@ -146,27 +480,79 @@ export async function deleteTheme(id: string): Promise<void> {
   const localThemes = getLocalThemes();
   const remaining = localThemes.filter((t) => t.id !== id);
   saveLocalThemes(remaining);
+  markThemeDeletedLocally(id);
+
+  if (auth.currentUser) {
+    await deleteThemeInFirestore(id);
+  }
 
   try {
     await fetch(`/api/themes/${encodeURIComponent(id)}`, {
-      method: 'DELETE'
+      method: 'DELETE',
     });
   } catch (err) {
-    console.warn('Backend deleteTheme sync failed (deleted locally):', err);
+    console.warn('Backend deleteTheme sync failed (deleted in cloud/local):', err);
   }
 }
 
 export async function resetThemesToDefault(): Promise<Theme[]> {
+  const existing = getLocalThemes();
+  for (const t of existing) {
+    markThemeDeletedLocally(t.id);
+    if (auth.currentUser) {
+      await deleteThemeInFirestore(t.id);
+    }
+  }
   saveLocalThemes([]);
+  try {
+    localStorage.setItem(THEMES_CLEARED_KEY, 'true');
+  } catch {}
 
   try {
     await fetch('/api/themes/reset', {
-      method: 'POST'
+      method: 'POST',
     });
   } catch (err) {
-    console.warn('Backend resetThemes sync failed (cleared locally):', err);
+    console.warn('Backend resetThemes sync failed (cleared in cloud/local):', err);
   }
   return [];
+}
+
+export async function importThemesBulk(importedThemes: Array<{ id?: string; name: string; category?: string; sop: string; isDefault?: boolean }>): Promise<Theme[]> {
+  const current = getLocalThemes();
+  const nowIso = new Date().toISOString();
+  const cleanedIncoming: Theme[] = importedThemes
+    .filter((t) => t && t.name && t.sop)
+    .map((t) => {
+      const clean = sanitizeThemeFields(t);
+      unmarkThemeDeletedLocally(clean.id);
+      return {
+        id: clean.id,
+        name: clean.name,
+        category: clean.category,
+        sop: clean.sop,
+        isDefault: clean.isDefault,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+    });
+
+  const merged = mergeThemeLists(cleanedIncoming, current, getDeletedThemeIds());
+  saveLocalThemes(merged);
+
+  if (auth.currentUser) {
+    await syncThemesToFirestore(merged);
+  }
+
+  for (const t of cleanedIncoming) {
+    fetch('/api/themes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(t),
+    }).catch(() => {});
+  }
+
+  return merged;
 }
 
 const DEFAULT_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzgvoleJIzFeZvFaQ77RjFH7mmg_9eQPgjqRlWK9IkEx49J9glVl0syuTlKx-FLe33yHg/exec';

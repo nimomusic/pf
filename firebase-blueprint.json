@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "Theme": {
+      "title": "Theme",
+      "description": "A playlist theme containing SOP instructions, category metadata, and server timestamps.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the theme.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the theme.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "category": {
+          "type": "string",
+          "description": "Category tag for the theme.",
+          "maxLength": 100
+        },
+        "sop": {
+          "type": "string",
+          "description": "Standard Operating Procedure instructions for AI generation.",
+          "minLength": 1,
+          "maxLength": 100000
+        },
+        "isDefault": {
+          "type": "boolean",
+          "description": "Whether this is a seeded default theme."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the theme was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the theme was last updated."
+        }
+      },
+      "required": ["id", "name", "category", "sop", "isDefault", "createdAt", "updatedAt"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized admin record granting theme write permissions.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the administrator.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Administrator email address.",
+          "maxLength": 320
+        }
+      },
+      "required": ["uid", "email"]
+    }
+  },
+  "firestore": {
+    "/themes/{themeId}": {
+      "schema": { "$ref": "#/entities/Theme" },
+      "description": "Shared catalog of playlist themes and SOP specifications."
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Administrator role registry for theme catalog management."
+    }
+  }
+}

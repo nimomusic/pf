@@ -94,8 +94,9 @@ app.post(['/api/themes', '/themes'], (req: Request, res: Response) => {
       name: name.trim(),
       category: (category || '일반').trim(),
       sop: sop.trim(),
-      createdAt: new Date().toISOString(),
-      isDefault: false
+      createdAt: req.body.createdAt || new Date().toISOString(),
+      updatedAt: req.body.updatedAt || new Date().toISOString(),
+      isDefault: Boolean(req.body.isDefault)
     };
 
     if (existingIndex >= 0) {
@@ -2312,14 +2313,43 @@ async function startServer() {
     app.get('*', (req: Request, res: Response) => {
       res.sendFile(path.resolve('dist', 'index.html'));
     });
-  } else {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[Plymaster Factory] Server running on http://0.0.0.0:${PORT}`);
     });
-    app.use(vite.middlewares);
+    return;
   }
+
+  // Start Vite initialization concurrently so port 3000 binds immediately on startup
+  let viteMiddleware: ((req: any, res: any, next: any) => void) | null = null;
+  const viteReady = import('vite')
+    .then(({ createServer: createViteServer }) =>
+      createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      })
+    )
+    .then((vite) => {
+      viteMiddleware = vite.middlewares;
+      return vite;
+    })
+    .catch((err) => {
+      console.error('[Plymaster Factory] Vite initialization error:', err);
+      throw err;
+    });
+
+  app.use(async (req, res, next) => {
+    try {
+      if (!viteMiddleware) {
+        await viteReady;
+      }
+      if (viteMiddleware) {
+        return viteMiddleware(req, res, next);
+      }
+      return next();
+    } catch (err) {
+      return next(err);
+    }
+  });
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Plymaster Factory] Server running on http://0.0.0.0:${PORT}`);
