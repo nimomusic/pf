@@ -559,35 +559,67 @@ function parseSopSpecs(theme: any) {
   const korCharCount = (rawSop.match(/[\uAC00-\uD7AF]/g) || []).length;
   const jpnCharCount = (rawSop.match(/[\u3040-\u309F\u30A0-\u30FF]/g) || []).length;
 
-  // 1. Japanese J-POP Detection
-  // Check if Japanese lyrics or J-POP is mandated in the SOP
-  const isJapanese = 
-    combined.includes('100% 일본어') ||
-    combined.includes('100% japanese') ||
-    combined.includes('일본어 가사') ||
-    combined.includes('일본어 곡 제목') ||
-    combined.includes('일본어 제목') ||
-    combined.includes('j-pop') ||
-    combined.includes('jpop') ||
-    combined.includes('제이팝') ||
-    combined.includes('city pop') ||
-    combined.includes('시티 팝') ||
-    combined.includes('시티팝') ||
-    combined.includes('alt-pop / electronic r&b') ||
-    combined.includes('electronic r&b j-pop') ||
-    combined.includes('r&b j-pop') ||
-    (combined.includes('일본어') && !combined.includes('한국어 가사')) ||
-    (combined.includes('japanese') && !combined.includes('korean lyrics')) ||
-    jpnCharCount > 10;
+  const titleAndCat = `${theme.name || ''} ${theme.category || ''}`.toLowerCase();
+  const sopLower = rawSop.toLowerCase();
 
-  // 2. Korean Directives (Strictly when NOT Japanese)
-  const hasKoreanDirectives = !isJapanese && (
-    combined.includes('한영 혼용') ||
-    combined.includes('한영혼용') ||
-    combined.includes('kor-eng') ||
-    combined.includes('code-switching') ||
-    combined.includes('한국어') ||
-    combined.includes('국문') ||
+  // Strip negative/exclude clauses when checking explicit language/genre directives
+  const sopWithoutExcludes = sopLower
+    .replace(/exclude\s*:[^\n\r]*/gi, '')
+    .replace(/금지[^\n\r]*/g, '')
+    .replace(/제외[^\n\r]*/g, '');
+
+  // Explicit English lyric/title directive check
+  const hasExplicitEnglishLyrics =
+    /\b(100%\s*english|in\s+100%\s*english|lyrics\s*(?:must\s*be\s*)?(?:written\s*)?in\s*(?:100%\s*)?english|write\s*lyrics\s*(?:naturally\s*)?in\s*english|english\s*lyrics\s*only|sing\s*in\s*english|all\s+lyrics\s+in\s+english|english\s+title)\b/i.test(sopWithoutExcludes) ||
+    sopWithoutExcludes.includes('100% 영문') ||
+    sopWithoutExcludes.includes('영어로만 작성') ||
+    sopWithoutExcludes.includes('영어로 작사') ||
+    sopWithoutExcludes.includes('영어 작사') ||
+    sopWithoutExcludes.includes('영어 가사') ||
+    sopWithoutExcludes.includes('영문 가사') ||
+    sopWithoutExcludes.includes('영어 곡 제목') ||
+    sopWithoutExcludes.includes('영문 제목') ||
+    sopWithoutExcludes.includes('가사는 영어');
+
+  // Explicit Korean lyric/title directive check
+  const hasExplicitKoreanLyrics =
+    sopWithoutExcludes.includes('한영 혼용') ||
+    sopWithoutExcludes.includes('한영혼용') ||
+    sopWithoutExcludes.includes('kor-eng') ||
+    sopWithoutExcludes.includes('code-switching') ||
+    sopWithoutExcludes.includes('한국어 가사') ||
+    sopWithoutExcludes.includes('한국어로 작성') ||
+    sopWithoutExcludes.includes('한국어 곡 제목') ||
+    sopWithoutExcludes.includes('오직 한국어로만') ||
+    sopWithoutExcludes.includes('국문 가사');
+
+  // 1. Strict Japanese J-POP Detection (never trigger on casual "city pop" / exclude references in Groove Pop or Pop themes)
+  const titleForcesJapanese =
+    titleAndCat.includes('j-pop') ||
+    titleAndCat.includes('jpop') ||
+    titleAndCat.includes('제이팝') ||
+    titleAndCat.includes('일본어') ||
+    titleAndCat.includes('japanese');
+
+  const sopForcesJapaneseLyrics =
+    sopWithoutExcludes.includes('100% 일본어') ||
+    sopWithoutExcludes.includes('100% japanese') ||
+    sopWithoutExcludes.includes('일본어 가사') ||
+    sopWithoutExcludes.includes('일본어로 작성') ||
+    sopWithoutExcludes.includes('일본어 곡 제목') ||
+    sopWithoutExcludes.includes('일본어 제목') ||
+    sopWithoutExcludes.includes('japanese lyrics') ||
+    sopWithoutExcludes.includes('lyrics in japanese') ||
+    sopWithoutExcludes.includes('electronic r&b j-pop') ||
+    sopWithoutExcludes.includes('alt-pop / electronic r&b');
+
+  const isJapanese =
+    titleForcesJapanese ||
+    (!hasExplicitEnglishLyrics && !hasExplicitKoreanLyrics && (sopForcesJapaneseLyrics || jpnCharCount > 25));
+
+  // 2. Korean Directives (Strictly when NOT Japanese and NOT explicitly requesting English-only lyrics)
+  const hasKoreanDirectives = !isJapanese && !hasExplicitEnglishLyrics && (
+    hasExplicitKoreanLyrics ||
     combined.includes('한국 힙합') ||
     combined.includes('한국 알앤비') ||
     combined.includes('인스타 감성') ||
@@ -595,7 +627,7 @@ function parseSopSpecs(theme: any) {
     korCharCount > 30
   );
 
-  const isKorEngMixed = !isJapanese && (
+  const isKorEngMixed = !isJapanese && !hasExplicitEnglishLyrics && (
     combined.includes('한영 혼용') ||
     combined.includes('한영혼용') ||
     combined.includes('kor-eng') ||
@@ -603,31 +635,25 @@ function parseSopSpecs(theme: any) {
     (combined.includes('한국어') && (combined.includes('영어') || combined.includes('english')))
   );
 
-  // 3. 100% English Explicit Check (Strictly when NOT Japanese and NOT Korean)
-  const isEnglishExplicit = !isJapanese && !hasKoreanDirectives && (
-    combined.includes('100% english') ||
-    combined.includes('in 100% english') ||
-    combined.includes('all lyrics must be written in 100% english') ||
-    combined.includes('all lyrics must be written in english') ||
-    combined.includes('write lyrics naturally in english') ||
-    combined.includes('100% 영문') ||
-    combined.includes('영어로만 작성') ||
-    combined.includes('written in 100% english')
+  // 3. 100% English Explicit Check
+  const isEnglishExplicit = !isJapanese && !hasExplicitKoreanLyrics && (
+    hasExplicitEnglishLyrics ||
+    (engCharCount > 150 && korCharCount < 30)
   );
 
-  const isEnglishOnly = isEnglishExplicit && !hasKoreanDirectives && !isJapanese;
+  const isEnglishOnly = isEnglishExplicit;
 
-  // Korean Hip-Hop & R&B (Strictly excluded when J-POP!)
-  const isKoreanHipHopRnb = !isJapanese && (
+  // Korean Hip-Hop & R&B (Strictly excluded when J-POP or English-only Pop!)
+  const isKoreanHipHopRnb = !isJapanese && !isEnglishOnly && (
     combined.includes('한국 알앤비') ||
     combined.includes('한국 힙합') ||
     combined.includes('인스타 감성') ||
     combined.includes('느좋') ||
     ((combined.includes('알앤비') || combined.includes('힙합') || combined.includes('hip-hop') || combined.includes('trap')) &&
-     (combined.includes('한영 혼용') || combined.includes('한영혼용') || combined.includes('특수 보컬 질감') || combined.includes('suno 키워드')))
+     (combined.includes('한영 혼용') || combined.includes('한영혼용') || combined.includes('특수 보컬 질감')))
   );
 
-  const targetLang: 'japanese' | 'english' | 'korean' = 
+  const targetLang: 'japanese' | 'english' | 'korean' =
     isJapanese ? 'japanese' :
     isEnglishOnly ? 'english' : 'korean';
 
@@ -650,12 +676,14 @@ function parseSopSpecs(theme: any) {
     combined.includes('1940') ||
     combined.includes('vintage pop');
 
-  const isCinematic = !isJapanese && (
-    combined.includes('film') ||
-    combined.includes('movie') ||
-    combined.includes('cinematic') ||
-    combined.includes('ost') ||
-    combined.includes('soundtrack')
+  const isCinematic = !isJapanese && !isKoreanHipHopRnb && (
+    titleAndCat.includes('ost') ||
+    titleAndCat.includes('movie') ||
+    titleAndCat.includes('cinematic') ||
+    sopWithoutExcludes.includes('film-music') ||
+    sopWithoutExcludes.includes('film soundtrack') ||
+    sopWithoutExcludes.includes('movie ost') ||
+    sopWithoutExcludes.includes('soundtrack')
   );
 
   return { 
@@ -666,6 +694,7 @@ function parseSopSpecs(theme: any) {
     isJapaneseTitle,
     isKorEngMixed, 
     isKoreanHipHopRnb, 
+    hasExplicitKoreanLyrics,
     forbidsIntroOutro, 
     isShellacVintage, 
     isCinematic, 
@@ -678,7 +707,7 @@ function parseSopSpecs(theme: any) {
 // Helper: Ensure track title contains ONLY the target language (no bilingual parentheses or multi-line translations)
 function cleanTitleSingleLanguage(
   title: string, 
-  targetLang: 'japanese' | 'english' | 'korean', 
+  targetLang: 'japanese' | 'english' | 'korean' | 'auto', 
   fallbackTitle = 'Track Title'
 ): string {
   if (!title) return fallbackTitle;
@@ -694,14 +723,20 @@ function cleanTitleSingleLanguage(
     } else if (targetLang === 'english') {
       const engLine = lines.find(l => /[a-zA-Z]/.test(l) && !/[\uAC00-\uD7AF]/.test(l) && !/[\u3040-\u309F\u30A0-\u30FF]/.test(l));
       if (engLine) clean = engLine;
-    } else {
+    } else if (targetLang === 'korean') {
       const korLine = lines.find(l => /[\uAC00-\uD7AF]/.test(l));
       if (korLine) clean = korLine;
+    } else {
+      clean = lines[0];
     }
   }
 
   // Strip leading numbering e.g. "1. ", "1) ", "- "
   clean = clean.replace(/^(?:\d+[\.\)]|[-•*])\s*/, '').trim();
+
+  if (targetLang === 'auto') {
+    return clean || fallbackTitle;
+  }
 
   // If title has parentheses e.g. "画面の向こう (화면 너머)" or "画面の向こう (on the other side)"
   const parenMatch = clean.match(/^([^(]+)\s*\(([^)]+)\)$/);
@@ -1032,11 +1067,11 @@ You MUST strictly follow these 5 field rules:
      * [Outro: ...] (0 sung lines - instrumental fadeout and [End])
    - Embody urban loneliness, quiet devastation, and poignant inner emotions fitting Japanese R&B (like Utada Hikaru, eill, iri, Friday Night Plans).`
       : isPureEnglish
-      ? `[CRITICAL MANDATORY LANGUAGE REQUIREMENT: 100% ENGLISH]
-The SOP explicitly commands 100% English production.
-- Track titles (title) MUST be 100% English only. Never include Korean translations or bilingual parentheses.
-- Style prompts (stylePrompt), section tags, and section guides MUST be 100% English (750 to 950 characters).
-- ALL lyrics in fullLyrics MUST be written in 100% pure English (36 to 50 lines across all sections for a 3-minute song). Not a single Korean word or syllable.`
+      ? `[CRITICAL MANDATORY THEME & LANGUAGE REQUIREMENT: "${theme.name}" (100% ENGLISH)]
+- Active Theme: "${theme.name}" (${theme.category || 'Music'}). Follow ONLY this theme's SOP for genre, BPM, instrumentation, groove, mood, and vocal direction! NEVER bleed in J-POP, Japanese lyrics, Korean R&B trap, or 1940s shellac unless explicitly written in this SOP.
+- Track titles ("title") MUST be 100% natural English only. Never include Korean or Japanese translations or bilingual parentheses.
+- Style prompts ("stylePrompt"), section tags, and section guides MUST be 100% English (750 to 950 characters) reflecting the exact genre, BPM, instruments, and vocal setup (${vocalLabel}) required by "${theme.name}"'s SOP.
+- ALL lyrics in "fullLyrics" MUST be written in 100% pure English (36 to 50 lines across all sections for a 3-minute song).`
       : isKorEng
       ? `[CRITICAL MANDATORY SPECIFICATIONS: KOREAN R&B HIP-HOP (한영 혼용)]
 The user's SOP explicitly specifies Korean R&B / Hip-Hop with Korean-English Code-switching (한영 혼용) for a complete 3-minute commercial playlist track. Follow these 4 strict field rules:
@@ -1083,8 +1118,9 @@ The user's SOP explicitly specifies Korean R&B / Hip-Hop with Korean-English Cod
    - SUNG LYRICS MUST BE KOREAN-ENGLISH CODE-SWITCHING (한영 혼용: approx. 70~80% Korean, 20~30% English)!
    - Write natural Korean conversational lyrics with smooth English rhyme endings, English hook phrases, and trendy ad-libs (Yeah, Right, Uh-huh, Hm-hm).
    - NEVER output 100% English lyrics! Korean MUST be the primary language of the sung lyrics lines!`
-      : `[LANGUAGE & LENGTH GUIDELINES]
-- Track titles and sung lyrics must match the language of the SOP. If the SOP is in Korean, use Korean titles and lyrics.
+      : `[CRITICAL THEME FIDELITY & LANGUAGE GUIDELINES: "${theme.name}"]
+- Active Theme: "${theme.name}" (${theme.category || 'Music'}). Strictly follow the [USER SOP SPECIFICATION] for genre, groove, BPM, instruments, vocal gender/tone (${vocalLabel}), and lyric language. NEVER substitute J-POP, Japanese, or unrelated genre templates unless explicitly written in "${theme.name}"'s SOP!
+- Track titles and sung lyrics must follow the exact language requested in the SOP (if unspecified, match the primary language of the SOP/concept).
 - Style prompts MUST be comprehensive (750-950 characters) and written in 100% English for Suno/Udio.
 - Full lyrics MUST be a complete 3-minute song (at least 36-50 lines across at least 7 structural sections).`;
 
@@ -1129,13 +1165,10 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 - NEVER return only 1 track when ${effectiveTrackCount} > 1, and NEVER skip trackNumber 1!
 
 1. [SOUND IDENTITY & ACOUSTIC CRITERIA]
-- Carefully inspect the SOP's Sound Identity, Acoustic Criteria, Genre, and Production Directives.
-- EVERY TRACK's 'stylePrompt' MUST EXCLUSIVELY EMBED AND REFLECT THE EXACT SOUND CRITERIA OF THE CURRENT SOP:
-  * If Japanese Electronic R&B J-pop / City Pop: electric piano, deep sub bass, minimal electronic drums, soft kick, glassy synth keys, clean guitar fragments, ambient room texture, original Japanese female lead, deep clear tone, intimate low verse, wide emotional chorus.
-  * If Korean R&B Hip-Hop: ambient synth pads, deep 808 bass, lazy trap snare, rolling hi-hats, reverb-heavy electric piano, chosen vocal texture preset keywords.
-  * If Cinematic Movie OST Ballad: felt upright piano intro, soaring orchestra strings, building crescendo, emotional dynamic range.
-  * If 1940s Shellac: 78 RPM record, antique wooden phonograph, surface crackle, warm midrange.
-- CRITICAL ISOLATION RULE: NEVER inherit, copy, or mix in instruments, eras, vintage crackles, or sound textures from previous or other themes! Use ONLY what is requested in the current SOP!
+- Carefully inspect the [USER SOP SPECIFICATION] for "${theme.name}" (${theme.category || 'Music'}) — including its exact Sound Identity, Genre, Tempo/BPM, Vocal Setup (${vocalLabel}), Instrumentation, and Production Directives.
+- EVERY TRACK's 'stylePrompt' MUST EXCLUSIVELY EMBED AND REFLECT THE EXACT SOUND CRITERIA OF "${theme.name}"'S SOP:
+  * Follow the exact genre, groove, instruments, BPM, vocal gender/texture (${vocalLabel}), and mix aesthetic written in [USER SOP SPECIFICATION].
+- CRITICAL ISOLATION RULE: NEVER inherit, copy, or mix in genres, languages, instruments, eras, J-POP/Japanese conventions, vintage crackles, or sound textures from any other theme! Use ONLY what belongs to "${theme.name}"'s SOP!
 
 2. [STYLE PROMPT SPECIFICATIONS (stylePrompt)]
 - Write in English so it can be pasted directly into the Suno / Udio Style Prompt input field.
@@ -1183,11 +1216,11 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 - NEVER output bilingual parentheses like "Title (제목)" or "제목 (Title)".
 
 5. [META INFO (metaInfo)]
-- For each track, output:
-  - vocal: e.g. ${isJapanese ? '"original Japanese female lead, deep clear tone, intimate low verse"' : '"20s female vocal, husky yet silky texture"'}
-  - genre: Genre strictly matching current SOP (e.g. ${isJapanese ? '"Electronic R&B J-pop, Cinematic Alt-pop"' : '"Atmospheric R&B, Chill Trap Hip-Hop"'})
-  - mood: Core emotional role defined in current SOP (e.g. ${isJapanese ? '"Urban loneliness, quietly devastating"' : '"Dreamy & Empty, Late Night Aesthetic"'})
-  - bpm: e.g. ${isJapanese ? '"94 BPM"' : '"82 BPM"'}
+- For each track, output values 100% faithful to "${theme.name}"'s SOP and Vocal Setup (${vocalLabel}):
+  - vocal: ${vocal === 'none' ? '"Instrumental (No vocals)"' : isJapanese ? `"original Japanese ${vocal === 'male' ? 'male' : 'female'} vocal matching SOP"` : isKorEng ? `"${vocal === 'male' ? 'male' : 'female'} vocal age and chosen texture matching SOP"` : `"${vocal === 'female' ? 'Female' : vocal === 'male' ? 'Male' : 'Lead'} vocal matching ${theme.name} SOP & ${vocalLabel}"`} (CRITICAL: strictly honor ${vocalLabel}; NEVER write "original Japanese male/female lead" unless the theme is genuinely J-POP!)
+  - genre: ${isJapanese ? '"Electronic R&B J-pop, Cinematic Alt-pop"' : isKorEng ? '"Atmospheric R&B, Chill Trap Hip-Hop"' : `"Exact genre specified in ${theme.name} SOP"`}
+  - mood: Core emotional role defined in current SOP
+  - bpm: Exact BPM matching current SOP
   - targetLength: e.g. "3:15"
 
 6. [YOUTUBE UPLOAD PACKAGE (youtube)]
@@ -1211,7 +1244,7 @@ CRITICAL: "tracks" MUST contain EXACTLY ${effectiveTrackCount} track objects ("t
   "tracks": [
     {
       "trackNumber": 1,
-      "title": ${isJapanese ? '"純粋な日本語の曲名 (例: 画面の向こう, 夜を泳ぐ, 残響)"' : isPureEnglish ? '"Single language English song title"' : '"한국어 곡 제목 (예: 공허, 새벽 세 시, 어스름)"'},
+      "title": ${isJapanese ? '"純粋な日本語の曲名 (例: 画面の向こう, 夜を泳ぐ, 残響)"' : isPureEnglish ? '"Single language English song title"' : isKorEng ? '"한국어 곡 제목 (예: 공허, 새벽 세 시, 어스름)"' : '"Song title strictly matching the language requested in the SOP"'},
       "metaInfo": {
         "vocal": "Detailed vocal assignment matching SOP (age, gender, chosen texture preset keywords)",
         "genre": "Genre strictly matching current SOP",
@@ -1235,7 +1268,7 @@ CRITICAL: "tracks" MUST contain EXACTLY ${effectiveTrackCount} track objects ("t
   }
 }`;
 
-    const standardSystemInstruction = `You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY RULES: (1) ALWAYS generate the EXACT number of tracks requested in Target Track Count (e.g., if ${effectiveTrackCount} tracks are requested, the "tracks" JSON array MUST contain all ${effectiveTrackCount} distinct tracks numbered 1 through ${effectiveTrackCount}, never just 1 track!). (2) Style prompts MUST be dense, comma-separated musical keywords and sound design tags (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries; DO NOT write narrative sentences like "This track embodies the essence of..."). (3) Tag & Line Break Hygiene: Every section tag MUST use single square brackets [Section: Guide] (NEVER curly braces {}, NEVER nested parentheses [(...)]). Put every tag on its own line followed by \\n, separate sections with \\n\\n, NEVER split single words onto separate lines, NEVER repeat parenthesized guides underneath [Outro: ...] or [Instrumental Interlude: ...], and emit [End] AT MOST ONCE at the very end. (4) Instrumental Sections Hygiene: [Intro: ...], [Outro: ...], [Piano Solo: ...], and [Instrumental Interlude: ...] MUST CONTAIN ZERO SUNG LYRICS! (5) When SOP specifies Japanese / J-POP, track titles MUST be pure Japanese (漢字/ひらがな), style prompts 100% English, section tags in English brackets, and sung lyrics 100% PURE JAPANESE (ZERO Korean). (6) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용, track titles MUST be Korean only, style prompts 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (36-50 lines). (7) Strictly respect tag prohibitions such as omitting [Intro], [Outro], and [End] when forbidden in the SOP. (8) For the YouTube Upload Package ("youtube"), provide BOTH Korean ("titleKo", "descriptionKo") and natural English ("titleEn", "descriptionEn") versions WITHOUT tracklists inside the descriptions, output "tracklist" WITHOUT any (0:00) timestamps, EXACTLY 5 SEO hashtags, and make "thumbnailPrompt" a single unified 16:9 center-focused photorealistic editorial photography prompt of AT LEAST 2,200 characters matching the title mood with STRICTLY ZERO text and NO split-screen.${cleanLyricConcept ? ` (9) MANDATORY LYRIC CONCEPT: ALL tracks, lyrics, and YouTube visuals MUST focus on the user concept: "${cleanLyricConcept}".` : ''} Respond strictly in valid JSON.`;
+    const standardSystemInstruction = `You are an expert AI music playlist producer and Suno prompt engineer for theme "${theme.name}" (${theme.category || 'Music'}). Follow the user SOP with 100% strict fidelity—NEVER mix in J-POP/Japanese or any other theme's genre/language unless explicitly required by this theme's SOP. CRITICAL MANDATORY RULES: (1) ALWAYS generate the EXACT number of tracks requested in Target Track Count (e.g., if ${effectiveTrackCount} tracks are requested, the "tracks" JSON array MUST contain all ${effectiveTrackCount} distinct tracks numbered 1 through ${effectiveTrackCount}, never just 1 track!). (2) Style prompts MUST be dense, comma-separated musical keywords and sound design tags matching "${theme.name}" (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries; DO NOT write narrative sentences like "This track embodies the essence of..."). (3) Tag & Line Break Hygiene: Every section tag MUST use single square brackets [Section: Guide] (NEVER curly braces {}, NEVER nested parentheses [(...)]). Put every tag on its own line followed by \\n, separate sections with \\n\\n, NEVER split single words onto separate lines, NEVER repeat parenthesized guides underneath [Outro: ...] or [Instrumental Interlude: ...], and emit [End] AT MOST ONCE at the very end. (4) Instrumental Sections Hygiene: [Intro: ...], [Outro: ...], [Piano Solo: ...], and [Instrumental Interlude: ...] MUST CONTAIN ZERO SUNG LYRICS! (5) Strictly match the vocal gender/role (${vocalLabel}) and the exact lyric language of "${theme.name}"'s SOP (${isJapanese ? '100% Pure Japanese titles and lyrics, ZERO Korean' : isPureEnglish ? '100% Pure English titles and lyrics' : isKorEng ? 'Korean titles and Korean-English code-switching lyrics' : 'exact language specified in the SOP'}). (6) Strictly respect tag prohibitions such as omitting [Intro], [Outro], and [End] when forbidden in the SOP. (7) For the YouTube Upload Package ("youtube"), provide BOTH Korean ("titleKo", "descriptionKo") and natural English ("titleEn", "descriptionEn") versions WITHOUT tracklists inside the descriptions, output "tracklist" WITHOUT any (0:00) timestamps, EXACTLY 5 SEO hashtags, and make "thumbnailPrompt" a single unified 16:9 center-focused photorealistic editorial photography prompt of AT LEAST 2,200 characters matching the title mood with STRICTLY ZERO text and NO split-screen.${cleanLyricConcept ? ` (8) MANDATORY LYRIC CONCEPT: ALL tracks, lyrics, and YouTube visuals MUST focus on the user concept: "${cleanLyricConcept}".` : ''} Respond strictly in valid JSON.`;
 
     // Shared post-processor: guarantees exact track count (with AI continuation if AI returned fewer),
     // sequential 1..N numbering, clean titles, clean lyrics, and synchronized YouTube tracklist.
@@ -1290,13 +1323,19 @@ Respond ONLY with valid JSON:
         rawTracks = rawTracks.slice(0, effectiveTrackCount);
       }
 
+      const cleanTitleLang: 'japanese' | 'english' | 'korean' | 'auto' =
+        sopSpecs.isJapanese ? 'japanese' :
+        sopSpecs.isEnglishOnly ? 'english' :
+        (sopSpecs.isKorEngMixed || sopSpecs.isKoreanHipHopRnb || sopSpecs.hasExplicitKoreanLyrics) ? 'korean' :
+        'auto';
+
       safeResult.tracks = rawTracks.map((tr: any, idx: number) => ({
         ...tr,
         trackNumber: idx + 1,
         title: cleanTitleSingleLanguage(
           tr?.title,
-          sopSpecs.targetLang,
-          sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : `Track ${idx + 1}`
+          cleanTitleLang,
+          sopSpecs.isJapanese ? '新曲' : cleanTitleLang === 'korean' ? '새로운 트랙' : `Track ${idx + 1}`
         ),
         fullLyrics: formatAndCleanLyrics(tr?.fullLyrics || '', sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro)
       }));
@@ -2206,44 +2245,83 @@ Our unforgettable late night drive`
       }
     ];
   } else {
-    // Dynamic extraction from user SOP for custom registered themes
+    // Dynamic extraction from user SOP for custom registered themes (e.g., Chill Groove Pop, Cafe Pop, Lounge)
     const rawSop = theme.sop || '';
     const styleMatch = rawSop.match(/(?:Style(?:\s+of\s+Music)?(?:\s+Prompt)?(?:\s+지침)?\s*[:]\s*['"]?)([^'"\n\r]+)/i);
-    const customStyle = styleMatch && styleMatch[1].trim()
-      ? styleMatch[1].trim()
-      : `${theme.category || theme.name}, emotive instrumentation, ${vocalTag}, 92 bpm, faithful to SOP`;
-
+    const isGrooveStyle = /groove|chill|pop|lounge|cafe|feel-?good/i.test(`${theme.name || ''} ${theme.category || ''} ${rawSop}`);
     const bpmMatch = rawSop.match(/(\d{2,3})\s*(?:~|-|\/)?\s*(\d{2,3})?\s*bpm/i);
-    const customBpm = bpmMatch ? `${bpmMatch[1]} BPM` : '92 BPM';
+    const customBpm = bpmMatch ? `${bpmMatch[1]} BPM` : isGrooveStyle ? '104 BPM' : '94 BPM';
 
-    trackTemplates = [
-      {
-        title: sopSpecs.isEnglishOnly ? 'Whispers in the Silence' : `${theme.name} - 1번 트랙`,
-        mood: `${theme.name}의 고유한 사운드 정체성과 감성`,
-        metaInfo: {
-          vocal: vocal === 'female' ? 'Female Lead Vocal' : vocal === 'male' ? 'Male Lead Vocal' : 'Vocal',
-          genre: theme.category || theme.name,
-          mood: 'Emotional Atmosphere',
-          bpm: customBpm,
-          targetLength: '3:15'
-        },
-        style: customStyle,
-        lyrics: `[Intro]\n[Opening instrumental motif according to SOP]\n\n[Verse 1]\n[Tender vocal delivery, subtle acoustic accompaniment]\nMoving through the quiet light of dawn\nA melody that keeps on holding on\n\n[Chorus]\n[Memorable vocal hook, full dynamic resolution]\nDeep inside where music learns to soar\nThis is the song we have been waiting for!\n\n[Outro]\n[Gentle fade to silence]\n[End]`
-      },
-      {
-        title: sopSpecs.isEnglishOnly ? 'Echoes Across the Horizon' : `${theme.name} - 2번 트랙`,
-        mood: `${theme.name}의 서정적인 감성과 멜로디`,
-        metaInfo: {
-          vocal: vocal === 'female' ? 'Female Lead Vocal' : vocal === 'male' ? 'Male Lead Vocal' : 'Vocal',
-          genre: theme.category || theme.name,
-          mood: 'Warm Acoustic Vibe',
-          bpm: customBpm,
-          targetLength: '3:05'
-        },
-        style: customStyle,
-        lyrics: `[Intro]\n[Acoustic instrumental intro]\n\n[Verse 1]\n[Expressive vocal delivery]\nFootsteps along an open road\nCarrying all the love we know\n\n[Chorus]\n[Harmonic climax, rich instrumentation]\nAcross the skies, into the dawn\nA timeless melody playing on!\n\n[Outro]\n[Warm closing fade]\n[End]`
-      }
-    ];
+    const customStyle = styleMatch && styleMatch[1].trim() && styleMatch[1].trim().length >= 300
+      ? styleMatch[1].trim()
+      : isGrooveStyle
+      ? `Chill groove pop, warm sun-kissed contemporary pop, breezy cafe lounge groove, ${theme.name}, ${customBpm}, tight live-feeling pocket drums with crisp brushed rimshot and bouncy muted bassline, warm Fender Rhodes electric piano chords, clean funk-inflected rhythm guitar stabs, subtle warm analog synth shimmer, ${vocalTag}, effortless conversational phrasing, sweet melodic chorus hook with smooth vocal harmonies, spacious modern stereo panorama, clean warm low-end punch, sparkling airy highs, polished streaming-ready master, -heavy distortion, -aggressive trap, -dark orchestral, -j-pop, -muddy bass`
+      : `${theme.category || theme.name}, faithful to ${theme.name} SOP, crisp acoustic and warm electric instrumentation, ${vocalTag}, ${customBpm}, balanced rhythmic pocket groove, clear studio-grade lead vocal presence, wide stereophonic imaging, polished commercial playlist mastering, -harsh distortion, -muddy bass`;
+
+    const simVocalLabel =
+      vocal === 'female' ? 'Warm expressive female lead vocal, effortless breezy tone' :
+      vocal === 'male' ? 'Smooth warm male lead vocal, effortless laid-back tone' :
+      vocal === 'none' ? 'Instrumental (No vocals)' : 'Warm expressive lead vocal, effortless tone';
+
+    const useEnglishSimTitle = sopSpecs.isEnglishOnly || isGrooveStyle;
+
+    trackTemplates = isGrooveStyle
+      ? [
+          {
+            title: useEnglishSimTitle ? 'Morning Latte at Our Usual Table' : `${theme.name} - 1번 트랙`,
+            mood: 'Warm Sunday café sunlight, breezy romantic groove and gentle excitement',
+            metaInfo: {
+              vocal: simVocalLabel,
+              genre: theme.category || 'Chill Groove Pop',
+              mood: 'Feel-Good Romantic Groove',
+              bpm: customBpm,
+              targetLength: '3:08'
+            },
+            style: customStyle,
+            lyrics: `[Intro: Warm Rhodes chords, crisp pocket rimshot and bouncy bass groove]\n\n[Verse 1: Light conversational vocal over clean rhythm guitar]\nSunlight slipping past the corner glass\nWatching every Sunday morning pass\nCoffee steam is curling in the air\nDidn't notice you were sitting there\nWait—you smiled before I looked away\nSuddenly the room felt brighter today\n\n[Pre-Chorus: Subtle tambourine lift, warm bass walkup]\nOne small hello across the wooden floor\nLike we've met a hundred times before\n\n[Chorus: Breezy feel-good groove pop hook with stacked harmonies]\nOh, we're moving to a Sunday groove\nEvery little laugh puts my heart in tune\nTwo warm cups cooling on the sunlit wood\nNever knew a quiet morning felt this good\nStay right here till the afternoon fades\nPromising we'll meet again next weekend day\n\n[Verse 2: Playful rhythmic phrasing, Rhodes fills]\nTalking favorite records side by side\nHours rolling like a golden tide\nShadows stretching softly down the street\nWish this easy rhythm wouldn't leave\n\n[Chorus: Breezy feel-good groove pop hook with stacked harmonies]\nOh, we're moving to a Sunday groove\nEvery little laugh puts my heart in tune\nTwo warm cups cooling on the sunlit wood\nNever knew a quiet morning felt this good\n\n[Bridge: Stripped back Rhodes and finger snaps, sweet anticipation]\nEvening lights are turning amber gold\nJust a sweet new story left untold\n"Same time next week?" smiling at the door\nAlready counting days till Sunday morning more\n\n[Outro: Rhodes and clean guitar riff fading into warm café groove]\n[End]`
+          },
+          {
+            title: useEnglishSimTitle ? 'See You Next Sunday' : `${theme.name} - 2번 트랙`,
+            mood: 'Sweet sunset farewell with warm anticipation for next weekend',
+            metaInfo: {
+              vocal: simVocalLabel,
+              genre: theme.category || 'Chill Groove Pop',
+              mood: 'Sunny Warmth & Sweet Anticipation',
+              bpm: customBpm,
+              targetLength: '3:12'
+            },
+            style: customStyle,
+            lyrics: `[Intro: Bouncy clean guitar riff and warm electric piano shimmer]\n\n[Verse 1: Relaxed warm vocal, tight brushed drum pocket]\nGolden hour painting down the avenue\nEvery word feels effortless with you\nUsed to keep my headphones on alone\nNow I hate to walk the evening home\n\n[Pre-Chorus: Bassline climbs smoothly, airy harmonies]\nWaiting at the corner neon sign\nNeither of us wants to say goodbye\n\n[Chorus: Catchy uplifting pop chorus with rich vocal warmth]\nSee you next Sunday when the sun comes round\nBest kind of feeling in this quiet town\nFrom a shy glance over morning tea\nTo the sweetest melody inside of me\nKeep that smile until the week goes through\nSunday morning belongs to me and you\n\n[Verse 2: Warm groove, delicate synth sparkle]\nTexting on the train back through the glow\nFunny how a single spark can grow\nCalendar is circled bright and clear\nSix more days till you are standing here\n\n[Outro: Mellow Rhodes chords and clean guitar resolving gently]\n[End]`
+          }
+        ]
+      : [
+          {
+            title: useEnglishSimTitle ? 'Sunlight Through the Open Window' : `${theme.name} - 1번 트랙`,
+            mood: `${theme.name}의 고유한 사운드 정체성과 감성`,
+            metaInfo: {
+              vocal: simVocalLabel,
+              genre: theme.category || theme.name,
+              mood: 'Warm Signature Vibe',
+              bpm: customBpm,
+              targetLength: '3:15'
+            },
+            style: customStyle,
+            lyrics: `[Intro: Opening instrumental motif faithful to SOP]\n\n[Verse 1: Tender vocal delivery, warm rhythmic pocket]\nMoving through the quiet light of day\nFinding something new we want to say\nEvery simple moment starts to shine\nFalling into rhythm right on time\n\n[Chorus: Memorable vocal hook, balanced dynamic lift]\nDeep inside where melodies feel true\nEvery note is leading back to you\nHold onto this feeling clear and bright\nCarrying the warmth into the night\n\n[Outro: Gentle instrumental resolution]\n[End]`
+          },
+          {
+            title: useEnglishSimTitle ? 'Echoes Across the Horizon' : `${theme.name} - 2번 트랙`,
+            mood: `${theme.name}의 서정적인 감성과 멜로디`,
+            metaInfo: {
+              vocal: simVocalLabel,
+              genre: theme.category || theme.name,
+              mood: 'Warm Acoustic Vibe',
+              bpm: customBpm,
+              targetLength: '3:05'
+            },
+            style: customStyle,
+            lyrics: `[Intro: Warm instrumental opening]\n\n[Verse 1: Expressive vocal delivery]\nFootsteps along an open sunlit road\nCarrying the gentle light we know\n\n[Chorus: Harmonic climax, rich instrumentation]\nAcross the skies into the golden dawn\nA timeless melody keeps playing on\n\n[Outro: Warm closing fade]\n[End]`
+          }
+        ];
   }
 
   // Guarantee consecutive calls never repeat the same starting track

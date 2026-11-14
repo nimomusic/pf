@@ -31,7 +31,11 @@ export function detectSceneProfile(
   // Prioritize active concept, generated title, and track titles BEFORE full SOP text
   // so incidental SOP words (e.g. "rain") don't override a sunny Sunday Cafe playlist!
   const activeContext = `${extraContext} ${lyricConcept} ${trackText} ${theme.name || ''} ${theme.category || ''}`.toLowerCase();
-  const sopContext = `${theme.sop || ''}`.toLowerCase();
+  const sopContext = `${theme.sop || ''}`
+    .toLowerCase()
+    .replace(/exclude\s*:[^\n\r]*/gi, '')
+    .replace(/금지[^\n\r]*/g, '')
+    .replace(/제외[^\n\r]*/g, '');
   const combined = `${activeContext} ${sopContext}`;
 
   if (combined.includes('shellac') || combined.includes('phonograph') || combined.includes('78 rpm') || combined.includes('1940')) {
@@ -120,7 +124,16 @@ export function detectSceneProfile(
     };
   }
 
-  if (combined.includes('j-pop') || combined.includes('jpop') || combined.includes('제이팝') || combined.includes('tokyo') || combined.includes('일본어') || combined.includes('city pop') || combined.includes('시티 팝')) {
+  const isJapaneseThemeVisual =
+    activeContext.includes('j-pop') ||
+    activeContext.includes('jpop') ||
+    activeContext.includes('제이팝') ||
+    activeContext.includes('tokyo') ||
+    activeContext.includes('일본어') ||
+    sopContext.includes('100% 일본어') ||
+    sopContext.includes('electronic r&b j-pop');
+
+  if (isJapaneseThemeVisual) {
     return {
       key: 'tokyo_rain',
       seasonEn: 'quiet indigo twilight in Tokyo',
@@ -131,6 +144,20 @@ export function detectSceneProfile(
       genreLabelKo: '일렉트로닉 R&B J-POP',
       moodLabelEn: 'Midnight Urban Solitude',
       moodLabelKo: '세련된 새벽 도시 감성 플리',
+    };
+  }
+
+  if (activeContext.includes('groove') || activeContext.includes('그루브') || activeContext.includes('chill groove')) {
+    return {
+      key: 'romantic_groove',
+      seasonEn: 'warm golden-lit afternoon in a sunlit city neighborhood',
+      seasonKo: '따스한 햇살과 기분 좋은 바람이 부는 오후',
+      locationEn: 'sunlit SoHo sidewalk café table with warm brick townhouses and lush sunlit street trees',
+      locationKo: '햇살이 스며드는 도심 골목 카페와 설레는 거리',
+      genreLabelEn: 'Good Day Groove Pop',
+      genreLabelKo: '기분 좋아지는 그루브 팝 모음',
+      moodLabelEn: 'Feel-Good Romantic Groove',
+      moodLabelKo: '듣는 순간 설레고 기분 좋아지는 그루브 팝',
     };
   }
 
@@ -447,8 +474,8 @@ export function buildCuratedYoutubePackage(
   const trackHighlightKo = trackNames.length > 0 ? `'${trackNames.join("', '")}'` : `'${theme.name || '감성 트랙'}'`;
   const trackHighlightEn = trackNames.length > 0 ? `'${trackNames.join("', '")}'` : `'${isEnglishAscii(theme.name || '') ? theme.name : scene.genreLabelEn}'`;
 
-  const conceptSuffixKo = cleanConcept ? ` (${cleanConcept})` : '';
-  const conceptSuffixEn = isEnglishAscii(cleanConcept) ? ` (${cleanConcept})` : '';
+  const conceptSuffixKo = cleanConcept && cleanConcept.length <= 16 ? ` (${cleanConcept})` : '';
+  const conceptSuffixEn = isEnglishAscii(cleanConcept) && cleanConcept.length <= 24 ? ` (${cleanConcept})` : '';
 
   const fallbackTitlesByScene: Record<SceneProfile['key'], { ko: string; en: string }> = {
     sunday_cafe: {

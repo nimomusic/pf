@@ -867,30 +867,65 @@ function parseClientSopSpecs(theme: Theme) {
 
   const engCharCount = (rawSop.match(/[a-zA-Z]/g) || []).length;
   const korCharCount = (rawSop.match(/[\uAC00-\uD7AF]/g) || []).length;
-  const jpnCharCount = (rawSop.match(/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g) || []).length;
+  const jpnCharCount = (rawSop.match(/[\u3040-\u309F\u30A0-\u30FF]/g) || []).length;
 
-  // Check if Japanese J-POP / Electronic R&B is explicitly requested
-  const isJapanese = (
-    combined.includes('j-pop') ||
-    combined.includes('jpop') ||
-    combined.includes('제이팝') ||
-    combined.includes('일본어') ||
-    combined.includes('japanese') ||
-    combined.includes('alt-pop / electronic r&b') ||
-    combined.includes('electronic r&b j-pop') ||
-    combined.includes('시티 팝') ||
-    combined.includes('city pop') ||
-    jpnCharCount > 10
-  );
+  const titleAndCat = `${theme.name || ''} ${theme.category || ''}`.toLowerCase();
+  const sopWithoutExcludes = rawSop
+    .toLowerCase()
+    .replace(/exclude\s*:[^\n\r]*/gi, '')
+    .replace(/금지[^\n\r]*/g, '')
+    .replace(/제외[^\n\r]*/g, '');
+
+  const hasExplicitEnglishLyrics =
+    /\b(100%\s*english|in\s+100%\s*english|lyrics\s*(?:must\s*be\s*)?(?:written\s*)?in\s*(?:100%\s*)?english|write\s*lyrics\s*(?:naturally\s*)?in\s*english|english\s*lyrics\s*only|sing\s*in\s*english|all\s+lyrics\s+in\s+english|english\s+title)\b/i.test(sopWithoutExcludes) ||
+    sopWithoutExcludes.includes('100% 영문') ||
+    sopWithoutExcludes.includes('영어로만 작성') ||
+    sopWithoutExcludes.includes('영어로 작사') ||
+    sopWithoutExcludes.includes('영어 작사') ||
+    sopWithoutExcludes.includes('영어 가사') ||
+    sopWithoutExcludes.includes('영문 가사') ||
+    sopWithoutExcludes.includes('영어 곡 제목') ||
+    sopWithoutExcludes.includes('영문 제목') ||
+    sopWithoutExcludes.includes('가사는 영어');
+
+  const hasExplicitKoreanLyrics =
+    sopWithoutExcludes.includes('한영 혼용') ||
+    sopWithoutExcludes.includes('한영혼용') ||
+    sopWithoutExcludes.includes('kor-eng') ||
+    sopWithoutExcludes.includes('code-switching') ||
+    sopWithoutExcludes.includes('한국어 가사') ||
+    sopWithoutExcludes.includes('한국어로 작성') ||
+    sopWithoutExcludes.includes('한국어 곡 제목') ||
+    sopWithoutExcludes.includes('오직 한국어로만') ||
+    sopWithoutExcludes.includes('국문 가사');
+
+  const titleForcesJapanese =
+    titleAndCat.includes('j-pop') ||
+    titleAndCat.includes('jpop') ||
+    titleAndCat.includes('제이팝') ||
+    titleAndCat.includes('일본어') ||
+    titleAndCat.includes('japanese');
+
+  const sopForcesJapaneseLyrics =
+    sopWithoutExcludes.includes('100% 일본어') ||
+    sopWithoutExcludes.includes('100% japanese') ||
+    sopWithoutExcludes.includes('일본어 가사') ||
+    sopWithoutExcludes.includes('일본어로 작성') ||
+    sopWithoutExcludes.includes('일본어 곡 제목') ||
+    sopWithoutExcludes.includes('일본어 제목') ||
+    sopWithoutExcludes.includes('japanese lyrics') ||
+    sopWithoutExcludes.includes('lyrics in japanese') ||
+    sopWithoutExcludes.includes('electronic r&b j-pop') ||
+    sopWithoutExcludes.includes('alt-pop / electronic r&b');
+
+  // Strict Japanese detection (never misfire on Chill Groove Pop mentioning city pop or exclude J-pop)
+  const isJapanese =
+    titleForcesJapanese ||
+    (!hasExplicitEnglishLyrics && !hasExplicitKoreanLyrics && (sopForcesJapaneseLyrics || jpnCharCount > 25));
 
   // Check if Korean or Kor-Eng code-switching is intended in the SOP
-  const hasKoreanDirectives = !isJapanese && (
-    combined.includes('한영 혼용') ||
-    combined.includes('한영혼용') ||
-    combined.includes('kor-eng') ||
-    combined.includes('code-switching') ||
-    combined.includes('한국어') ||
-    combined.includes('국문') ||
+  const hasKoreanDirectives = !isJapanese && !hasExplicitEnglishLyrics && (
+    hasExplicitKoreanLyrics ||
     combined.includes('한국 힙합') ||
     combined.includes('한국 알앤비') ||
     combined.includes('인스타 감성') ||
@@ -898,7 +933,7 @@ function parseClientSopSpecs(theme: Theme) {
     korCharCount > 30
   );
 
-  const isKorEngMixed = !isJapanese && (
+  const isKorEngMixed = !isJapanese && !hasExplicitEnglishLyrics && (
     combined.includes('한영 혼용') ||
     combined.includes('한영혼용') ||
     combined.includes('kor-eng') ||
@@ -906,36 +941,28 @@ function parseClientSopSpecs(theme: Theme) {
     (combined.includes('한국어') && (combined.includes('영어') || combined.includes('english')))
   );
 
-  // Strictly check if 100% English is explicitly mandated without Korean mixing
-  const isEnglishExplicit = !isJapanese && (
-    (combined.includes('100% english') ||
-     combined.includes('in 100% english') ||
-     combined.includes('all lyrics must be written in 100% english') ||
-     combined.includes('all lyrics must be written in english') ||
-     combined.includes('write lyrics naturally in english') ||
-     combined.includes('100% 영문') ||
-     combined.includes('영어로만 작성') ||
-     combined.includes('written in 100% english')) &&
-    !hasKoreanDirectives
+  const isEnglishExplicit = !isJapanese && !hasExplicitKoreanLyrics && (
+    hasExplicitEnglishLyrics ||
+    (engCharCount > 150 && korCharCount < 30)
   );
 
-  const isEnglishOnly = !isJapanese && isEnglishExplicit && !hasKoreanDirectives;
+  const isEnglishOnly = isEnglishExplicit;
 
-  const targetLang: 'japanese' | 'english' | 'korean' = 
+  const targetLang: 'japanese' | 'english' | 'korean' =
     isJapanese ? 'japanese' :
     isEnglishOnly ? 'english' : 'korean';
 
   const isKoreanTitle = targetLang === 'korean';
   const isJapaneseTitle = targetLang === 'japanese';
 
-  // Differentiate Korean R&B Hip-Hop from J-POP
-  const isKoreanHipHopRnb = !isJapanese && (
+  // Differentiate Korean R&B Hip-Hop from J-POP & English Pop
+  const isKoreanHipHopRnb = !isJapanese && !isEnglishOnly && (
     combined.includes('한국 알앤비') ||
     combined.includes('한국 힙합') ||
     combined.includes('인스타 감성') ||
     combined.includes('느좋') ||
     ((combined.includes('알앤비') || combined.includes('힙합') || combined.includes('hip-hop') || combined.includes('trap')) &&
-     (combined.includes('한영 혼용') || combined.includes('한영혼용') || combined.includes('특수 보컬 질감') || combined.includes('suno 키워드')))
+     (combined.includes('한영 혼용') || combined.includes('한영혼용') || combined.includes('특수 보컬 질감')))
   );
 
   const forbidsIntroOutro = 
@@ -953,12 +980,14 @@ function parseClientSopSpecs(theme: Theme) {
     combined.includes('1940') ||
     combined.includes('vintage pop');
 
-  const isCinematic = !isJapanese && (
-    combined.includes('film') ||
-    combined.includes('movie') ||
-    combined.includes('cinematic') ||
-    combined.includes('ost') ||
-    combined.includes('soundtrack')
+  const isCinematic = !isJapanese && !isKoreanHipHopRnb && (
+    titleAndCat.includes('ost') ||
+    titleAndCat.includes('movie') ||
+    titleAndCat.includes('cinematic') ||
+    sopWithoutExcludes.includes('film-music') ||
+    sopWithoutExcludes.includes('film soundtrack') ||
+    sopWithoutExcludes.includes('movie ost') ||
+    sopWithoutExcludes.includes('soundtrack')
   );
 
   return { 
@@ -969,6 +998,7 @@ function parseClientSopSpecs(theme: Theme) {
     isJapaneseTitle,
     isKorEngMixed, 
     isKoreanHipHopRnb, 
+    hasExplicitKoreanLyrics,
     forbidsIntroOutro, 
     isShellacVintage, 
     isCinematic, 
@@ -981,7 +1011,7 @@ function parseClientSopSpecs(theme: Theme) {
 // Helper: Ensure track title contains ONLY the target language (no bilingual parentheses or multi-line translations)
 function cleanTitleSingleLanguage(
   title: string, 
-  targetLang: 'japanese' | 'english' | 'korean', 
+  targetLang: 'japanese' | 'english' | 'korean' | 'auto', 
   fallbackTitle = 'Track Title'
 ): string {
   if (!title) return fallbackTitle;
@@ -997,14 +1027,20 @@ function cleanTitleSingleLanguage(
     } else if (targetLang === 'english') {
       const engLine = lines.find(l => /[a-zA-Z]/.test(l) && !/[\uAC00-\uD7AF]/.test(l) && !/[\u3040-\u309F\u30A0-\u30FF]/.test(l));
       if (engLine) clean = engLine;
-    } else {
+    } else if (targetLang === 'korean') {
       const korLine = lines.find(l => /[\uAC00-\uD7AF]/.test(l));
       if (korLine) clean = korLine;
+    } else {
+      clean = lines[0];
     }
   }
 
   // Strip leading numbering e.g. "1. ", "1) ", "- "
   clean = clean.replace(/^(?:\d+[\.\)]|[-•*])\s*/, '').trim();
+
+  if (targetLang === 'auto') {
+    return clean || fallbackTitle;
+  }
 
   // If title has parentheses e.g. "画面の向こう (화면 너머)" or "画面の向こう (on the other side)"
   const parenMatch = clean.match(/^([^(]+)\s*\(([^)]+)\)$/);
