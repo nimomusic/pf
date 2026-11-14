@@ -1,4 +1,4 @@
-import { Theme, TrackItem, YoutubePackage } from '../types';
+import type { Theme, TrackItem, YoutubePackage } from '../types.ts';
 
 export interface SceneProfile {
   key: 'christmas_nyc' | 'rainy_autumn' | 'sunny_autumn_cafe' | 'romantic_groove' | 'night_drive' | 'tokyo_rain' | 'vintage_1940s' | 'cinematic_ost';

@@ -1,10 +1,11 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
+import type { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import seedThemes from './data/themes.json' with { type: 'json' };
-import { buildCuratedYoutubePackage } from './src/utils/youtubePackageBuilder';
+import { buildCuratedYoutubePackage } from './src/utils/youtubePackageBuilder.ts';
 
 dotenv.config();
 
