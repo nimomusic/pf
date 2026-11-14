@@ -171,6 +171,7 @@ function mergeThemeLists(
 }
 
 async function fetchFirestoreThemes(): Promise<Theme[] | null> {
+  if (!db) return null;
   try {
     const q = query(
       collection(db, THEMES_COLLECTION),
@@ -201,7 +202,7 @@ async function upsertThemeInFirestore(theme: {
   sop: string;
   isDefault: boolean;
 }): Promise<boolean> {
-  if (!auth.currentUser) return false;
+  if (!db || !auth?.currentUser) return false;
   const clean = sanitizeThemeFields(theme);
   const docPath = `${THEMES_COLLECTION}/${clean.id}`;
   const ref = doc(db, THEMES_COLLECTION, clean.id);
@@ -234,7 +235,7 @@ async function upsertThemeInFirestore(theme: {
 }
 
 async function deleteThemeInFirestore(id: string): Promise<boolean> {
-  if (!auth.currentUser) return false;
+  if (!db || !auth?.currentUser) return false;
   const safeId = sanitizeThemeId(id);
   const docPath = `${THEMES_COLLECTION}/${safeId}`;
   try {
@@ -246,7 +247,7 @@ async function deleteThemeInFirestore(id: string): Promise<boolean> {
 }
 
 export async function syncThemesToFirestore(themesToSync?: Theme[]): Promise<{ syncedCount: number }> {
-  if (!auth.currentUser) {
+  if (!db || !auth?.currentUser) {
     throw new Error('클라우드 동기화를 위해 먼저 Google 계정으로 로그인해 주세요.');
   }
 
@@ -319,7 +320,7 @@ export async function fetchThemes(): Promise<Theme[]> {
     finalThemes = mergeThemeLists(cloudThemes, localThemes, deletedMap);
 
     // If signed in and local has unsynced newer themes, push them to Firestore automatically
-    if (auth.currentUser && localThemes.length > 0) {
+    if (auth?.currentUser && localThemes.length > 0) {
       syncThemesToFirestore(finalThemes).catch((e) =>
         console.warn('Background Firestore sync notice:', e)
       );
@@ -346,7 +347,7 @@ export async function fetchThemes(): Promise<Theme[]> {
     }
 
     // Seed Firestore automatically if admin is already signed in
-    if (auth.currentUser && finalThemes.length > 0 && cloudThemes && cloudThemes.length === 0) {
+    if (auth?.currentUser && finalThemes.length > 0 && cloudThemes && cloudThemes.length === 0) {
       syncThemesToFirestore(finalThemes).catch((e) =>
         console.warn('Initial Firestore seed notice:', e)
       );
@@ -392,7 +393,7 @@ export async function createTheme(themeData: { id?: string; name: string; catego
   saveLocalThemes(updatedList);
 
   // 2. Persist to Firebase Firestore when signed in as Admin
-  if (auth.currentUser) {
+  if (auth?.currentUser) {
     await upsertThemeInFirestore(clean);
   }
 
@@ -453,7 +454,7 @@ export async function updateTheme(id: string, themeData: Partial<Theme>): Promis
   }
 
   // Persist update to Firebase Firestore when signed in as Admin
-  if (auth.currentUser) {
+  if (auth?.currentUser) {
     await upsertThemeInFirestore(clean);
   }
 
@@ -482,7 +483,7 @@ export async function deleteTheme(id: string): Promise<void> {
   saveLocalThemes(remaining);
   markThemeDeletedLocally(id);
 
-  if (auth.currentUser) {
+  if (auth?.currentUser) {
     await deleteThemeInFirestore(id);
   }
 
@@ -499,7 +500,7 @@ export async function resetThemesToDefault(): Promise<Theme[]> {
   const existing = getLocalThemes();
   for (const t of existing) {
     markThemeDeletedLocally(t.id);
-    if (auth.currentUser) {
+    if (auth?.currentUser) {
       await deleteThemeInFirestore(t.id);
     }
   }
@@ -540,7 +541,7 @@ export async function importThemesBulk(importedThemes: Array<{ id?: string; name
   const merged = mergeThemeLists(cleanedIncoming, current, getDeletedThemeIds());
   saveLocalThemes(merged);
 
-  if (auth.currentUser) {
+  if (auth?.currentUser) {
     await syncThemesToFirestore(merged);
   }
 

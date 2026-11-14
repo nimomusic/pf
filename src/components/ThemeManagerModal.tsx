@@ -56,10 +56,11 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [cloudUser, setCloudUser] = useState<User | null>(auth.currentUser);
+  const [cloudUser, setCloudUser] = useState<User | null>(auth?.currentUser || null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (!auth) return;
     const unsub = onAuthStateChanged(auth, (user) => {
       setCloudUser(user);
     });

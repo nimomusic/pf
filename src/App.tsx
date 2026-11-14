@@ -144,11 +144,13 @@ export default function App() {
     };
     loadThemes();
 
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        loadThemes();
-      }
-    });
+    const unsub = auth
+      ? onAuthStateChanged(auth, (user) => {
+          if (user) {
+            loadThemes();
+          }
+        })
+      : () => {};
 
     return () => {
       cancelled = true;
