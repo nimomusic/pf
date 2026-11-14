@@ -1192,18 +1192,17 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 
 6. [YOUTUBE UPLOAD PACKAGE (youtube)]
 - Produce a high-CTR editorial YouTube playlist upload package matching the theme, lyric concept, season, mood, and tracks:
-  - "titleKo": Korean viral playlist title crafted in the style of top curated YouTube music channels—adapt season, city/place, vibe, emojis, and pipe subtitle dynamically to fit the planned music concept. Reference phrasing & rhythm styles:
-    * "지금 계절에 딱 맞는 뉴욕 분위기 🗽🍂 기분 좋아지는 그루브 팝 모음 🎧 | Good Day Pop"
-    * "🎧 𝐩𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 햇살 좋은 날, 여유롭고 편안한 어쿠스틱 플리 ☀️"
-    * "크리스마스가 가까워질수록, 이런 뉴욕이 더 좋아지잖아 🎄🗽 첫 곡부터 기분 좋아지는 그루브 팝 모음 🎧 | Christmas Pop Playlist"
-    * "가을 공기 좋다, 오늘은 어디든 놀러 가자 🐶🍂 듣는 순간 기분 좋아지는 팝송 모음 🎧 | Good Day Pop"
-    * "𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 너와 걷던 그 거리 🍁🌧️ 가을비 내린 날 하루 종일 듣고 싶은 감성 플리 𝐅𝐞𝐞𝐥-𝐆𝐨𝐨𝐝 𝐀𝐮𝐭𝐮𝐦𝐧 𝐏𝐨𝐩 | 카페음악 • 노동요"
-  - "titleEn": A natural, emotionally resonant English adaptation of "titleKo" keeping the same vibe, seasonal imagery, emojis, and clean subtitle (e.g., "The Closer Christmas Gets, The Better New York Feels 🎄🗽 Feel-Good Groove Pop 🎧 | Christmas Pop Playlist").
-  - "descriptionKo": Warm, engaging Korean playlist introduction tailored to the theme & track story, including the formatted [🎧 Tracklist] with timestamps and closing call-to-action.
-  - "descriptionEn": Smooth, idiomatic English adaptation of "descriptionKo" carrying the same narrative tone and including the formatted [🎧 Tracklist] with timestamps.
-  - "hashtags": EXACTLY 5 curated lowercase SEO hashtags mixing playlist tag, genre, mood/season, and setting separated by spaces (e.g., "#playlist #groovepop #autumnpop #gooddaypop #cafe").
-  - "thumbnailPrompt": 100% English photorealistic editorial photography prompt STRICTLY AT LEAST 2,200 CHARACTERS (aim 2,200–2,600 chars!). Explicitly describe: (a) season, weather & exact architectural/street/café setting matched to the playlist concept, (b) 16:9 widescreen composition & rule-of-thirds depth, (c) detailed foreground props (ceramic coffee cup, condensation, falling maple/ginkgo leaves, glass reflections, etc.), (d) human subject(s) — clothing fabric textures, pose, hand gesture, candid facial expression & gaze, (e) directional lighting, reflections & warm-vs-cool bokeh balance, (f) real camera/film stock specs (e.g. Leica SL2-S 35mm f/1.8, Kodak Portra 400 / Cinestill 800T, zero CGI plastic skin), and (g) minimalist white editorial serif cover typography placement in clean negative space (e.g., "Christmas Pop", "AUTUMN MOOD", "playlist") without blocking faces or hero props.
-  - "backgroundImagePrompt": 100% English 16:9 seamless loop visual backdrop prompt STRICTLY AT LEAST 2,200 CHARACTERS (aim 2,200–2,600 chars!). Engineered for a locked-off tripod shot with ZERO camera cuts/pans/zooms, matching the same curated photographic world as the thumbnail, specifying continuous gentle ambient loop physics (drifting autumn leaves, rising coffee steam, raindrop ripples, softly breathing fairy-light bokeh), detailed material micro-textures, film grain, and STRICTLY NO TEXT, NO TITLES, NO LOGOS, and NO WATERMARKS anywhere in frame.
+  - "titleKo": Korean viral playlist title crafted in the style of top curated YouTube music channels—adapt season, city/place, vibe, emojis, and pipe subtitle dynamically to fit the planned music concept.
+  - "titleEn": A natural, emotionally resonant English adaptation of "titleKo" keeping the same vibe, seasonal imagery, emojis, and clean subtitle.
+  - "descriptionKo": Warm, engaging Korean playlist introduction describing the mood, listening situation (café, drive, weekend morning, work), and closing message. **CRITICAL: NEVER include any tracklist, song list, or timestamps inside "descriptionKo"!**
+  - "descriptionEn": Smooth, idiomatic English adaptation of "descriptionKo" carrying the same narrative tone and closing message. **CRITICAL: NEVER include any tracklist, song list, or timestamps inside "descriptionEn"!**
+  - "tracklist": Numbered song titles ONLY, one per line (e.g., "01. Waiting in the Sunday Cafe\\n02. Sundays with You\\n03. Waiting for Your Smile"). **NEVER include timestamps or parentheses like (0:00)!**
+  - "hashtags": EXACTLY 5 curated lowercase SEO hashtags mixing playlist tag, genre, mood/season, and setting separated by spaces (e.g., "#playlist #groovepop #cafe #sundayvibes #feelgood").
+  - "thumbnailPrompt": 100% English photorealistic editorial photography prompt STRICTLY AT LEAST 2,200 CHARACTERS (aim 2,200–2,600 chars!) tailored to match the EXACT mood, weather, season, and setting of "titleKo" / "titleEn" and the tracks (for example, if the title is "일요일 카페에서 기분 좋아지는 그루브 팝 모음", paint a warm sunlit Sunday café interior—NEVER an unrelated rainy street!). Follow these strict art-direction rules:
+    * **SINGLE UNIFIED SCENE ONLY**: Describe ONE continuous, uninterrupted 16:9 camera frame from ONE single viewpoint. Strictly forbid split-screen, diptych, left/right side-by-side panels, or collage!
+    * **CENTER-FOCUSED VISUAL HIERARCHY**: Place the hero subject and/or foreground props cleanly near the center focal point using natural leading lines (table edges, sunlit beams, window frames) and soft surrounding optical bokeh so the viewer's eyes immediately focus on the center, with harmonious cohesive color grading.
+    * **FULL PHOTOGRAPHIC DETAIL**: Detail weather/time of day, architectural interior/exterior, foreground table props, human subject pose/wardrobe/candid joyful expression, directional lighting & specular reflections, tactile textures, and Leica SL2-S 35mm f/1.8 + Kodak Portra 400 optical realism (zero CGI gloss).
+    * **STRICTLY ZERO TEXT**: Explicitly command NO text, NO typography, NO titles, NO letters, NO captions, NO logos, and NO watermarks anywhere in the image!
 
 [OUTPUT FORMAT - PURE JSON ONLY]
 Respond ONLY with a valid JSON object matching this schema (no markdown fences, no conversational text).
@@ -1228,16 +1227,15 @@ CRITICAL: "tracks" MUST contain EXACTLY ${effectiveTrackCount} track objects ("t
   "youtube": {
     "titleKo": "Curated Korean playlist YouTube title matching theme/season/vibe/emoji + | Subtitle pattern",
     "titleEn": "Natural English adaptation of titleKo",
-    "descriptionKo": "Detailed Korean YouTube video description including story, listening context, and [🎧 Tracklist] timestamps",
-    "descriptionEn": "Matching English YouTube video description adapted from descriptionKo including [🎧 Tracklist] timestamps",
-    "tracklist": "01. Title (0:00)...",
-    "hashtags": "#playlist #groovepop #autumnpop #gooddaypop #cafe",
-    "thumbnailPrompt": "Minimum 2,200-character ultra-detailed 16:9 photorealistic editorial photography prompt with season, setting, framing, foreground objects, subject pose/expression/wardrobe, lighting, film lens specs, and minimalist white serif cover text placement",
-    "backgroundImagePrompt": "Minimum 2,200-character ultra-detailed 16:9 locked-off tripod seamless loop cinematic photography prompt with gentle ambient loop motion, film texture, and zero text/logos"
+    "descriptionKo": "Pure narrative Korean YouTube video description WITHOUT any tracklist or timestamps",
+    "descriptionEn": "Pure narrative English YouTube video description adapted from descriptionKo WITHOUT any tracklist or timestamps",
+    "tracklist": "01. Track Title\\n02. Track Title",
+    "hashtags": "#playlist #groovepop #cafe #sundayvibes #feelgood",
+    "thumbnailPrompt": "Minimum 2,200-character ultra-detailed 16:9 single-scene center-focused photorealistic editorial photography prompt matching the title mood exactly, with ZERO text and NO split-screen"
   }
 }`;
 
-    const standardSystemInstruction = `You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY RULES: (1) ALWAYS generate the EXACT number of tracks requested in Target Track Count (e.g., if ${effectiveTrackCount} tracks are requested, the "tracks" JSON array MUST contain all ${effectiveTrackCount} distinct tracks numbered 1 through ${effectiveTrackCount}, never just 1 track!). (2) Style prompts MUST be dense, comma-separated musical keywords and sound design tags (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries; DO NOT write narrative sentences like "This track embodies the essence of..."). (3) Tag & Line Break Hygiene: Every section tag MUST use single square brackets [Section: Guide] (NEVER curly braces {}, NEVER nested parentheses [(...)]). Put every tag on its own line followed by \\n, separate sections with \\n\\n, NEVER split single words onto separate lines, NEVER repeat parenthesized guides underneath [Outro: ...] or [Instrumental Interlude: ...], and emit [End] AT MOST ONCE at the very end. (4) Instrumental Sections Hygiene: [Intro: ...], [Outro: ...], [Piano Solo: ...], and [Instrumental Interlude: ...] MUST CONTAIN ZERO SUNG LYRICS! (5) When SOP specifies Japanese / J-POP, track titles MUST be pure Japanese (漢字/ひらがな), style prompts 100% English, section tags in English brackets, and sung lyrics 100% PURE JAPANESE (ZERO Korean). (6) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용, track titles MUST be Korean only, style prompts 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (36-50 lines). (7) Strictly respect tag prohibitions such as omitting [Intro], [Outro], and [End] when forbidden in the SOP. (8) For the YouTube Upload Package ("youtube"), ALWAYS provide BOTH Korean ("titleKo", "descriptionKo") and natural English ("titleEn", "descriptionEn") versions, EXACTLY 5 SEO hashtags mixing playlist/genre/season/setting, and make BOTH "thumbnailPrompt" and "backgroundImagePrompt" rich, realistic English editorial photography prompts of AT LEAST 2,200 characters each.${cleanLyricConcept ? ` (9) MANDATORY LYRIC CONCEPT: ALL tracks, lyrics, and YouTube visuals MUST focus on the user concept: "${cleanLyricConcept}".` : ''} Respond strictly in valid JSON.`;
+    const standardSystemInstruction = `You are an expert AI music playlist producer and Suno prompt engineer. Follow the user SOP with 100% strict compliance. CRITICAL MANDATORY RULES: (1) ALWAYS generate the EXACT number of tracks requested in Target Track Count (e.g., if ${effectiveTrackCount} tracks are requested, the "tracks" JSON array MUST contain all ${effectiveTrackCount} distinct tracks numbered 1 through ${effectiveTrackCount}, never just 1 track!). (2) Style prompts MUST be dense, comma-separated musical keywords and sound design tags (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries; DO NOT write narrative sentences like "This track embodies the essence of..."). (3) Tag & Line Break Hygiene: Every section tag MUST use single square brackets [Section: Guide] (NEVER curly braces {}, NEVER nested parentheses [(...)]). Put every tag on its own line followed by \\n, separate sections with \\n\\n, NEVER split single words onto separate lines, NEVER repeat parenthesized guides underneath [Outro: ...] or [Instrumental Interlude: ...], and emit [End] AT MOST ONCE at the very end. (4) Instrumental Sections Hygiene: [Intro: ...], [Outro: ...], [Piano Solo: ...], and [Instrumental Interlude: ...] MUST CONTAIN ZERO SUNG LYRICS! (5) When SOP specifies Japanese / J-POP, track titles MUST be pure Japanese (漢字/ひらがな), style prompts 100% English, section tags in English brackets, and sung lyrics 100% PURE JAPANESE (ZERO Korean). (6) When SOP specifies Korean R&B / Hip-Hop with 한영 혼용, track titles MUST be Korean only, style prompts 100% English, section tags in English brackets, and sung lyrics in natural Korean-English code-switching (36-50 lines). (7) Strictly respect tag prohibitions such as omitting [Intro], [Outro], and [End] when forbidden in the SOP. (8) For the YouTube Upload Package ("youtube"), provide BOTH Korean ("titleKo", "descriptionKo") and natural English ("titleEn", "descriptionEn") versions WITHOUT tracklists inside the descriptions, output "tracklist" WITHOUT any (0:00) timestamps, EXACTLY 5 SEO hashtags, and make "thumbnailPrompt" a single unified 16:9 center-focused photorealistic editorial photography prompt of AT LEAST 2,200 characters matching the title mood with STRICTLY ZERO text and NO split-screen.${cleanLyricConcept ? ` (9) MANDATORY LYRIC CONCEPT: ALL tracks, lyrics, and YouTube visuals MUST focus on the user concept: "${cleanLyricConcept}".` : ''} Respond strictly in valid JSON.`;
 
     // Shared post-processor: guarantees exact track count (with AI continuation if AI returned fewer),
     // sequential 1..N numbering, clean titles, clean lyrics, and synchronized YouTube tracklist.
@@ -1304,9 +1302,7 @@ Respond ONLY with valid JSON:
       }));
 
       const builtTracklist = safeResult.tracks.map((t: any, idx: number) => {
-        const min = Math.floor(idx * 3 + (idx * 20) / 60);
-        const sec = ((idx * 24) % 60).toString().padStart(2, '0');
-        return `${String(idx + 1).padStart(2, '0')}. ${t.title} (${min}:${sec})`;
+        return `${String(idx + 1).padStart(2, '0')}. ${t.title}`;
       }).join('\n');
 
       safeResult.youtube = buildCuratedYoutubePackage(
@@ -2285,9 +2281,7 @@ Our unforgettable late night drive`
 
   // Youtube upload package
   const tracklistText = tracks.map((t, idx) => {
-    const min = Math.floor(idx * 3 + (idx * 20) / 60);
-    const sec = ((idx * 24) % 60).toString().padStart(2, '0');
-    return `${(idx + 1).toString().padStart(2, '0')}. ${t.title} (${min}:${sec})`;
+    return `${(idx + 1).toString().padStart(2, '0')}. ${t.title}`;
   }).join('\n');
 
   const youtube = buildCuratedYoutubePackage(

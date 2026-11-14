@@ -69,8 +69,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
     }
     full += `[트랙리스트]\n${data.youtube.tracklist}\n\n`;
     full += `[해시태그]\n${data.youtube.hashtags}\n\n`;
-    full += `[썸네일 프롬프트]\n${data.youtube.thumbnailPrompt}\n\n`;
-    full += `[배경 이미지 프롬프트]\n${data.youtube.backgroundImagePrompt}\n`;
+    full += `[썸네일 프롬프트]\n${data.youtube.thumbnailPrompt}\n`;
 
     return full;
   };
@@ -386,7 +385,6 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                 `[트랙리스트]\n${data.youtube.tracklist}`,
                 `[해시태그]\n${data.youtube.hashtags}`,
                 `[썸네일 프롬프트]\n${data.youtube.thumbnailPrompt}`,
-                `[배경 이미지 프롬프트]\n${data.youtube.backgroundImagePrompt}`,
               ].filter(Boolean);
               return parts.join('\n\n');
             };
@@ -400,7 +398,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                       유튜브 플레이리스트 업로드 원스톱 패키지
                     </h3>
                     <p className="text-xs text-rose-700">
-                      한국어/영어 듀얼 제목·설명문, 타임스탬프 트랙리스트, SEO 해시태그 5종 및 실사 사진급 2,000자+ AI 이미지 프롬프트
+                      한국어/영어 듀얼 제목·설명문, 트랙리스트, SEO 해시태그 5종 및 실사 사진급 2,000자+ 썸네일 프롬프트
                     </p>
                   </div>
                   <button
@@ -505,7 +503,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                      트랙리스트 (Tracklist with Timestamps)
+                      트랙리스트 (Tracklist)
                     </span>
                     <button
                       onClick={() => handleCopy(data.youtube.tracklist, 'yt_tracklist')}
@@ -540,54 +538,28 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                   </div>
                 </div>
 
-                {/* 5. Thumbnail Prompt & 6. Background Image Prompt */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                        썸네일 프롬프트 (Thumbnail Prompt)
+                {/* 5. Thumbnail Prompt */}
+                <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                      썸네일 프롬프트 (Thumbnail Prompt — 16:9 Single Scene · No Text)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                        {data.youtube.thumbnailPrompt.length.toLocaleString()}자
                       </span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-                          {data.youtube.thumbnailPrompt.length.toLocaleString()}자
-                        </span>
-                        <button
-                          onClick={() => handleCopy(data.youtube.thumbnailPrompt, 'yt_thumb')}
-                          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
-                        >
-                          {copiedKey === 'yt_thumb' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedKey === 'yt_thumb' ? '복사됨' : '복사'}</span>
-                        </button>
-                      </div>
-                    </div>
-                    <div className="font-mono text-[11px] text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 leading-relaxed max-h-64 overflow-y-auto select-all">
-                      {data.youtube.thumbnailPrompt}
+                      <button
+                        onClick={() => handleCopy(data.youtube.thumbnailPrompt, 'yt_thumb')}
+                        className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
+                      >
+                        {copiedKey === 'yt_thumb' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedKey === 'yt_thumb' ? '복사됨' : '복사'}</span>
+                      </button>
                     </div>
                   </div>
-
-                  <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-                        배경 이미지 프롬프트 (16:9 Loop Visual)
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                          {data.youtube.backgroundImagePrompt.length.toLocaleString()}자
-                        </span>
-                        <button
-                          onClick={() => handleCopy(data.youtube.backgroundImagePrompt, 'yt_bg')}
-                          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer"
-                        >
-                          {copiedKey === 'yt_bg' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedKey === 'yt_bg' ? '복사됨' : '복사'}</span>
-                        </button>
-                      </div>
-                    </div>
-                    <div className="font-mono text-[11px] text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 leading-relaxed max-h-64 overflow-y-auto select-all">
-                      {data.youtube.backgroundImagePrompt}
-                    </div>
+                  <div className="font-mono text-[11px] text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 leading-relaxed max-h-64 overflow-y-auto select-all">
+                    {data.youtube.thumbnailPrompt}
                   </div>
                 </div>
               </div>

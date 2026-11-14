@@ -49,7 +49,6 @@ export interface YoutubePackage {
   tracklist: string;
   hashtags: string;
   thumbnailPrompt: string;
-  backgroundImagePrompt: string;
 }
 
 export interface PlaylistResult {

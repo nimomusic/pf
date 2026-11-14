@@ -312,8 +312,7 @@ export default function App() {
           description: '',
           tracklist: '',
           hashtags: '',
-          thumbnailPrompt: '',
-          backgroundImagePrompt: ''
+          thumbnailPrompt: ''
         }
       };
 

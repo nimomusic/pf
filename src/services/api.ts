@@ -846,11 +846,7 @@ export async function generatePlaylist(params: {
     }));
 
     const fallbackTracklist = data.result.tracks
-      .map((t: any, idx: number) => {
-        const min = Math.floor(idx * 3 + (idx * 20) / 60);
-        const sec = ((idx * 24) % 60).toString().padStart(2, '0');
-        return `${String(idx + 1).padStart(2, '0')}. ${t.title} (${min}:${sec})`;
-      })
+      .map((t: any, idx: number) => `${String(idx + 1).padStart(2, '0')}. ${t.title}`)
       .join('\n');
 
     data.result.youtube = buildCuratedYoutubePackage(
@@ -1861,9 +1857,7 @@ Our unforgettable late night drive`
   }
 
   const tracklistText = tracks.map((t, idx) => {
-    const min = Math.floor(idx * 3 + (idx * 20) / 60);
-    const sec = ((idx * 24) % 60).toString().padStart(2, '0');
-    return `${(idx + 1).toString().padStart(2, '0')}. ${t.title} (${min}:${sec})`;
+    return `${(idx + 1).toString().padStart(2, '0')}. ${t.title}`;
   }).join('\n');
 
   const youtube = buildCuratedYoutubePackage(
