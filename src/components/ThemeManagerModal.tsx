@@ -17,7 +17,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { ensureFirebaseInitialized, signInWithGoogleForAdmin, signOutFirebase } from '../firebase';
+import { ensureFirebaseInitialized, getFirebaseDiagnostics, signInWithGoogleForAdmin, signOutFirebase } from '../firebase';
 import { Theme } from '../types';
 import {
   createTheme,
@@ -57,14 +57,17 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [cloudUser, setCloudUser] = useState<User | null>(null);
+  const [firebaseReady, setFirebaseReady] = useState<boolean | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
     let unsub: (() => void) | undefined;
 
-    ensureFirebaseInitialized().then(({ auth: activeAuth }) => {
-      if (cancelled || !activeAuth) return;
+    ensureFirebaseInitialized().then(({ auth: activeAuth, configured }) => {
+      if (cancelled) return;
+      setFirebaseReady(configured);
+      if (!activeAuth) return;
       setCloudUser(activeAuth.currentUser || null);
       unsub = onAuthStateChanged(activeAuth, (user) => {
         if (!cancelled) setCloudUser(user);
@@ -88,6 +91,9 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
     if (code === 'auth/unauthorized-domain' || raw.includes('auth/unauthorized-domain')) {
       const host = typeof window !== 'undefined' ? window.location.hostname : '';
       return `현재 접속 도메인(${host})이 Firebase 승인된 도메인에 등록되지 않았습니다. Firebase Console → Authentication → Settings → Authorized domains에 '${host}'를 추가해 주세요.`;
+    }
+    if (code === 'auth/popup-blocked' || raw.includes('auth/popup-blocked')) {
+      return '브라우저에서 Google 로그인 팝업 창이 차단되었습니다. 주소창 오른쪽의 팝업 차단 해제를 허용한 뒤 다시 눌러 주세요.';
     }
     if (code === 'auth/popup-closed-by-user' || raw.includes('auth/popup-closed-by-user')) {
       return 'Google 로그인 창이 닫혔습니다. 다시 시도해 주세요.';
@@ -392,6 +398,24 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
 
         {/* Content area */}
         <div className="p-6 overflow-y-auto flex-1">
+          {!cloudUser && firebaseReady === true && !syncNotice && !errorMsg && (
+            <div className="mb-4 p-3 bg-blue-50/70 border border-blue-200/80 text-blue-800 text-xs rounded-xl leading-relaxed">
+              라이선스 키 입장과 별개로, 클라우드 DB(Firestore)에 테마를 영구 저장하려면 위 <strong>「Google 로그인으로 클라우드 영구 저장 연동」</strong> 버튼을 눌러 관리자 Google 계정(팝업 창)으로 1회 인증해 주세요.
+            </div>
+          )}
+
+          {!cloudUser && firebaseReady === false && !errorMsg && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl leading-relaxed">
+              {(() => {
+                const diag = getFirebaseDiagnostics();
+                if (diag.missingKeys.length > 0) {
+                  return `현재 접속 호스트(${diag.hostname})에 Firebase 환경 변수가 아직 설정되지 않았습니다. 누락: ${diag.missingKeys.join(', ')}`;
+                }
+                return `현재 접속 주소(${diag.hostname})에서 Firebase 설정을 불러오지 못했습니다. 새로고침하거나 최신 버전을 Publish / 재배포한 뒤 다시 시도해 주세요.`;
+              })()}
+            </div>
+          )}
+
           {syncNotice && (
             <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl font-medium">
               {syncNotice}
@@ -399,7 +423,7 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
           )}
 
           {errorMsg && !isEditing && (
-            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium">
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium whitespace-pre-line">
               {errorMsg}
             </div>
           )}

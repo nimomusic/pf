@@ -40,24 +40,63 @@ const initialConfig: FirebaseAppletConfig = {
   firestoreDatabaseId: envConfig.firestoreDatabaseId || localFileConfig.firestoreDatabaseId,
 };
 
+export interface FirebaseDiagnostics {
+  configured: boolean;
+  source: 'build-env' | 'local-file' | 'runtime-api' | 'none';
+  runtimeApiStatus: number | null;
+  runtimeApiReachable: boolean;
+  missingKeys: string[];
+  initError: string | null;
+  hostname: string;
+}
+
 let app: FirebaseApp | null = null;
 export let db: Firestore | null = null;
 export let auth: Auth | null = null;
 export let hasFirebaseConfig = false;
 let connectionTested = false;
 
-function initWithConfig(cfg: FirebaseAppletConfig): boolean {
-  if (!cfg.apiKey || !cfg.projectId || !cfg.appId) return false;
-  if (app && db && auth) return true;
+const diagnostics: FirebaseDiagnostics = {
+  configured: false,
+  source: 'none',
+  runtimeApiStatus: null,
+  runtimeApiReachable: false,
+  missingKeys: [],
+  initError: null,
+  hostname: typeof window !== 'undefined' ? window.location.hostname : '',
+};
 
-  app = getApps().length > 0 ? getApps()[0] : initializeApp(cfg);
-  db = cfg.firestoreDatabaseId
-    ? getFirestore(app, cfg.firestoreDatabaseId)
-    : getFirestore(app);
-  auth = getAuth(app);
-  hasFirebaseConfig = true;
-  void testConnection();
-  return true;
+export function getFirebaseDiagnostics(): FirebaseDiagnostics {
+  return { ...diagnostics };
+}
+
+function initWithConfig(
+  cfg: FirebaseAppletConfig,
+  source: 'build-env' | 'local-file' | 'runtime-api'
+): boolean {
+  if (!cfg.apiKey || !cfg.projectId || !cfg.appId) return false;
+  if (app && db && auth) {
+    diagnostics.configured = true;
+    return true;
+  }
+
+  try {
+    app = getApps().length > 0 ? getApps()[0] : initializeApp(cfg);
+    db = cfg.firestoreDatabaseId
+      ? getFirestore(app, cfg.firestoreDatabaseId)
+      : getFirestore(app);
+    auth = getAuth(app);
+    hasFirebaseConfig = true;
+    diagnostics.configured = true;
+    diagnostics.source = source;
+    diagnostics.initError = null;
+    void testConnection();
+    return true;
+  } catch (err: any) {
+    diagnostics.initError = err?.message || String(err);
+    console.error('Firebase initialization failed:', err);
+    return false;
+  }
 }
 
 async function testConnection() {
@@ -72,8 +111,12 @@ async function testConnection() {
   }
 }
 
-// Synchronous initialization when bundled config or build-time VITE_* env vars are present
-initWithConfig(initialConfig);
+// Synchronous initialization when build-time VITE_* env vars or bundled config are present
+if (envConfig.apiKey && envConfig.projectId && envConfig.appId) {
+  initWithConfig(initialConfig, 'build-env');
+} else if (localFileConfig.apiKey && localFileConfig.projectId && localFileConfig.appId) {
+  initWithConfig(initialConfig, 'local-file');
+}
 
 let initPromise: Promise<{ db: Firestore | null; auth: Auth | null; configured: boolean }> | null = null;
 
@@ -100,13 +143,25 @@ export async function ensureFirebaseInitialized(): Promise<{
     initPromise = (async () => {
       try {
         const res = await fetch('/api/firebase-config', { cache: 'no-store' });
+        diagnostics.runtimeApiStatus = res.status;
         if (res.ok) {
-          const data = await res.json();
-          if (data?.configured && data?.config) {
-            initWithConfig(data.config);
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            diagnostics.runtimeApiReachable = true;
+            const data = await res.json();
+            if (Array.isArray(data?.missingKeys)) {
+              diagnostics.missingKeys = data.missingKeys;
+            }
+            if (data?.configured && data?.config) {
+              initWithConfig(data.config, 'runtime-api');
+            }
+          } else {
+            diagnostics.runtimeApiReachable = false;
+            diagnostics.initError = '서버 설정 API(/api/firebase-config)가 JSON이 아닌 응답을 반환했습니다. 최신 버전 재배포가 필요합니다.';
           }
         }
-      } catch (err) {
+      } catch (err: any) {
+        diagnostics.initError = err?.message || String(err);
         console.warn('Failed to fetch runtime Firebase config:', err);
       }
       if (auth) {
@@ -182,7 +237,22 @@ export function handleFirestoreError(
 export async function signInWithGoogleForAdmin() {
   const { auth: activeAuth } = await ensureFirebaseInitialized();
   if (!activeAuth) {
-    throw new Error('Firebase 환경 변수(VITE_FIREBASE_*) 또는 설정 파일이 구성되지 않았습니다.');
+    const diag = getFirebaseDiagnostics();
+    if (!diag.runtimeApiReachable) {
+      throw new Error(
+        `현재 접속 주소(${diag.hostname})에서 Firebase 설정 API 응답을 받지 못했습니다(상태: ${diag.runtimeApiStatus ?? '연결 실패'}). 브라우저를 새로고침하거나, AI Studio Publish(다시 게시) 또는 GitHub/Vercel 최신 재배포 후 다시 시도해 주세요.`
+      );
+    }
+    if (diag.missingKeys.length > 0) {
+      throw new Error(
+        `현재 서버(${diag.hostname})에 Firebase 환경 변수가 누락되었습니다: ${diag.missingKeys.join(', ')}. (AI Studio Secrets 외에 Vercel 등 외부 호스팅을 사용 중이라면 해당 호스팅의 Environment Variables에도 동일하게 추가해 주세요.)`
+      );
+    }
+    throw new Error(
+      diag.initError
+        ? `Firebase 초기화 오류: ${diag.initError}`
+        : 'Firebase 환경 변수(VITE_FIREBASE_*) 또는 설정 파일이 구성되지 않았습니다.'
+    );
   }
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });

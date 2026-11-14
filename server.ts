@@ -72,6 +72,9 @@ function saveThemesList(themes: any[]) {
 
 // 0. Runtime Firebase Web Configuration (reads AI Studio / Vercel / Cloud Run runtime env vars or local config file)
 app.get(['/api/firebase-config', '/firebase-config'], (req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+
   let fileCfg: Record<string, any> = {};
   try {
     const cfgPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
@@ -80,18 +83,31 @@ app.get(['/api/firebase-config', '/firebase-config'], (req: Request, res: Respon
     }
   } catch {}
 
+  const cleanVal = (v: unknown) =>
+    String(v ?? '')
+      .trim()
+      .replace(/^['"]|['"]$/g, '')
+      .trim();
+
   const config = {
-    apiKey: String(process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY || fileCfg.apiKey || '').trim(),
-    authDomain: String(process.env.VITE_FIREBASE_AUTH_DOMAIN || process.env.FIREBASE_AUTH_DOMAIN || fileCfg.authDomain || '').trim(),
-    projectId: String(process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || fileCfg.projectId || '').trim(),
-    storageBucket: String(process.env.VITE_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET || fileCfg.storageBucket || '').trim(),
-    messagingSenderId: String(process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || process.env.FIREBASE_MESSAGING_SENDER_ID || fileCfg.messagingSenderId || '').trim(),
-    appId: String(process.env.VITE_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID || fileCfg.appId || '').trim(),
-    firestoreDatabaseId: String(process.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || process.env.FIREBASE_FIRESTORE_DATABASE_ID || fileCfg.firestoreDatabaseId || '').trim(),
+    apiKey: cleanVal(process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY || fileCfg.apiKey),
+    authDomain: cleanVal(process.env.VITE_FIREBASE_AUTH_DOMAIN || process.env.FIREBASE_AUTH_DOMAIN || fileCfg.authDomain),
+    projectId: cleanVal(process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || fileCfg.projectId),
+    storageBucket: cleanVal(process.env.VITE_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET || fileCfg.storageBucket),
+    messagingSenderId: cleanVal(process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || process.env.FIREBASE_MESSAGING_SENDER_ID || fileCfg.messagingSenderId),
+    appId: cleanVal(process.env.VITE_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID || fileCfg.appId),
+    firestoreDatabaseId: cleanVal(process.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || process.env.FIREBASE_FIRESTORE_DATABASE_ID || fileCfg.firestoreDatabaseId),
   };
 
+  const missingKeys: string[] = [];
+  if (!config.apiKey) missingKeys.push('VITE_FIREBASE_API_KEY');
+  if (!config.authDomain) missingKeys.push('VITE_FIREBASE_AUTH_DOMAIN');
+  if (!config.projectId) missingKeys.push('VITE_FIREBASE_PROJECT_ID');
+  if (!config.appId) missingKeys.push('VITE_FIREBASE_APP_ID');
+  if (!config.firestoreDatabaseId) missingKeys.push('VITE_FIREBASE_FIRESTORE_DATABASE_ID');
+
   const configured = Boolean(config.apiKey && config.projectId && config.appId);
-  res.json({ success: true, configured, config });
+  res.json({ success: true, configured, missingKeys, config });
 });
 
 // 1. Get all themes
