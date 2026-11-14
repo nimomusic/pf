@@ -17,7 +17,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, signInWithGoogleForAdmin, signOutFirebase } from '../firebase';
+import { ensureFirebaseInitialized, signInWithGoogleForAdmin, signOutFirebase } from '../firebase';
 import { Theme } from '../types';
 import {
   createTheme,
@@ -56,23 +56,41 @@ export const ThemeManagerModal: React.FC<ThemeManagerModalProps> = ({
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [cloudUser, setCloudUser] = useState<User | null>(auth?.currentUser || null);
+  const [cloudUser, setCloudUser] = useState<User | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!auth) return;
-    const unsub = onAuthStateChanged(auth, (user) => {
-      setCloudUser(user);
+    let cancelled = false;
+    let unsub: (() => void) | undefined;
+
+    ensureFirebaseInitialized().then(({ auth: activeAuth }) => {
+      if (cancelled || !activeAuth) return;
+      setCloudUser(activeAuth.currentUser || null);
+      unsub = onAuthStateChanged(activeAuth, (user) => {
+        if (!cancelled) setCloudUser(user);
+      });
     });
-    return () => unsub();
-  }, []);
+
+    return () => {
+      cancelled = true;
+      if (unsub) unsub();
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const formatErrorForUi = (err: any, fallback: string) => {
     const raw = err?.message || '';
+    const code = err?.code || '';
     if (raw.includes('Missing or insufficient permissions') || raw.includes('PERMISSION_DENIED')) {
-      return '클라우드 DB 쓰기 권한이 없습니다. 관리자 Google 계정으로 로그인했는지 확인해 주세요.';
+      return '클라우드 DB 쓰기 권한이 없습니다. 관리자 Google 계정(nimomusicceo@gmail.com)으로 로그인했는지 확인해 주세요.';
+    }
+    if (code === 'auth/unauthorized-domain' || raw.includes('auth/unauthorized-domain')) {
+      const host = typeof window !== 'undefined' ? window.location.hostname : '';
+      return `현재 접속 도메인(${host})이 Firebase 승인된 도메인에 등록되지 않았습니다. Firebase Console → Authentication → Settings → Authorized domains에 '${host}'를 추가해 주세요.`;
+    }
+    if (code === 'auth/popup-closed-by-user' || raw.includes('auth/popup-closed-by-user')) {
+      return 'Google 로그인 창이 닫혔습니다. 다시 시도해 주세요.';
     }
     return raw || fallback;
   };

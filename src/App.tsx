@@ -25,7 +25,7 @@ import { ResultModal } from './components/ResultModal';
 import { ExpiredPaymentModal } from './components/ExpiredPaymentModal';
 import { getTranslation } from './i18n/translations';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './firebase';
+import { ensureFirebaseInitialized } from './firebase';
 import { Theme, VocalType, ProviderType, PlaylistResult, StepId } from './types';
 import { fetchThemes, generatePlaylist, verifyLicenseKey } from './services/api';
 import { PROVIDER_AUTO_MODELS, PROVIDER_LABELS } from './constants/models';
@@ -144,17 +144,19 @@ export default function App() {
     };
     loadThemes();
 
-    const unsub = auth
-      ? onAuthStateChanged(auth, (user) => {
-          if (user) {
-            loadThemes();
-          }
-        })
-      : () => {};
+    let unsubAuth: (() => void) | undefined;
+    ensureFirebaseInitialized().then(({ auth: activeAuth }) => {
+      if (cancelled || !activeAuth) return;
+      unsubAuth = onAuthStateChanged(activeAuth, (user) => {
+        if (user && !cancelled) {
+          loadThemes();
+        }
+      });
+    });
 
     return () => {
       cancelled = true;
-      unsub();
+      if (unsubAuth) unsubAuth();
     };
   }, []);
 

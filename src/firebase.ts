@@ -1,8 +1,8 @@
-import { initializeApp, FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, Auth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer, Firestore } from 'firebase/firestore';
 
-interface FirebaseAppletConfig {
+export interface FirebaseAppletConfig {
   projectId?: string;
   appId?: string;
   apiKey?: string;
@@ -30,7 +30,7 @@ const envConfig: FirebaseAppletConfig = {
   firestoreDatabaseId: import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || undefined,
 };
 
-const firebaseConfig: FirebaseAppletConfig = {
+const initialConfig: FirebaseAppletConfig = {
   apiKey: envConfig.apiKey || localFileConfig.apiKey,
   authDomain: envConfig.authDomain || localFileConfig.authDomain,
   projectId: envConfig.projectId || localFileConfig.projectId,
@@ -40,23 +40,92 @@ const firebaseConfig: FirebaseAppletConfig = {
   firestoreDatabaseId: envConfig.firestoreDatabaseId || localFileConfig.firestoreDatabaseId,
 };
 
-const isFirebaseConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
-
 let app: FirebaseApp | null = null;
-let dbInstance: Firestore | null = null;
-let authInstance: Auth | null = null;
+export let db: Firestore | null = null;
+export let auth: Auth | null = null;
+export let hasFirebaseConfig = false;
+let connectionTested = false;
 
-if (isFirebaseConfigured) {
-  app = initializeApp(firebaseConfig);
-  dbInstance = firebaseConfig.firestoreDatabaseId
-    ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+function initWithConfig(cfg: FirebaseAppletConfig): boolean {
+  if (!cfg.apiKey || !cfg.projectId || !cfg.appId) return false;
+  if (app && db && auth) return true;
+
+  app = getApps().length > 0 ? getApps()[0] : initializeApp(cfg);
+  db = cfg.firestoreDatabaseId
+    ? getFirestore(app, cfg.firestoreDatabaseId)
     : getFirestore(app);
-  authInstance = getAuth(app);
+  auth = getAuth(app);
+  hasFirebaseConfig = true;
+  void testConnection();
+  return true;
 }
 
-export const db: Firestore | null = dbInstance;
-export const auth: Auth | null = authInstance;
-export const hasFirebaseConfig = isFirebaseConfigured;
+async function testConnection() {
+  if (!db || connectionTested) return;
+  connectionTested = true;
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration.');
+    }
+  }
+}
+
+// Synchronous initialization when bundled config or build-time VITE_* env vars are present
+initWithConfig(initialConfig);
+
+let initPromise: Promise<{ db: Firestore | null; auth: Auth | null; configured: boolean }> | null = null;
+
+/**
+ * Ensures Firebase SDK is initialized even when Secrets / env vars are injected at runtime on the server
+ * (e.g., AI Studio Secrets, Cloud Run, or Vercel runtime env) rather than baked into the Vite bundle at build time.
+ */
+export async function ensureFirebaseInitialized(): Promise<{
+  db: Firestore | null;
+  auth: Auth | null;
+  configured: boolean;
+}> {
+  if (db && auth) {
+    try {
+      await Promise.race([
+        auth.authStateReady(),
+        new Promise<void>((resolve) => setTimeout(resolve, 1500)),
+      ]);
+    } catch {}
+    return { db, auth, configured: true };
+  }
+
+  if (!initPromise) {
+    initPromise = (async () => {
+      try {
+        const res = await fetch('/api/firebase-config', { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.configured && data?.config) {
+            initWithConfig(data.config);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch runtime Firebase config:', err);
+      }
+      if (auth) {
+        try {
+          await Promise.race([
+            auth.authStateReady(),
+            new Promise<void>((resolve) => setTimeout(resolve, 1500)),
+          ]);
+        } catch {}
+      }
+      if (!db || !auth) {
+        initPromise = null; // allow retry on next attempt if failed transiently
+      }
+      return { db, auth, configured: Boolean(db && auth) };
+    })();
+  }
+
+  return await initPromise;
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -92,13 +161,13 @@ export function handleFirestoreError(
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: authInstance?.currentUser?.uid,
-      email: authInstance?.currentUser?.email,
-      emailVerified: authInstance?.currentUser?.emailVerified,
-      isAnonymous: authInstance?.currentUser?.isAnonymous,
-      tenantId: authInstance?.currentUser?.tenantId,
+      userId: auth?.currentUser?.uid,
+      email: auth?.currentUser?.email,
+      emailVerified: auth?.currentUser?.emailVerified,
+      isAnonymous: auth?.currentUser?.isAnonymous,
+      tenantId: auth?.currentUser?.tenantId,
       providerInfo:
-        authInstance?.currentUser?.providerData?.map((provider) => ({
+        auth?.currentUser?.providerData?.map((provider) => ({
           providerId: provider.providerId,
           email: provider.email,
         })) || [],
@@ -110,28 +179,18 @@ export function handleFirestoreError(
   throw new Error(JSON.stringify(errInfo));
 }
 
-async function testConnection() {
-  if (!dbInstance) return;
-  try {
-    await getDocFromServer(doc(dbInstance, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
-    }
-  }
-}
-testConnection();
-
 export async function signInWithGoogleForAdmin() {
-  if (!authInstance) {
+  const { auth: activeAuth } = await ensureFirebaseInitialized();
+  if (!activeAuth) {
     throw new Error('Firebase 환경 변수(VITE_FIREBASE_*) 또는 설정 파일이 구성되지 않았습니다.');
   }
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
-  return await signInWithPopup(authInstance, provider);
+  return await signInWithPopup(activeAuth, provider);
 }
 
 export async function signOutFirebase() {
-  if (!authInstance) return;
-  return await signOut(authInstance);
+  const { auth: activeAuth } = await ensureFirebaseInitialized();
+  if (!activeAuth) return;
+  return await signOut(activeAuth);
 }

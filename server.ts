@@ -70,6 +70,30 @@ function saveThemesList(themes: any[]) {
 
 // API Routes (supports both /api/path and /path for direct Vercel serverless function rewrites)
 
+// 0. Runtime Firebase Web Configuration (reads AI Studio / Vercel / Cloud Run runtime env vars or local config file)
+app.get(['/api/firebase-config', '/firebase-config'], (req: Request, res: Response) => {
+  let fileCfg: Record<string, any> = {};
+  try {
+    const cfgPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
+    if (fs.existsSync(cfgPath)) {
+      fileCfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+    }
+  } catch {}
+
+  const config = {
+    apiKey: String(process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY || fileCfg.apiKey || '').trim(),
+    authDomain: String(process.env.VITE_FIREBASE_AUTH_DOMAIN || process.env.FIREBASE_AUTH_DOMAIN || fileCfg.authDomain || '').trim(),
+    projectId: String(process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || fileCfg.projectId || '').trim(),
+    storageBucket: String(process.env.VITE_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET || fileCfg.storageBucket || '').trim(),
+    messagingSenderId: String(process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || process.env.FIREBASE_MESSAGING_SENDER_ID || fileCfg.messagingSenderId || '').trim(),
+    appId: String(process.env.VITE_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID || fileCfg.appId || '').trim(),
+    firestoreDatabaseId: String(process.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || process.env.FIREBASE_FIRESTORE_DATABASE_ID || fileCfg.firestoreDatabaseId || '').trim(),
+  };
+
+  const configured = Boolean(config.apiKey && config.projectId && config.appId);
+  res.json({ success: true, configured, config });
+});
+
 // 1. Get all themes
 app.get(['/api/themes', '/themes'], (req: Request, res: Response) => {
   const themes = getThemesList();

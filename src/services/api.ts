@@ -11,7 +11,7 @@ import {
   updateDoc,
   where
 } from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType } from '../firebase';
+import { ensureFirebaseInitialized, handleFirestoreError, OperationType } from '../firebase';
 import { Theme, PlaylistResult, VocalType, ProviderType } from '../types';
 
 const THEMES_STORAGE_KEY = 'plymaster_custom_themes';
@@ -171,10 +171,11 @@ function mergeThemeLists(
 }
 
 async function fetchFirestoreThemes(): Promise<Theme[] | null> {
-  if (!db) return null;
+  const { db: activeDb } = await ensureFirebaseInitialized();
+  if (!activeDb) return null;
   try {
     const q = query(
-      collection(db, THEMES_COLLECTION),
+      collection(activeDb, THEMES_COLLECTION),
       where('isDefault', 'in', [true, false])
     );
     let snap;
@@ -202,10 +203,11 @@ async function upsertThemeInFirestore(theme: {
   sop: string;
   isDefault: boolean;
 }): Promise<boolean> {
-  if (!db || !auth?.currentUser) return false;
+  const { db: activeDb, auth: activeAuth } = await ensureFirebaseInitialized();
+  if (!activeDb || !activeAuth?.currentUser) return false;
   const clean = sanitizeThemeFields(theme);
   const docPath = `${THEMES_COLLECTION}/${clean.id}`;
-  const ref = doc(db, THEMES_COLLECTION, clean.id);
+  const ref = doc(activeDb, THEMES_COLLECTION, clean.id);
 
   try {
     const existingSnap = await getDoc(ref);
@@ -235,11 +237,12 @@ async function upsertThemeInFirestore(theme: {
 }
 
 async function deleteThemeInFirestore(id: string): Promise<boolean> {
-  if (!db || !auth?.currentUser) return false;
+  const { db: activeDb, auth: activeAuth } = await ensureFirebaseInitialized();
+  if (!activeDb || !activeAuth?.currentUser) return false;
   const safeId = sanitizeThemeId(id);
   const docPath = `${THEMES_COLLECTION}/${safeId}`;
   try {
-    await deleteDoc(doc(db, THEMES_COLLECTION, safeId));
+    await deleteDoc(doc(activeDb, THEMES_COLLECTION, safeId));
     return true;
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, docPath);
@@ -247,7 +250,8 @@ async function deleteThemeInFirestore(id: string): Promise<boolean> {
 }
 
 export async function syncThemesToFirestore(themesToSync?: Theme[]): Promise<{ syncedCount: number }> {
-  if (!db || !auth?.currentUser) {
+  const { db: activeDb, auth: activeAuth } = await ensureFirebaseInitialized();
+  if (!activeDb || !activeAuth?.currentUser) {
     throw new Error('클라우드 동기화를 위해 먼저 Google 계정으로 로그인해 주세요.');
   }
 
@@ -294,7 +298,8 @@ export async function fetchThemes(): Promise<Theme[]> {
   const deletedMap = getDeletedThemeIds();
   const isLocallyCleared = localStorage.getItem(THEMES_CLEARED_KEY) === 'true';
 
-  // 1. Fetch from Firestore cloud database (authoritative persistent store)
+  // 1. Initialize Firebase (including runtime Secrets config) & fetch from Firestore
+  const { auth: activeAuth } = await ensureFirebaseInitialized();
   const cloudThemes = await fetchFirestoreThemes();
 
   // 2. Fetch server seed/runtime list as fallback or initial seed source
@@ -320,7 +325,7 @@ export async function fetchThemes(): Promise<Theme[]> {
     finalThemes = mergeThemeLists(cloudThemes, localThemes, deletedMap);
 
     // If signed in and local has unsynced newer themes, push them to Firestore automatically
-    if (auth?.currentUser && localThemes.length > 0) {
+    if (activeAuth?.currentUser && localThemes.length > 0) {
       syncThemesToFirestore(finalThemes).catch((e) =>
         console.warn('Background Firestore sync notice:', e)
       );
@@ -347,7 +352,7 @@ export async function fetchThemes(): Promise<Theme[]> {
     }
 
     // Seed Firestore automatically if admin is already signed in
-    if (auth?.currentUser && finalThemes.length > 0 && cloudThemes && cloudThemes.length === 0) {
+    if (activeAuth?.currentUser && finalThemes.length > 0 && cloudThemes && cloudThemes.length === 0) {
       syncThemesToFirestore(finalThemes).catch((e) =>
         console.warn('Initial Firestore seed notice:', e)
       );
@@ -393,7 +398,8 @@ export async function createTheme(themeData: { id?: string; name: string; catego
   saveLocalThemes(updatedList);
 
   // 2. Persist to Firebase Firestore when signed in as Admin
-  if (auth?.currentUser) {
+  const { auth: activeAuth } = await ensureFirebaseInitialized();
+  if (activeAuth?.currentUser) {
     await upsertThemeInFirestore(clean);
   }
 
@@ -454,7 +460,8 @@ export async function updateTheme(id: string, themeData: Partial<Theme>): Promis
   }
 
   // Persist update to Firebase Firestore when signed in as Admin
-  if (auth?.currentUser) {
+  const { auth: activeAuth } = await ensureFirebaseInitialized();
+  if (activeAuth?.currentUser) {
     await upsertThemeInFirestore(clean);
   }
 
@@ -483,7 +490,8 @@ export async function deleteTheme(id: string): Promise<void> {
   saveLocalThemes(remaining);
   markThemeDeletedLocally(id);
 
-  if (auth?.currentUser) {
+  const { auth: activeAuth } = await ensureFirebaseInitialized();
+  if (activeAuth?.currentUser) {
     await deleteThemeInFirestore(id);
   }
 
@@ -498,9 +506,10 @@ export async function deleteTheme(id: string): Promise<void> {
 
 export async function resetThemesToDefault(): Promise<Theme[]> {
   const existing = getLocalThemes();
+  const { auth: activeAuth } = await ensureFirebaseInitialized();
   for (const t of existing) {
     markThemeDeletedLocally(t.id);
-    if (auth?.currentUser) {
+    if (activeAuth?.currentUser) {
       await deleteThemeInFirestore(t.id);
     }
   }
@@ -541,7 +550,8 @@ export async function importThemesBulk(importedThemes: Array<{ id?: string; name
   const merged = mergeThemeLists(cleanedIncoming, current, getDeletedThemeIds());
   saveLocalThemes(merged);
 
-  if (auth?.currentUser) {
+  const { auth: activeAuth } = await ensureFirebaseInitialized();
+  if (activeAuth?.currentUser) {
     await syncThemesToFirestore(merged);
   }
 
