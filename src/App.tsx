@@ -30,6 +30,59 @@ import { Theme, VocalType, ProviderType, PlaylistResult, StepId } from './types'
 import { fetchThemes, generatePlaylist, verifyLicenseKey } from './services/api';
 import { PROVIDER_AUTO_MODELS, PROVIDER_LABELS } from './constants/models';
 
+const LYRIC_SUBTOPIC_PRESETS = [
+  {
+    id: 'love_at_first_sight',
+    title: '첫눈에 반한 감정',
+    description: '누군가를 처음 보고 강렬하게 끌리는 순간이나 상대방에게 빠져드는 과정을 생생하게 묘사합니다.'
+  },
+  {
+    id: 'sweet_confession',
+    title: '달콤한 고백',
+    description: '사랑하는 사람과 함께할 때 느끼는 행복감을 표현하며 상대방의 마음을 얻고 싶어 하는 이야기를 담습니다.'
+  },
+  {
+    id: 'heartbreak_wound',
+    title: '헤어짐의 상처',
+    description: '연인과 헤어진 직후 느끼는 공허함과 배신감, 슬픔을 솔직하게 풀어냅니다.'
+  },
+  {
+    id: 'past_regret',
+    title: '과거에 대한 후회',
+    description: '헤어진 연인을 잊지 못해 그리워하거나 지나간 시간을 되돌리고 싶어 하는 감정을 다룹니다.'
+  },
+  {
+    id: 'growth_after_breakup',
+    title: '이별 후의 성장',
+    description: '상처를 극복하고 혼자서도 충분히 행복하고 강하다는 메시지를 전달합니다.'
+  },
+  {
+    id: 'self_confidence',
+    title: '자신감 표현',
+    description: '타인의 시선에 흔들리지 않고 있는 그대로의 자신을 사랑하자는 응원의 가사가 주를 이룹니다.'
+  },
+  {
+    id: 'stress_relief',
+    title: '현실의 스트레스 해소',
+    description: '반복되는 지루한 일상에서 벗어나 친구들과 밤새 춤추며 즐기는 자유로운 분위기를 그립니다.'
+  },
+  {
+    id: 'moment_of_joy',
+    title: '순간의 즐거움',
+    description: '내일 걱정은 잠시 미뤄두고 지금 이 순간의 젊음과 에너지를 만끽하자는 내용을 담습니다.'
+  },
+  {
+    id: 'overcoming_adversity',
+    title: '역경 극복',
+    description: '힘든 시기를 겪고 있더라도 포기하지 않고 앞으로 나아가면 결국 해낼 수 있다는 격려를 보냅니다.'
+  },
+  {
+    id: 'better_future',
+    title: '더 나은 미래',
+    description: '새로운 시작을 앞둔 설렘과 자신의 목표를 이루기 위해 끊임없이 노력하는 열정을 노래합니다.'
+  }
+] as const;
+
 export default function App() {
   // G20 Language State
   const [currentLang, setCurrentLang] = useState<string>(() => localStorage.getItem('plymaster_lang') || 'ko');
@@ -58,6 +111,9 @@ export default function App() {
   // Track Count, Lyric Concept & Vocal Settings - Default track count is 1, default vocal is random
   const [useLyricConcept, setUseLyricConcept] = useState<boolean>(false);
   const [lyricConcept, setLyricConcept] = useState<string>('');
+  const [selectedSubtopicId, setSelectedSubtopicId] = useState<string>('');
+  const [isSubtopicDropdownOpen, setIsSubtopicDropdownOpen] = useState<boolean>(false);
+  const subtopicDropdownRef = useRef<HTMLDivElement>(null);
   const [trackCount, setTrackCount] = useState<number>(1);
   const [vocal, setVocal] = useState<VocalType>('random');
 
@@ -160,11 +216,14 @@ export default function App() {
     };
   }, []);
 
-  // Close dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (themeDropdownRef.current && !themeDropdownRef.current.contains(e.target as Node)) {
         setIsThemeDropdownOpen(false);
+      }
+      if (subtopicDropdownRef.current && !subtopicDropdownRef.current.contains(e.target as Node)) {
+        setIsSubtopicDropdownOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -267,7 +326,16 @@ export default function App() {
       setCurrentStep('create');
       setStatusMessage(`02 CREATE: 트랙별 무드, Suno/Udio 스타일 프롬프트 및 완성형 가사 작성 중... (총 ${trackCount}곡)`);
 
-      const activeLyricConcept = useLyricConcept && lyricConcept.trim() ? lyricConcept.trim() : '';
+      const selectedSubtopicObj = LYRIC_SUBTOPIC_PRESETS.find((item) => item.id === selectedSubtopicId);
+      const subtopicConceptText = selectedSubtopicObj
+        ? `${selectedSubtopicObj.title}: ${selectedSubtopicObj.description}`
+        : '';
+      const typedConcept = lyricConcept.trim();
+      const combinedConcept =
+        typedConcept && subtopicConceptText
+          ? `${typedConcept} (${subtopicConceptText})`
+          : typedConcept || subtopicConceptText;
+      const activeLyricConcept = useLyricConcept && combinedConcept ? combinedConcept : '';
 
       // Call API
       const apiResult = await generatePlaylist({
@@ -638,7 +706,7 @@ export default function App() {
                     onChange={(e) => {
                       const val = e.target.value;
                       setLyricConcept(val);
-                      if (val.trim().length > 0) {
+                      if (val.trim().length > 0 || selectedSubtopicId) {
                         setUseLyricConcept(true);
                       } else {
                         setUseLyricConcept(false);
@@ -651,6 +719,78 @@ export default function App() {
                         : 'border-slate-300 bg-slate-50/70 text-slate-600'
                     }`}
                   />
+                </div>
+
+                {/* 가사 컨셉 소주제 드랍다운 (10종) */}
+                <div className="mt-2.5 flex items-center gap-2.5">
+                  <span className="text-xs font-semibold text-slate-500 shrink-0 pl-7">
+                    소주제 선택:
+                  </span>
+                  <div ref={subtopicDropdownRef} className="relative flex-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsSubtopicDropdownOpen((prev) => !prev)}
+                      className={`w-full px-3.5 py-2 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                        selectedSubtopicId && useLyricConcept
+                          ? 'border-blue-400 bg-white text-slate-900 font-medium shadow-2xs'
+                          : 'border-slate-300 bg-slate-50/70 text-slate-600 hover:border-slate-400'
+                      }`}
+                    >
+                      <span className="text-xs sm:text-sm truncate pr-2">
+                        {(() => {
+                          const found = LYRIC_SUBTOPIC_PRESETS.find((item) => item.id === selectedSubtopicId);
+                          return found ? `${found.title} — ${found.description}` : '소주제 10가지 중 선택 (선택 사항)';
+                        })()}
+                      </span>
+                      <ChevronDown
+                        className={`w-4 h-4 text-slate-500 shrink-0 transition-transform ${
+                          isSubtopicDropdownOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </button>
+
+                    {isSubtopicDropdownOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-xl border border-slate-200 shadow-xl z-30 max-h-72 overflow-y-auto py-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSubtopicId('');
+                            setIsSubtopicDropdownOpen(false);
+                            if (!lyricConcept.trim()) {
+                              setUseLyricConcept(false);
+                            }
+                          }}
+                          className={`w-full px-4 py-2 text-left text-xs font-medium hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-100 ${
+                            !selectedSubtopicId ? 'bg-slate-50 text-slate-800 font-semibold' : 'text-slate-500'
+                          }`}
+                        >
+                          선택 안함 (직접 입력만 사용)
+                        </button>
+                        {LYRIC_SUBTOPIC_PRESETS.map((item) => {
+                          const isSel = selectedSubtopicId === item.id;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedSubtopicId(item.id);
+                                setUseLyricConcept(true);
+                                setIsSubtopicDropdownOpen(false);
+                              }}
+                              className={`w-full px-4 py-2.5 text-left hover:bg-slate-50 transition-colors cursor-pointer ${
+                                isSel ? 'bg-blue-50/70 text-blue-700' : 'text-slate-700'
+                              }`}
+                            >
+                              <div className="text-xs sm:text-sm font-semibold">{item.title}</div>
+                              <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                                {item.description}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

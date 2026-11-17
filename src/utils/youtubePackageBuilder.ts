@@ -152,17 +152,23 @@ export function extractLyricMoodDetails(
   const morning = /\b(morning|sunday|brunch|sunlight|sunrise|daylight)\b/i.test(fullText) ||
     /(아침|일요일|햇살|오전|주말)/.test(fullText);
 
+  const isEmpoweringRecovery =
+    /(이별\s*후의\s*성장|상처를\s*극복|역경\s*극복|혼자서도\s*충분히\s*행복|자신감\s*표현|더\s*나은\s*미래|순간의\s*즐거움|스트레스\s*해소)/.test(fullText) ||
+    /\b(overcoming adversity|self[- ]confidence|empowering|move on stronger|better future)\b/i.test(fullText);
+
   const isHeartbreak =
-    /\b(lonely|loneliness|devastating|heartbreak|goodbye|farewell|miss you|empty|hollow|tears|sorrow|broken)\b/i.test(fullText) ||
-    /(이별|그리움|외로움|공허|눈물|쓸쓸|아쉬운|헤어짐|혼자|고독|寂し|涙|さよなら)/.test(fullText);
+    !isEmpoweringRecovery &&
+    (/\b(lonely|loneliness|devastating|heartbreak|goodbye|farewell|miss you|empty|hollow|tears|sorrow|broken)\b/i.test(fullText) ||
+      /(이별|그리움|외로움|공허|눈물|쓸쓸|아쉬운|헤어짐|혼자|고독|寂し|涙|さよなら)/.test(fullText));
 
   const isConfident =
+    isEmpoweringRecovery ||
     /\b(west\s*coast|freestyle|cypher|swagger|lowrider|g-funk|hip-hop|hip\s*hop|rap|flex)\b/i.test(fullText) ||
-    /(자신감|프리스타일|힙합|랩)/.test(fullText);
+    /(자신감|프리스타일|힙합|랩|극복|열정|자유로운\s*분위기)/.test(fullText);
 
   const isNostalgic =
     /\b(nostalgic|memories|yesterday|vintage|antique|gramophone|letter|photograph|remember)\b/i.test(fullText) ||
-    /(추억|기억|오래된|옛날|향수|그때|필름|축음기)/.test(fullText);
+    /(추억|기억|오래된|옛날|향수|그때|필름|축음기|과거에\s*대한\s*후회)/.test(fullText);
 
   let emotionKey: LyricMoodDetails['emotionKey'] = 'warm_romantic';
   let emotionDescriptorEn = 'warm romantic anticipation, gentle affection, and uplifting tenderness';
@@ -178,8 +184,12 @@ export function extractLyricMoodDetails(
     emotionKey = 'confident_groove';
     emotionDescriptorEn = /\b(west\s*coast|california|los\s*angeles)\b/i.test(fullText)
       ? 'effortless West Coast rhythm, laid-back confidence, and magnetic street-level swagger'
+      : isEmpoweringRecovery
+      ? 'radiant self-assurance, uplifting resilience, and liberated joyful energy'
       : 'effortless street-level rhythm, laid-back confidence, and authentic artistic poise';
-    expressionEn = 'carrying a calm, self-assured expression with relaxed rhythmic poise and authentic charismatic presence';
+    expressionEn = isEmpoweringRecovery
+      ? 'carrying a bright, self-assured and liberated smile radiating resilience and genuine inner peace'
+      : 'carrying a calm, self-assured expression with relaxed rhythmic poise and authentic charismatic presence';
     lightingMoodEn = 'crisp directional golden-hour sunlight carving warm highlights and deep atmospheric street contrast';
   } else if (isNostalgic) {
     emotionKey = 'nostalgic_reflective';
