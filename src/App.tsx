@@ -726,20 +726,24 @@ export default function App() {
                   <span className="text-xs font-semibold text-slate-500 shrink-0 pl-7">
                     소주제 선택:
                   </span>
-                  <div ref={subtopicDropdownRef} className="relative flex-1">
+                  <div ref={subtopicDropdownRef} className="relative flex-1 min-w-0">
                     <button
                       type="button"
                       onClick={() => setIsSubtopicDropdownOpen((prev) => !prev)}
+                      title={(() => {
+                        const found = LYRIC_SUBTOPIC_PRESETS.find((item) => item.id === selectedSubtopicId);
+                        return found ? found.description : undefined;
+                      })()}
                       className={`w-full px-3.5 py-2 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
                         selectedSubtopicId && useLyricConcept
                           ? 'border-blue-400 bg-white text-slate-900 font-medium shadow-2xs'
                           : 'border-slate-300 bg-slate-50/70 text-slate-600 hover:border-slate-400'
                       }`}
                     >
-                      <span className="text-xs sm:text-sm truncate pr-2">
+                      <span className="text-sm truncate pr-2">
                         {(() => {
                           const found = LYRIC_SUBTOPIC_PRESETS.find((item) => item.id === selectedSubtopicId);
-                          return found ? `${found.title} — ${found.description}` : '소주제 10가지 중 선택 (선택 사항)';
+                          return found ? found.title : '소주제 10가지 중 선택 (선택 사항)';
                         })()}
                       </span>
                       <ChevronDown
