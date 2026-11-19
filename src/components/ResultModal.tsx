@@ -474,7 +474,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                         <span>{copiedKey === 'yt_desc_ko' ? '한국어 설명 복사됨' : '한국어 설명 복사'}</span>
                       </button>
                     </div>
-                    <div className="font-mono text-xs text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-line leading-relaxed max-h-52 overflow-y-auto select-all">
+                    <div className="font-mono text-xs text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto select-all">
                       {descKo}
                     </div>
                   </div>
@@ -491,7 +491,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                           <span>{copiedKey === 'yt_desc_en' ? '영문 설명 복사됨' : '영문 설명 복사'}</span>
                         </button>
                       </div>
-                      <div className="font-mono text-xs text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-line leading-relaxed max-h-52 overflow-y-auto select-all">
+                      <div className="font-mono text-xs text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto select-all">
                         {descEn}
                       </div>
                     </div>
