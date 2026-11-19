@@ -14,6 +14,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
   const t = getTranslation(lang);
   const [activeTab, setActiveTab] = useState<'tracks' | 'youtube' | 'all'>('tracks');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [expandedAuditTrack, setExpandedAuditTrack] = useState<number | null>(null);
 
   if (!isOpen || !data) return null;
 
@@ -51,6 +52,13 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
       full += `Title\n${t.title}\n\n`;
       full += `Style Prompt\n${t.stylePrompt}\n\n`;
       full += `Lyrics\n${t.fullLyrics}\n\n`;
+      if (t.craftAudit) {
+        full += `[7항목 사운드 차별화 자가검증]\n`;
+        t.craftAudit.criteria.forEach((c) => {
+          full += `- ${c.item}: ${c.result} (${c.judgment})\n`;
+        });
+        full += `\n`;
+      }
     });
 
     const titleKo = data.youtube.titleKo || data.youtube.title;
@@ -362,6 +370,80 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                           {track.fullLyrics}
                         </div>
                       </div>
+
+                      {/* 4. 7-Axis Musical Quality Pre-Output Audit Report */}
+                      {track.craftAudit && (
+                        <div className="p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-200/80">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-extrabold text-emerald-950 text-xs flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                                7항목 사운드 차별화 검증 완료
+                              </span>
+                              <span className="text-[10px] font-semibold bg-white text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
+                                {track.craftAudit.refined ? '자동 보완 적용됨' : '1차 기준 통과'}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedAuditTrack((prev) =>
+                                  prev === track.trackNumber ? null : track.trackNumber
+                                )
+                              }
+                              className="text-xs font-bold text-emerald-700 hover:text-emerald-900 bg-white px-2.5 py-1 rounded-lg border border-emerald-200 cursor-pointer"
+                            >
+                              {expandedAuditTrack === track.trackNumber ? '리포트 접기 ▲' : '7항목 리포트 보기 ▼'}
+                            </button>
+                          </div>
+
+                          {expandedAuditTrack === track.trackNumber && (
+                            <div className="mt-3 space-y-2.5">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] bg-white p-2.5 rounded-lg border border-emerald-100">
+                                <div><strong className="text-slate-700">베이스:</strong> {track.craftAudit.signatureTags.bass}</div>
+                                <div><strong className="text-slate-700">드럼:</strong> {track.craftAudit.signatureTags.drum}</div>
+                                <div><strong className="text-slate-700">하이햇:</strong> {track.craftAudit.signatureTags.hihat}</div>
+                                <div><strong className="text-slate-700">악기 대화:</strong> {track.craftAudit.signatureTags.interaction}</div>
+                                <div><strong className="text-slate-700">보컬 프레이징:</strong> {track.craftAudit.signatureTags.vocalPhrasing}</div>
+                                <div><strong className="text-slate-700">화성 색채:</strong> {track.craftAudit.signatureTags.harmony}</div>
+                              </div>
+
+                              <div className="overflow-x-auto bg-white rounded-lg border border-emerald-100">
+                                <table className="w-full text-left border-collapse text-[11px]">
+                                  <thead>
+                                    <tr className="bg-emerald-50/70 text-emerald-950 border-b border-emerald-100">
+                                      <th className="py-1.5 px-2.5 font-bold">평가 항목</th>
+                                      <th className="py-1.5 px-2.5 font-bold w-16 text-center">결과</th>
+                                      <th className="py-1.5 px-2.5 font-bold">판단</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {track.craftAudit.criteria.map((c) => (
+                                      <tr key={c.item}>
+                                        <td className="py-1.5 px-2.5 font-semibold text-slate-800">{c.item}</td>
+                                        <td className="py-1.5 px-2.5 text-center">
+                                          <span
+                                            className={`inline-block px-1.5 py-0.5 rounded font-bold text-[10px] ${
+                                              c.result === '우수'
+                                                ? 'bg-emerald-100 text-emerald-800'
+                                                : c.result === '양호'
+                                                ? 'bg-blue-100 text-blue-800'
+                                                : 'bg-amber-100 text-amber-800'
+                                            }`}
+                                          >
+                                            {c.result}
+                                          </span>
+                                        </td>
+                                        <td className="py-1.5 px-2.5 text-slate-600">{c.judgment}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

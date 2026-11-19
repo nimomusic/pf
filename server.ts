@@ -6,6 +6,13 @@ import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import seedThemes from './data/themes.json' with { type: 'json' };
 import { buildCuratedYoutubePackage } from './src/utils/youtubePackageBuilder.ts';
+import {
+  buildRefinementPromptForAI,
+  evaluateTrackMusicalCraft,
+  formatInnovationPromptSection,
+  generateTrackInnovationPlans,
+  refineTrackWithCraftAudit,
+} from './src/utils/musicalCraftEngine.ts';
 
 dotenv.config();
 
@@ -1158,6 +1165,9 @@ The user explicitly specified the following lyric concept/storyline for ALL trac
 - When generating multiple tracks, write a fresh angle, scene, and distinct song title for each track around "${cleanLyricConcept}" while strictly respecting the SOP's genre, language rules, vocal style, and acoustic criteria!`
       : '';
 
+    const innovationPlans = generateTrackInnovationPlans(theme, sopSpecs, effectiveTrackCount, vocal);
+    const innovationPromptSection = formatInnovationPromptSection(innovationPlans);
+
     const systemPrompt = `You are "Plymaster", a world-class AI executive music producer and Suno/Udio prompt engineer.
 
 ${languageRule}
@@ -1178,6 +1188,7 @@ ${theme.sop || ''}
 - Target Track Count: EXACTLY ${effectiveTrackCount} track(s) (You MUST generate ALL ${effectiveTrackCount} distinct tracks numbered sequentially 1 to ${effectiveTrackCount}!)
 - Vocal Setup: ${vocalLabel}${cleanLyricConcept ? `\n- Lyric Concept (가사 컨셉): ${cleanLyricConcept}` : ''}
 ${lyricConceptSection}
+${innovationPromptSection}
 
 ================================================================================
 STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
@@ -1309,10 +1320,13 @@ CRITICAL: "tracks" MUST contain EXACTLY ${effectiveTrackCount} track objects ("t
 
     // Shared post-processor: guarantees exact track count (with AI continuation if AI returned fewer),
     // sequential 1..N numbering, clean titles, clean lyrics, and synchronized YouTube tracklist.
-    const buildContinuationPrompt = (missingCount: number, startNumber: number, existingTitles: string[]) => `
+    const buildContinuationPrompt = (missingCount: number, startNumber: number, existingTitles: string[]) => {
+      const subsetPlans = innovationPlans.slice(startNumber - 1, startNumber - 1 + missingCount);
+      return `
 You previously generated ${startNumber - 1} track(s) for this playlist, but the user requested EXACTLY ${effectiveTrackCount} tracks.
 Generate the remaining ${missingCount} NEW, DISTINCT track(s) (trackNumber ${startNumber} to ${effectiveTrackCount}) following the exact same SOP, language rules, 750-950 character stylePrompt requirement, and full 3-minute lyrics structure.
 Do NOT repeat these existing song titles: ${existingTitles.map(t => `"${t}"`).join(', ') || '(none)'}.${cleanLyricConcept ? `\nALL new tracks MUST also faithfully express the Lyric Concept: "${cleanLyricConcept}".` : ''}
+${formatInnovationPromptSection(subsetPlans)}
 
 [USER SOP SPECIFICATION]
 ${theme.sop || ''}
@@ -1330,10 +1344,12 @@ Respond ONLY with valid JSON:
     }
   ]
 }`;
+    };
 
     const finalizeAndCompleteTracks = async (
       parsed: any,
-      requestAdditionalTracks: (contPrompt: string) => Promise<any[]>
+      requestAdditionalTracks: (contPrompt: string) => Promise<any[]>,
+      requestCraftRefinement?: (refPrompt: string) => Promise<any[]>
     ) => {
       const safeResult: any = parsed && typeof parsed === 'object' ? { ...parsed } : {};
       let rawTracks: any[] = Array.isArray(safeResult.tracks) ? [...safeResult.tracks] : [];
@@ -1366,7 +1382,7 @@ Respond ONLY with valid JSON:
         (sopSpecs.isKorEngMixed || sopSpecs.isKoreanHipHopRnb || sopSpecs.hasExplicitKoreanLyrics) ? 'korean' :
         'auto';
 
-      safeResult.tracks = rawTracks.map((tr: any, idx: number) => ({
+      let normalizedTracks = rawTracks.map((tr: any, idx: number) => ({
         ...tr,
         trackNumber: idx + 1,
         title: cleanTitleSingleLanguage(
@@ -1376,6 +1392,60 @@ Respond ONLY with valid JSON:
         ),
         fullLyrics: formatAndCleanLyrics(tr?.fullLyrics || '', sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro)
       }));
+
+      // Pre-Output 7-Axis Musical Quality Audit & AI + Algorithmic Refinement Pass
+      const allStylePrompts = normalizedTracks.map((t: any) => String(t?.stylePrompt || ''));
+      const weakItems: Array<{ track: any; plan: any; audit: any }> = [];
+      normalizedTracks.forEach((tr: any, idx: number) => {
+        const plan = innovationPlans[idx] || innovationPlans[0];
+        const audit = evaluateTrackMusicalCraft(tr, plan, allStylePrompts);
+        if (audit.criteria.some((c) => c.result === '미흡' || c.result === '보통')) {
+          weakItems.push({ track: tr, plan, audit });
+        }
+      });
+
+      if (weakItems.length > 0 && requestCraftRefinement) {
+        try {
+          const aiRefined = await requestCraftRefinement(
+            buildRefinementPromptForAI(weakItems.slice(0, 5), theme.name || 'Playlist')
+          );
+          if (Array.isArray(aiRefined) && aiRefined.length > 0) {
+            const refinedMap = new Map(aiRefined.map((r: any) => [Number(r?.trackNumber), r]));
+            normalizedTracks = normalizedTracks.map((tr: any) => {
+              const patch = refinedMap.get(tr.trackNumber);
+              if (!patch) return tr;
+              let updatedLyrics = tr.fullLyrics;
+              if (patch.verseGuide) {
+                updatedLyrics = updatedLyrics.replace(
+                  /^\[Verse 1(?::\s*[^\]]+)?\]$/m,
+                  `[Verse 1: ${String(patch.verseGuide).replace(/[\[\]{}]/g, '').trim()}]`
+                );
+              }
+              if (patch.chorusGuide) {
+                updatedLyrics = updatedLyrics.replace(
+                  /^\[Chorus(?::\s*[^\]]+)?\]$/m,
+                  `[Chorus: ${String(patch.chorusGuide).replace(/[\[\]{}]/g, '').trim()}]`
+                );
+              }
+              return {
+                ...tr,
+                stylePrompt: typeof patch.stylePrompt === 'string' && patch.stylePrompt.length >= 650
+                  ? patch.stylePrompt.trim()
+                  : tr.stylePrompt,
+                fullLyrics: updatedLyrics,
+              };
+            });
+          }
+        } catch (refErr: any) {
+          console.warn('[Plymaster] AI craft refinement skipped, applying deterministic refinement:', refErr.message);
+        }
+      }
+
+      const postPrompts = normalizedTracks.map((t: any) => String(t?.stylePrompt || ''));
+      safeResult.tracks = normalizedTracks.map((tr: any, idx: number) => {
+        const plan = innovationPlans[idx] || innovationPlans[0];
+        return refineTrackWithCraftAudit(tr, plan, postPrompts);
+      });
 
       const builtTracklist = safeResult.tracks.map((t: any, idx: number) => {
         return `${String(idx + 1).padStart(2, '0')}. ${t.title}`;
@@ -1453,14 +1523,25 @@ Respond ONLY with valid JSON:
 
         const rawText = geminiResponse.text?.trim() || '';
         const initialParsed = extractJsonFromText(rawText);
-        const parsed = await finalizeAndCompleteTracks(initialParsed, async (contPrompt) => {
-          const contRes = await Promise.race([
-            callGemini(contPrompt, 8192),
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Continuation timeout')), 60000))
-          ]);
-          const contJson = extractJsonFromText(contRes.text?.trim() || '{}');
-          return Array.isArray(contJson?.tracks) ? contJson.tracks : [];
-        });
+        const parsed = await finalizeAndCompleteTracks(
+          initialParsed,
+          async (contPrompt) => {
+            const contRes = await Promise.race([
+              callGemini(contPrompt, 8192),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Continuation timeout')), 60000))
+            ]);
+            const contJson = extractJsonFromText(contRes.text?.trim() || '{}');
+            return Array.isArray(contJson?.tracks) ? contJson.tracks : [];
+          },
+          async (refPrompt) => {
+            const refRes = await Promise.race([
+              callGemini(refPrompt, 4096),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Refinement timeout')), 25000))
+            ]);
+            const refJson = extractJsonFromText(refRes.text?.trim() || '{}');
+            return Array.isArray(refJson?.refinedTracks) ? refJson.refinedTracks : [];
+          }
+        );
 
         res.json({
           success: true,
@@ -1560,13 +1641,23 @@ Respond ONLY with valid JSON:
         const gptData = await openaiRes.json();
         const content = gptData.choices?.[0]?.message?.content || '{}';
         const initialParsed = extractJsonFromText(content);
-        const parsed = await finalizeAndCompleteTracks(initialParsed, async (contPrompt) => {
-          const contRes = await fetchGpt(activeEngine, contPrompt);
-          if (!contRes.ok) return [];
-          const contData = await contRes.json();
-          const contJson = extractJsonFromText(contData.choices?.[0]?.message?.content || '{}');
-          return Array.isArray(contJson?.tracks) ? contJson.tracks : [];
-        });
+        const parsed = await finalizeAndCompleteTracks(
+          initialParsed,
+          async (contPrompt) => {
+            const contRes = await fetchGpt(activeEngine, contPrompt);
+            if (!contRes.ok) return [];
+            const contData = await contRes.json();
+            const contJson = extractJsonFromText(contData.choices?.[0]?.message?.content || '{}');
+            return Array.isArray(contJson?.tracks) ? contJson.tracks : [];
+          },
+          async (refPrompt) => {
+            const refRes = await fetchGpt(activeEngine, refPrompt);
+            if (!refRes.ok) return [];
+            const refData = await refRes.json();
+            const refJson = extractJsonFromText(refData.choices?.[0]?.message?.content || '{}');
+            return Array.isArray(refJson?.refinedTracks) ? refJson.refinedTracks : [];
+          }
+        );
 
         res.json({
           success: true,
@@ -1640,13 +1731,23 @@ Respond ONLY with valid JSON:
         const claudeData = await claudeRes.json();
         const textBlock = claudeData.content?.[0]?.text || '';
         const initialParsed = extractJsonFromText(textBlock);
-        const parsed = await finalizeAndCompleteTracks(initialParsed, async (contPrompt) => {
-          const contRes = await callClaude(contPrompt, 4096);
-          if (!contRes.ok) return [];
-          const contData = await contRes.json();
-          const contJson = extractJsonFromText(contData.content?.[0]?.text || '{}');
-          return Array.isArray(contJson?.tracks) ? contJson.tracks : [];
-        });
+        const parsed = await finalizeAndCompleteTracks(
+          initialParsed,
+          async (contPrompt) => {
+            const contRes = await callClaude(contPrompt, 4096);
+            if (!contRes.ok) return [];
+            const contData = await contRes.json();
+            const contJson = extractJsonFromText(contData.content?.[0]?.text || '{}');
+            return Array.isArray(contJson?.tracks) ? contJson.tracks : [];
+          },
+          async (refPrompt) => {
+            const refRes = await callClaude(refPrompt, 4096);
+            if (!refRes.ok) return [];
+            const refData = await refRes.json();
+            const refJson = extractJsonFromText(refData.content?.[0]?.text || '{}');
+            return Array.isArray(refJson?.refinedTracks) ? refJson.refinedTracks : [];
+          }
+        );
 
         res.json({
           success: true,
@@ -2394,21 +2495,28 @@ Our unforgettable late night drive`
     });
   }
 
+  // Pre-output 7-axis innovation & refinement pass in simulation mode too
+  const simPlans = generateTrackInnovationPlans(theme, sopSpecs, trackCount, vocal);
+  const simStylePrompts = tracks.map((t) => t.stylePrompt);
+  const refinedTracks = tracks.map((t, idx) =>
+    refineTrackWithCraftAudit(t, simPlans[idx] || simPlans[0], simStylePrompts)
+  );
+
   // Youtube upload package
-  const tracklistText = tracks.map((t, idx) => {
+  const tracklistText = refinedTracks.map((t, idx) => {
     return `${(idx + 1).toString().padStart(2, '0')}. ${t.title}`;
   }).join('\n');
 
   const youtube = buildCuratedYoutubePackage(
     undefined,
-    tracks,
+    refinedTracks,
     theme,
     cleanConcept,
     tracklistText
   );
 
   return {
-    tracks,
+    tracks: refinedTracks,
     youtube
   };
 }

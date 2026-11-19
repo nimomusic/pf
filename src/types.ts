@@ -24,6 +24,26 @@ export interface ModelOption {
   suitability: string;
 }
 
+export interface CraftAuditCriterion {
+  item: string;
+  result: '우수' | '양호' | '보통' | '미흡';
+  judgment: string;
+}
+
+export interface TrackCraftAudit {
+  archetypeLabel: string;
+  refined: boolean;
+  signatureTags: {
+    bass: string;
+    drum: string;
+    hihat: string;
+    interaction: string;
+    vocalPhrasing: string;
+    harmony: string;
+  };
+  criteria: CraftAuditCriterion[];
+}
+
 export interface TrackItem {
   trackNumber: number;
   title: string;
@@ -37,6 +57,7 @@ export interface TrackItem {
   };
   stylePrompt: string;
   fullLyrics: string;
+  craftAudit?: TrackCraftAudit;
 }
 
 export interface YoutubePackage {

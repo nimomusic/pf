@@ -14,6 +14,7 @@ import {
 import { ensureFirebaseInitialized, handleFirestoreError, OperationType } from '../firebase';
 import { Theme, PlaylistResult, VocalType, ProviderType } from '../types';
 import { buildCuratedYoutubePackage } from '../utils/youtubePackageBuilder';
+import { generateTrackInnovationPlans, refineTrackWithCraftAudit } from '../utils/musicalCraftEngine';
 
 const THEMES_STORAGE_KEY = 'plymaster_custom_themes';
 const DELETED_THEMES_STORAGE_KEY = 'plymaster_deleted_theme_ids';
@@ -1905,13 +1906,19 @@ Our unforgettable late night drive`
     });
   }
 
-  const tracklistText = tracks.map((t, idx) => {
+  const fallbackPlans = generateTrackInnovationPlans(theme, specs, effectiveCount, vocal);
+  const fallbackStylePrompts = tracks.map((t) => t.stylePrompt);
+  const refinedTracks = tracks.map((t, idx) =>
+    refineTrackWithCraftAudit(t, fallbackPlans[idx] || fallbackPlans[0], fallbackStylePrompts)
+  );
+
+  const tracklistText = refinedTracks.map((t, idx) => {
     return `${(idx + 1).toString().padStart(2, '0')}. ${t.title}`;
   }).join('\n');
 
   const youtube = buildCuratedYoutubePackage(
     undefined,
-    tracks,
+    refinedTracks,
     theme,
     lyricConcept || '',
     tracklistText
@@ -1920,7 +1927,7 @@ Our unforgettable late night drive`
   return {
     modelUsed: `${provider.toUpperCase()} - ${model || 'SOP Analyzer'}`,
     result: {
-      tracks,
+      tracks: refinedTracks,
       youtube
     }
   };
