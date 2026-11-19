@@ -324,24 +324,30 @@ export function detectSceneProfile(
     };
   }
 
+  const isJapaneseVisual =
+    culture === 'japanese' ||
+    /\b(j-pop|jpop|tokyo)\b/i.test(activeContext) ||
+    activeContext.includes('제이팝') ||
+    sopContext.includes('100% 일본어') ||
+    sopContext.includes('electronic r&b j-pop');
+
+  const hasExplicitRainInActive =
+    /\b(rain|rainy|raindrops|drizzle|rainstorm|downpour)\b/i.test(activeContext) ||
+    /(가을비|빗소리|비\s*내리|비\s*오는|우산\s*쓰|장대비|소나기)/.test(activeContext);
+
+  const hasExplicitAutumnInActive =
+    /\b(autumn|fall\s+leaves|maple|foliage)\b/i.test(activeContext) ||
+    /(가을비|가을\s*감성|가을\s*날|가을\s*거리|낙엽|단풍|은행나무)/.test(activeContext);
+
+  const hasExplicitStreetInActive =
+    /\b(street|boulevard|sidewalk|avenue|alley)\b/i.test(activeContext) ||
+    /(?:^|[\s,])(?:거리|골목|산책길|돌담길)(?:에서|를|에|가|의|\s|$)/.test(activeContext);
+
   // 4. Sunday / Cozy Cafe (localized by culture!)
   if (
-    activeContext.includes('sunday') ||
-    activeContext.includes('일요일') ||
-    activeContext.includes('주말') ||
-    activeContext.includes('브런치') ||
-    activeContext.includes('brunch') ||
-    activeContext.includes('coffee') ||
-    activeContext.includes('커피') ||
-    activeContext.includes('cafe') ||
-    activeContext.includes('카페')
+    /\b(sunday|brunch|coffee|cafe|café)\b/i.test(activeContext) ||
+    /(일요일|주말\s*카페|브런치|커피\s*한\s*잔|단골\s*카페|카페\s*창가)/.test(activeContext)
   ) {
-    const hasExplicitRainInActive =
-      activeContext.includes('가을비') ||
-      activeContext.includes('rainy') ||
-      activeContext.includes('빗소리') ||
-      activeContext.includes('비 오는');
-
     if (!hasExplicitRainInActive) {
       return {
         key: 'sunday_cafe',
@@ -369,11 +375,8 @@ export function detectSceneProfile(
     }
   }
 
-  // 5. Rainy Autumn Walk (localized by culture!)
-  if (
-    (activeContext.includes('rain') || activeContext.includes('비') || activeContext.includes('가을비')) &&
-    (activeContext.includes('autumn') || activeContext.includes('가을') || activeContext.includes('낙엽') || activeContext.includes('street') || activeContext.includes('거리'))
-  ) {
+  // 5. Rainy Autumn Walk (STRICT phrase matching — never trigger on casual "grain", "street", or syllables containing "비"!)
+  if (hasExplicitRainInActive && (hasExplicitAutumnInActive || (hasExplicitStreetInActive && !isJapaneseVisual))) {
     return {
       key: 'rainy_autumn',
       culture,
@@ -398,15 +401,6 @@ export function detectSceneProfile(
   }
 
   // 6. Japanese J-POP / Tokyo Night
-  const isJapaneseVisual =
-    culture === 'japanese' ||
-    activeContext.includes('j-pop') ||
-    activeContext.includes('jpop') ||
-    activeContext.includes('제이팝') ||
-    activeContext.includes('tokyo') ||
-    sopContext.includes('100% 일본어') ||
-    sopContext.includes('electronic r&b j-pop');
-
   if (isJapaneseVisual) {
     return {
       key: 'tokyo_rain',
@@ -805,7 +799,7 @@ export function ensurePhotorealisticPrompt(
   extraContext: string = ''
 ): string {
   const cleanRaw = stripTextOverlayInstructions((rawPrompt || '').replace(/\s+/g, ' ').trim());
-  const scene = detectSceneProfile(theme, lyricConcept, tracks, `${extraContext} ${cleanRaw}`);
+  const scene = detectSceneProfile(theme, lyricConcept, tracks, extraContext);
   const hasNonEnglish = (val: string) => /[\uAC00-\uD7AF\u3040-\u30FF\u4E00-\u9FAF]/.test(val);
   const enSafeTheme = theme.name && !hasNonEnglish(theme.name) ? theme.name : scene.genreLabelEn;
 
@@ -925,9 +919,9 @@ function isWeakYoutubeTitle(rawTitle: string, isKorean: boolean): boolean {
   return false;
 }
 
-function isWeakYoutubeDescription(rawDesc: string, isKorean: boolean): boolean {
+function isWeakYoutubeDescription(rawDesc: string, isKorean: boolean, sceneKey?: SceneProfile['key']): boolean {
   const d = (rawDesc || '').trim();
-  if (!d || d.length < 180) return true;
+  if (!d || d.length < 160) return true;
 
   // Reject textbook AI slop phrases
   if (
@@ -937,12 +931,21 @@ function isWeakYoutubeDescription(rawDesc: string, isKorean: boolean): boolean {
     return true;
   }
 
-  // Must carry the 5-block YouTube playlist structure (Tracklist marker, pin CTA, hashtags)
-  const hasTracklistHeader = /🎧\s*tracklist/i.test(d);
-  const hasPinBlock = d.includes('📌');
-  const hasHashtags = (d.match(/#[a-zA-Z0-9_\uAC00-\uD7AF]+/g) || []).length >= 4;
+  // Reject hallucinated rainy-autumn cliché when the active scene is NOT rainy_autumn
+  if (
+    sceneKey &&
+    sceneKey !== 'rainy_autumn' &&
+    /(가을비 내린 촉촉한 오후|가을비의 차분한 감성|misty golden-crimson autumn afternoon after rain|rainy-day autumn)/i.test(d)
+  ) {
+    return true;
+  }
 
-  if (!hasTracklistHeader || !hasPinBlock || !hasHashtags) {
+  // Must carry the core YouTube description structure (Tracklist marker, CTA/pin, hashtags)
+  const hasTracklistHeader = /tracklist/i.test(d);
+  const hasPinOrCta = d.includes('📌') || /(구독과\s*좋아요|subscribe|notifications)/i.test(d);
+  const hasHashtags = (d.match(/#[a-zA-Z0-9_\uAC00-\uD7AF]+/g) || []).length >= 3;
+
+  if (!hasTracklistHeader || !hasPinOrCta || !hasHashtags) {
     return true;
   }
 
@@ -1399,27 +1402,177 @@ function buildEditorialDescriptionPair(
 
   const cfg = byScene[scene.key];
   const cleanGenreLabelKo = scene.genreLabelKo.replace(/\s*(플레이리스트|플리|모음)\s*$/g, '').trim() || scene.genreLabelKo;
-  const line1Ko = hook.koEmotionDesc
-    ? `${scene.seasonKo}, ${hook.koEmotionDesc} ${cleanGenreLabelKo} 플레이리스트입니다.`
-    : cfg.line1Ko;
-  const line1En = hook.enEmotionDesc
-    ? `${scene.seasonEn.charAt(0).toUpperCase() + scene.seasonEn.slice(1)} — ${hook.enEmotionDesc}, this ${scene.genreLabelEn.replace(/\s*playlist\s*$/i, '').trim()} playlist sets the exact mood.`
-    : cfg.line1En;
+  const cleanGenreLabelEn = scene.genreLabelEn.replace(/\s*playlist\s*$/i, '').trim() || scene.genreLabelEn;
+  const conceptFocus = extractConceptFocusPhrase(cleanConcept).titleLabel.replace(/[.!?~]+$/, '');
+  const asciiConceptTokens = conceptFocus.match(/[A-Za-z0-9][A-Za-z0-9\s&+-]{1,20}/g);
+  const enConceptFocus =
+    conceptFocus && !/[\uAC00-\uD7AF\u3040-\u30FF\u4E00-\u9FAF]/.test(conceptFocus)
+      ? conceptFocus
+      : asciiConceptTokens && asciiConceptTokens.join(' ').trim().length >= 2
+      ? asciiConceptTokens.join(' ').trim()
+      : '';
+
+  const themeTagKo =
+    scene.key === 'night_drive'
+      ? '#한국알앤비 #감성힙합 #느좋플리 #새벽감성'
+      : scene.key === 'tokyo_rain'
+      ? '#제이팝 #일본알앤비 #도쿄감성 #AltPop'
+      : scene.key === 'vintage_1940s_50s'
+      ? '#빈티지팝 #레트로라운지 #아날로그감성 #올드팝'
+      : scene.key === 'west_coast_rap'
+      ? '#웨스트코스트랩 #프리스타일랩 #GFunk #힙합플리'
+      : scene.key === 'cinematic_ost'
+      ? '#감성발라드 #영화OST #시네마틱사운드 #서정적음악'
+      : scene.key === 'christmas_holiday'
+      ? '#크리스마스플레이리스트 #겨울감성 #연말팝송 #XmasBGM'
+      : '#그루브팝 #GroovePop #ChillPop #감성팝송';
+
+  const themeTagEn =
+    scene.key === 'night_drive'
+      ? '#KoreanRnB #ChillHipHop #LateNightVibes #AestheticMix'
+      : scene.key === 'tokyo_rain'
+      ? '#JPOP #ElectronicRnB #AltPop #CityVibes'
+      : scene.key === 'vintage_1940s_50s'
+      ? '#VintagePop #RetroLounge #AnalogVibes #ClassicSound'
+      : scene.key === 'west_coast_rap'
+      ? '#WestCoastRap #FreestyleRap #GFunk #HipHopPlaylist'
+      : scene.key === 'cinematic_ost'
+      ? '#CinematicOST #EmotionalBallad #FilmMood #HealingBGM'
+      : scene.key === 'christmas_holiday'
+      ? '#ChristmasPlaylist #HolidayPop #CozyWinter #XmasVibes'
+      : '#GroovePop #ChillPop #FeelGoodPop #ModernPlaylist';
+
+  let line1Ko = cfg.line1Ko;
+  let line2Ko = cfg.line2Ko;
+  let situationsKo = cfg.situationsKo;
+  let wishKo = cfg.wishKo;
+  let pinKo = cfg.pinKo;
+  let ctaKo = cfg.ctaKo;
+  let tagsKo = cfg.tagsKo;
+
+  let line1En = cfg.line1En;
+  let line2En = cfg.line2En;
+  let situationsEn = cfg.situationsEn;
+  let wishEn = cfg.wishEn;
+  let pinEn = cfg.pinEn;
+  let ctaEn = cfg.ctaEn;
+  let tagsEn = cfg.tagsEn;
+
+  if (cleanConcept) {
+    const cLower = `${cleanConcept} ${theme.name || ''}`.toLowerCase();
+    const isQuirkyPlayful = /(엉뚱|장난|유쾌|친구|개성|웃음|발랄|엉성|미소|별난|quirky|playful|funny|witty)/i.test(cLower);
+    const isRomantic = /첫눈에\s*반한|달콤한\s*고백|설렘|연인|짝사랑|사랑/.test(cLower) || moodDetails.emotionKey === 'warm_romantic';
+    const isHeartbreak = moodDetails.emotionKey === 'heartbreak_melancholy';
+    const isEmpowering =
+      /(이별\s*후의\s*성장|자신감\s*표현|역경\s*극복|더\s*나은\s*미래)/.test(cLower) ||
+      moodDetails.emotionKey === 'confident_groove';
+    const isStressReliefOrJoy = /(스트레스\s*해소|순간의\s*즐거움|밤새|파티|드라이브|신나|자유)/.test(cLower);
+    const hasExplicitSeason =
+      scene.key === 'christmas_holiday' || scene.key === 'rainy_autumn' || scene.key === 'vintage_1940s_50s' || scene.key === 'west_coast_rap';
+
+    if (isQuirkyPlayful) {
+      line1Ko = `어디로 튈지 모르는 유쾌한 매력과 기분 좋은 상상력, '${conceptFocus}'의 재치 있는 장면을 감각적인 사운드로 엮어낸 ${cleanGenreLabelKo} 플레이리스트입니다.`;
+      line2Ko = `톡톡 튀는 리듬과 위트 있는 멜로디로 카페, 작업 공간, 그리고 평범한 하루에 기분 좋은 반전을 더해보세요. ✨🎧`;
+      situationsKo = `친구들과 수다 떠는 카페·매장 BGM은 물론, 산뜻한 기분 전환 드라이브, 즐겁게 집중하는 작업 시간에도 찰떡같이 어울립니다.`;
+      wishKo = `예측할 수 없는 매력처럼 기분 좋게 미소 지어지는 하루 보내세요!`;
+      pinKo = `📌 이 영상은 콘셉트 특유의 재치와 생동감 있는 리듬을 살린 맞춤형 사운드를 지향합니다.`;
+      ctaKo = `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 유쾌한 플레이리스트를 함께 나눠주세요!`;
+      tagsKo = `${themeTagKo} #플레이리스트 #카페음악 #매장BGM #기분전환 #노동요`;
+
+      const subjectEn = enConceptFocus ? `"${enConceptFocus}"` : 'this playful everyday story';
+      line1En = `Playful, witty, and effortlessly charismatic — this ${cleanGenreLabelEn} playlist turns the quirky charm of ${subjectEn} into a fresh, cohesive groove.`;
+      line2En = `Lively rhythms and crisp melodic hooks bring instant warmth and lighthearted momentum to cafés, studios, and everyday hangouts. ✨🎧`;
+      situationsEn = `Great for upbeat café & shop ambiance, drives with friends, lighthearted studio sessions, and daily mood lifts.`;
+      wishEn = `Have a bright, smiling day full of unexpected fun and effortless rhythm!`;
+      pinEn = `📌 Curated to translate playful storytelling and fresh sonic character into every track.`;
+      ctaEn = `If these grooves made you smile, subscribe, like, and hit the bell to share more concept mixes together!`;
+      tagsEn = `${themeTagEn} #PlayfulVibes #CafeMusic #StoreBGM #DailyMoodLift #WorkBGM`;
+    } else if (isEmpowering || isStressReliefOrJoy) {
+      line1Ko = `${hook.koEmotionDesc} ${cleanGenreLabelKo} 플레이리스트입니다.`;
+      line2Ko = `탄탄한 그루브와 산뜻하게 뻗는 사운드로 답답한 일상을 환기하고, 나만의 속도로 하루의 에너지를 채워보세요. 🔥✨`;
+      situationsKo = `기분 전환이 필요한 출퇴근·드라이브는 물론, 몰입감을 높여주는 작업·운동, 활기찬 매장 BGM으로도 완벽하게 어울립니다.`;
+      wishKo = `주저 없이 나아가는 경쾌한 리듬과 함께 당당하고 빛나는 하루 보내세요!`;
+      pinKo = `📌 이 영상은 리스너의 텐션과 자신감을 자연스럽게 끌어올리는 세련된 사운드를 지향합니다.`;
+      ctaKo = `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 긍정적인 에너지를 함께 나눠주세요!`;
+      tagsKo = `${themeTagKo} #기분전환음악 #플레이리스트 #드라이브음악 #노동요 #자존감BGM`;
+
+      line1En = `Built with uplifting momentum — ${hook.enEmotionDesc}, this ${cleanGenreLabelEn} playlist locks into an effortless, confident stride.`;
+      line2En = `Crisp grooves and bright harmonic lift bring clarity and fresh drive to commutes, studios, and bustling retail spaces. 🔥✨`;
+      situationsEn = `Tailored for energetic city drives, focused creative sprints, workouts, and lively café or boutique floors.`;
+      wishEn = `Keep moving at your own pace and enjoy an empowered, luminous day!`;
+      pinEn = `📌 Curated to elevate everyday confidence and momentum through distinctive, polished production.`;
+      ctaEn = `If this mix boosted your mood, subscribe, like, and hit notifications to stay tuned for every new release!`;
+      tagsEn = `${themeTagEn} #ConfidenceMix #DriveMusic #WorkoutBGM #WorkPlaylist #PositiveVibes`;
+    } else if (isHeartbreak) {
+      line1Ko = `누구에게도 쉽게 꺼내지 못한 마음의 결을 조용히 어루만지는, ${hook.koEmotionDesc} ${cleanGenreLabelKo} 플레이리스트입니다.`;
+      line2Ko = `과장 없이 스며드는 보컬과 섬세한 여백의 사운드로 혼자만의 밤, 사색의 공간, 그리고 고요한 시간을 깊이 있게 채워보세요. 🌙🎧`;
+      situationsKo = `혼자 조용히 걷는 밤 산책은 물론, 늦은 밤 드라이브, 감정 정리가 필요한 새벽 작업·휴식 시간에도 묵묵히 곁을 지켜줍니다.`;
+      wishKo = `어지러운 마음 끝자락에 따뜻한 위로가 조용히 머무는 밤 되세요!`;
+      pinKo = `📌 이 영상은 과도한 꾸밈 대신 진솔한 감정의 여백과 밀도를 담아낸 사운드를 지향합니다.`;
+      ctaKo = `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 깊은 여운의 플레이리스트를 함께 나눠주세요!`;
+      tagsKo = `${themeTagKo} #새벽감성 #이별플레이리스트 #사색음악 #밤산책BGM #위로음악`;
+
+      line1En = `Quietly honest and deeply resonant — ${hook.enEmotionDesc}, this ${cleanGenreLabelEn} playlist stays close through unguarded midnight hours.`;
+      line2En = `Uncluttered arrangements and intimate vocal nuance fill solo evenings, reflective drives, and calm nocturnal rooms. 🌙🎧`;
+      situationsEn = `Made for late-night walks, quiet highway drives, journaling, and unhurried moments of reflection.`;
+      wishEn = `May these gentle melodies bring quiet comfort and steady warmth to your night!`;
+      pinEn = `📌 Curated around emotional sincerity, intimate space, and refined vocal storytelling.`;
+      ctaEn = `If these songs resonated with you, subscribe, like, and turn on notifications to share more late-night mixes!`;
+      tagsEn = `${themeTagEn} #LateNightMood #EmotionalPlaylist #NightWalkBGM #HealingMusic #QuietHours`;
+    } else if (hasExplicitSeason) {
+      // Genuine explicit season/era/subculture concept (Christmas, Rainy Autumn, 1940s-50s, West Coast)
+      line1Ko = `${scene.seasonKo}, ${hook.koEmotionDesc} ${cleanGenreLabelKo} 플레이리스트입니다.`;
+      line1En = `${scene.seasonEn.charAt(0).toUpperCase() + scene.seasonEn.slice(1)} — ${hook.enEmotionDesc}, this ${cleanGenreLabelEn} playlist sets the exact mood.`;
+    } else if (isRomantic) {
+      line1Ko = `마음 한켠에 기분 좋은 온기가 피어오르는 순간, ${hook.koEmotionDesc} ${cleanGenreLabelKo} 플레이리스트입니다.`;
+      line2Ko = `부드럽고 설레는 멜로디와 세련된 리듬으로 데이트 공간, 카페, 그리고 당신의 다정한 일상을 더욱 특별하게 채워보세요. 💌🎧`;
+      situationsKo = `분위기 좋은 카페·매장 BGM은 물론, 나란히 걷는 산책, 기분 좋은 주말 드라이브, 작업 시간에도 설렘을 더해줍니다.`;
+      wishKo = `다정한 설렘이 오래 머무는 따뜻하고 기분 좋은 하루 보내세요!`;
+      pinKo = `📌 이 영상은 일상의 장면을 한층 다정하고 감각적으로 물들이는 사운드를 지향합니다.`;
+      ctaKo = `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 설레는 음악 일상을 함께 나눠주세요!`;
+      tagsKo = `${themeTagKo} #설렘플레이리스트 #달콤한팝 #카페음악 #매장BGM #데이트음악`;
+
+      line1En = `Warm, tender, and full of subtle sparks — ${hook.enEmotionDesc}, this ${cleanGenreLabelEn} playlist captures that effortless glow.`;
+      line2En = `Silky rhythms and inviting harmonies brighten cafés, date nights, and gentle everyday routines. 💌🎧`;
+      situationsEn = `Ideal for cozy café & lounge BGM, sunny weekend drives, afternoon walks, and easygoing creative focus.`;
+      wishEn = `Wishing you a sweet, sunlit day wrapped in warm melodies and good company!`;
+      pinEn = `📌 Curated to turn ordinary moments into warm, memorable listening scenes.`;
+      ctaEn = `If this playlist brightened your mood, subscribe, like, and hit the bell to share more curated mixes!`;
+      tagsEn = `${themeTagEn} #RomanticVibes #CafeMusic #StoreBGM #WeekendDrive #SweetPlaylist`;
+    } else {
+      line1Ko = `'${conceptFocus}'의 고유한 분위기와 장면들을 감각적인 사운드로 풀어낸 ${cleanGenreLabelKo} 플레이리스트입니다.`;
+      line2Ko = `트렌디한 톤과 살아있는 리듬감으로 매장, 작업실, 그리고 당신만의 플레이리스트 시간에 확실한 개성을 더해보세요. 🎧✨`;
+      situationsKo = `감각적인 카페·쇼룸 BGM은 물론, 집중이 필요한 작업 시간과 기분 전환 드라이브에도 자연스럽게 어울립니다.`;
+      wishKo = `기획된 무드 그대로 감각적이고 영감 가득한 하루 보내세요!`;
+      pinKo = `📌 이 영상은 테마 본연의 질감과 기획 콘셉트의 디테일을 균형 있게 살린 사운드를 지향합니다.`;
+      ctaKo = `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 다양한 콘셉트 플레이리스트를 함께 나눠주세요!`;
+      tagsKo = `${themeTagKo} #콘셉트플레이리스트 #카페음악 #매장BGM #작업BGM #플레이리스트`;
+
+      const enSubject = enConceptFocus ? `"${enConceptFocus}"` : 'this custom concept';
+      line1En = `Crafted around the distinct mood and storytelling of ${enSubject}, this ${cleanGenreLabelEn} playlist delivers fresh sonic character from start to finish.`;
+      line2En = `Balanced with expressive groove and tactile production to elevate cafés, studios, and everyday listening spaces. 🎧✨`;
+      situationsEn = `Built for curated retail & café BGM, daily creative sessions, and scenic afternoon drives.`;
+      wishEn = `Have an inspired, smooth day immersed in the exact vibe you asked for!`;
+      pinEn = `📌 Curated to pair distinct concept storytelling with cohesive, high-craft sound design.`;
+      ctaEn = `If you enjoyed this custom mix, subscribe, like, and turn on notifications for more themed playlists!`;
+      tagsEn = `${themeTagEn} #CustomPlaylist #CafeMusic #StoreBGM #CreativeFocus #CuratedMix`;
+    }
+  }
 
   const ko = [
-    `${line1Ko}\n${cfg.line2Ko}`,
-    `${cfg.situationsKo}\n${cfg.wishKo}`,
+    `${line1Ko}\n${line2Ko}`,
+    `${situationsKo}\n${wishKo}`,
     `🎧 Tracklist\n\n`,
-    `${cfg.pinKo}\n${cfg.ctaKo}`,
-    cfg.tagsKo,
+    `${pinKo}\n${ctaKo}`,
+    tagsKo,
   ].join('\n\n');
 
   const en = [
-    `${line1En}\n${cfg.line2En}`,
-    `${cfg.situationsEn}\n${cfg.wishEn}`,
+    `${line1En}\n${line2En}`,
+    `${situationsEn}\n${wishEn}`,
     `🎧 Tracklist\n\n`,
-    `${cfg.pinEn}\n${cfg.ctaEn}`,
-    cfg.tagsEn,
+    `${pinEn}\n${ctaEn}`,
+    tagsEn,
   ].join('\n\n');
 
   return { ko, en };
@@ -1433,11 +1586,11 @@ export function buildCuratedYoutubePackage(
   tracklist: string = ''
 ): YoutubePackage {
   const cleanConcept = (lyricConcept || '').trim();
+  // IMPORTANT: Do NOT pass aiYoutube.thumbnailPrompt into scene detection (photo optics like "film grain" / "street" caused false rainy_autumn matches!)
   const rawContextForScene = [
     aiYoutube?.titleKo || '',
     aiYoutube?.titleEn || '',
     aiYoutube?.title || '',
-    aiYoutube?.thumbnailPrompt || '',
   ].join(' ');
 
   const scene = detectSceneProfile(theme, cleanConcept, tracks, rawContextForScene);
@@ -1463,8 +1616,8 @@ export function buildCuratedYoutubePackage(
     (aiYoutube?.descriptionEn || '').trim() || (!hasHangulInDesc && rawAiDesc ? rawAiDesc : '')
   );
 
-  const descriptionKo = !isWeakYoutubeDescription(candidateDescKo, true) ? candidateDescKo : editorialDescs.ko;
-  const descriptionEn = !isWeakYoutubeDescription(candidateDescEn, false) ? candidateDescEn : editorialDescs.en;
+  const descriptionKo = !isWeakYoutubeDescription(candidateDescKo, true, scene.key) ? candidateDescKo : editorialDescs.ko;
+  const descriptionEn = !isWeakYoutubeDescription(candidateDescEn, false, scene.key) ? candidateDescEn : editorialDescs.en;
 
   const hashtags = normalizeFiveHashtags(aiYoutube?.hashtags, theme, cleanConcept, tracks, rawContextForScene);
   const thumbnailPrompt = ensurePhotorealisticPrompt(

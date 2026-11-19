@@ -1263,13 +1263,13 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
     * Adapt dynamically to ANY theme (Groove Pop, Korean R&B Hip-Hop, J-POP Electronic R&B, 1940s–50s Vintage Pop, West Coast Rap, Cinematic OST, Christmas, etc.) AND any custom lyric concept.
     * STRICTLY BANNED AI CLICHÉS: NEVER write generic titles like "~와 함께하는 신나는 하루 | 플레이리스트" or bare "| 플레이리스트" without genre/mood tags!
   - "titleEn": A natural, emotionally resonant editorial English playlist title mirroring "titleKo" (e.g., "𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | Came In for One Coffee, Stayed Three Hours ☕️🎧 | Chill Groove Pop • Café & Work Vibes")—NEVER write clunky textbook titles like "Exciting Day with ... | Playlist".
-  - "descriptionKo": MUST follow this EXACT 5-BLOCK Korean YouTube playlist description structure adapted dynamically to "${theme.name}", its genre, mood, and lyric concept:
-    * Block 1 (2 lines): Evocative scene/season/theme intro ending with "... 플레이리스트입니다." + sound character & everyday space elevation ending with 2 fitting emojis.
-    * Block 2 (2 lines): Concrete listening use-cases suited to the theme (e.g., 카페·매장 BGM, 드라이브, 홈파티, 작업/노동요, 새벽 휴식 등) + warm closing wish ending with "!".
+  - "descriptionKo": MUST follow this EXACT 5-BLOCK Korean YouTube playlist description structure, crafted freshly every time for "${theme.name}", its genre, mood, and actual lyric concept${cleanLyricConcept ? ` ("${cleanLyricConcept}")` : ''}:
+    * Block 1 (2 lines): Unique, natural scene/mood/concept-tailored intro ending with "... 플레이리스트입니다." (STRICTLY tailor the imagery to the actual concept & tracks—NEVER invent unrelated weather/seasonal clichés like "가을비 내린 촉촉한 오후" unless autumn/rain is genuinely in the concept or lyrics!) + sound character & everyday space elevation ending with 2 fitting emojis.
+    * Block 2 (2 lines): Concrete listening use-cases suited specifically to this concept & theme (e.g., 카페·매장 BGM, 드라이브, 친구들과의 시간, 작업/노동요, 새벽 휴식 등) + warm closing wish ending with "!".
     * Block 3: Literally "🎧 Tracklist" followed by TWO blank lines ONLY (leaving space for timestamps—STRICTLY NEVER write numbered track titles or (0:00) timestamps inside "descriptionKo"!).
-    * Block 4 (2 lines): "📌 이 영상은 [테마/기획에 맞는 사운드 지향점 한 줄]을 지향합니다." + "영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 [테마 분위기]를 함께 나눠주세요!"
-    * Block 5 (1 line): 8 to 9 relevant Korean & English hashtags separated by spaces matching the theme, setting, and mood (e.g., "#그루브팝 #카페음악 #매장BGM #플레이리스트 #노동요 #GroovePop #ChillPop #드라이브음악 #GoodDayPop").
-    * STRICTLY BANNED AI CLICHÉS: NEVER write "~을 경험하세요", "~를 만끽하세요", "~에 빠져보세요"!
+    * Block 4 (2 lines): "📌 이 영상은 [테마/기획 콘셉트에 맞는 사운드 지향점 한 줄]을 지향합니다." + "영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 [기획 분위기에 맞는 표현]을 함께 나눠주세요!"
+    * Block 5 (1 line): 8 to 9 relevant Korean & English hashtags separated by spaces matching the theme, concept, and mood (NEVER output #가을플레이리스트 or #비오는날음악 unless genuinely rainy autumn!).
+    * STRICTLY BANNED AI CLICHÉS: NEVER write "~을 경험하세요", "~를 만끽하세요", "~에 빠져보세요", or default weather openers ("가을비 내린 촉촉한 오후") unrelated to the concept!
   - "descriptionEn": Smooth, idiomatic English adaptation of "descriptionKo" following the EXACT SAME 5-BLOCK structure (2-line evocative intro with 2 emojis → 2-line listening situations & warm wish → "🎧 Tracklist" with 2 blank lines and NO numbered tracks/timestamps → "📌 ..." + subscribe/like/bell CTA → 8 to 9 matching English hashtags).
   - "tracklist": Numbered song titles ONLY, one per line (e.g., "01. Waiting in the Sunday Cafe\\n02. Sundays with You\\n03. Waiting for Your Smile"). **NEVER include timestamps or parentheses like (0:00)!**
   - "hashtags": EXACTLY 5 curated lowercase SEO hashtags mixing playlist tag, genre, mood/season, and setting separated by spaces (e.g., "#playlist #groovepop #cafe #sundayvibes #feelgood").
