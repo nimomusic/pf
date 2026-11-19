@@ -7,13 +7,39 @@ export type MusicArchetype =
   | 'vintage_1940s_50s'
   | 'west_coast_rap'
   | 'cinematic_ost'
+  | 'ballad_intimate'
   | 'acoustic_indie'
   | 'general_custom';
+
+export type ArrangementMode =
+  | 'full_rhythm'
+  | 'bassless_percussive'
+  | 'drumless_melodic'
+  | 'stripped_ballad';
+
+export interface SopArrangementConstraints {
+  forbidsOrchestra: boolean;
+  forbidsStrings: boolean;
+  forbidsBrass: boolean;
+  forbidsTimpani: boolean;
+  forbidsBass: boolean;
+  forbidsDrums: boolean;
+  forbidsHihat: boolean;
+  isStrippedSoloSetting: boolean;
+  isBalladTheme: boolean;
+  explicitExcludeTokens: string[];
+}
 
 export interface InnovationPlan {
   trackNumber: number;
   archetype: MusicArchetype;
   archetypeLabel: string;
+  arrangementMode: ArrangementMode;
+  arrangementLabel: string;
+  hasBass: boolean;
+  hasDrums: boolean;
+  hasHihat: boolean;
+  constraints: SopArrangementConstraints;
   bpmSuggestion: string;
   keyColor: string;
   bassKo: string;
@@ -47,6 +73,44 @@ interface ArchetypePool {
   vocalPhrasingOptions: Array<{ ko: string; suno: string }>;
   dynamicOptions: Array<{ ko: string; suno: string }>;
 }
+
+// Stripped/Bassless/Drumless accompaniment pools used when a ballad, acoustic, or minimal SOP omits bass and/or drums
+const BASSLESS_LEFT_HAND_POOL: Array<{ ko: string; suno: string }> = [
+  {
+    ko: '베이스 없이 4마디마다 보이싱·페달톤이 변하는 피아노 왼손 독립 대선율 모티프',
+    suno: '4-bar evolving piano left-hand independent counter-melody and shifting open-fifth low-register resonance with zero bass instrument',
+  },
+  {
+    ko: '어쿠스틱 기타 저음현 엄지 아르페지오가 4마디마다 선율을 바꾸는 독립 리프 (베이스 제외)',
+    suno: 'independent 4-bar evolving fingerpicked acoustic lower-string thumb arpeggio counter-line shifting motifs naturally',
+  },
+  {
+    ko: '펠트 피아노 저역 옥타브 공명과 경과음이 4마디 단위로 움직이는 서정적 반주 리프',
+    suno: '4-bar evolving warm felt-piano lower-register octave resonance and chromatic passing-tone line carrying low-end warmth organically',
+  },
+];
+
+const DRUMLESS_PULSE_POOL: Array<{ ko: string; suno: string }> = [
+  {
+    ko: '드럼 비트 없이 반주 스트럼·아르페지오 악센트 이동과 자연스러운 루바토 호흡',
+    suno: 'drumless organic phrasing with subtle rubato tempo elasticity and displaced chordal pulse accents inside the accompaniment',
+  },
+  {
+    ko: '타악기 없이 4마디마다 반주 리듬 밀도를 비틀어 긴장을 조율하는 어쿠스틱 펄스',
+    suno: 'no percussion pulse relying on shifting 4-bar arpeggio syncopation and natural performer breathing rubato',
+  },
+];
+
+const HIHATLESS_SPACE_POOL: Array<{ ko: string; suno: string }> = [
+  {
+    ko: '하이햇 대신 프레이즈 끝 1박의 의도적인 침묵과 여백의 호흡(에어 포켓) 설계',
+    suno: 'intentional 1-beat silent breath pauses and suspended decay air-pockets between phrases instead of hi-hat ticks',
+  },
+  {
+    ko: '심벌/하이햇 없이 보컬 흡기와 피아노 잔향 사이의 비대칭 정적 리듬 설계',
+    suno: 'asymmetric vocal-intake silence gaps and lingering natural room decay creating rhythmic tension without hi-hats',
+  },
+];
 
 const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
   groove_pop: {
@@ -286,7 +350,7 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
   },
 
   vintage_1940s_50s: {
-    label: "1940s–1950s Shellac Vintage Pop / Lounge",
+    label: '1940s–1950s Shellac Vintage Pop / Lounge',
     bpmPool: ['74 BPM', '78 BPM', '82 BPM', '72 BPM', '80 BPM', '86 BPM'],
     keyColors: ['Ebmaj7', 'Ab6', 'Dm7b5–G7alt', 'Bbmaj7', 'C6/9', 'Fmaj7'],
     bassOptions: [
@@ -389,50 +453,116 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
     ],
   },
 
+  // NOTE: SOP-safe Cinematic OST Ballad (no strings/timpani/brass if forbidden; supports both bass-equipped lanes and stripped bassless/drumless lanes!)
   cinematic_ost: {
-    label: 'Cinematic OST / Emotional Film Ballad',
-    bpmPool: ['70 BPM', '74 BPM', '72 BPM', '76 BPM', '68 BPM', '75 BPM'],
+    label: 'Cinematic Movie OST Ballad',
+    bpmPool: ['68 BPM', '72 BPM', '74 BPM', '66 BPM', '76 BPM', '70 BPM'],
     keyColors: ['Dm9', 'Cm9', 'Am(add9)', 'Gm9', 'Bbmaj7', 'Em9'],
     bassOptions: [
       {
-        ko: '4마디마다 전위와 선율을 바꾸며 서사를 이끄는 첼로·콘트라베이스 대선율 리프',
-        suno: '4-bar evolving contrapuntal cello and bowed contrabass motif shifting harmonic inversions asymmetrically',
+        ko: '절제된 딥 서브 베이스/업라이트 베이스가 4마디마다 전위와 선율을 바꾸는 독립 저음 리프',
+        suno: '4-bar evolving warm upright bass or deep sub-bass counter-melody shifting inversions organically beneath sparse chords',
+      },
+      {
+        ko: '베이스 악기 없이 펠트 피아노 왼손·어쿠스틱 저음현 공명으로 저역을 채우는 독립 반주',
+        suno: 'bassless warm felt-piano left-hand open-fifth resonance and 4-bar evolving lower-register counter-voice',
       },
     ],
     drumOptions: [
       {
-        ko: '정형적 드럼 비트를 배제하고 팀파니·타악 악센트가 박자를 비틀어 긴장을 쌓는 구조',
-        suno: 'cinematic percussive swells and deep orchestral floor-tom accents placed off-bar to build dramatic tension',
+        ko: '후렴에서만 부드럽게 합류하는 브러쉬/미니멀 펄스의 변칙 위치와 프레이즈 호흡',
+        suno: 'restrained brushed kit or soft programmed pulse entering late in chorus with behind-the-beat rhythmic phrasing',
+      },
+      {
+        ko: '드럼 비트를 비운 루바토 호흡과 반주 아르페지오의 강약 악센트 이동',
+        suno: 'drumless intimate rubato phrasing led by expressive acoustic guitar or felt-piano rhythmic weight shifts',
       },
     ],
     hihatOptions: [
       {
-        ko: '심벌 롤과 하프·피아노 스타카토가 쉼표를 두고 호흡하는 여백의 리듬 아티큘레이션',
-        suno: 'delicate suspended cymbal swells and sparse rhythmic pulse pauses letting emotional silence breathe',
+        ko: '최종 후렴 직전 1박 정적(Silence Drop)과 여백의 호흡 설계',
+        suno: 'intentional 1-beat near-silence contrast pause before final chorus and spacious vocal-breath rests',
       },
     ],
     interactionOptions: [
       {
-        ko: '펠트 업라이트 피아노와 솔로 첼로·현악 섹션이 2마디씩 문답하는 시네마틱 대화',
-        suno: 'intimate call-and-response dialogue between felt upright piano arpeggios, weeping solo cello, and soaring strings',
+        ko: '피아노/클린 기타와 보컬 적층 화음이 2마디 여백에서 주고받는 영화적 문답',
+        suno: 'intimate call-and-response dialogue between felt piano or fingerpicked guitar fills and stacked vocal harmonies inside breath gaps',
       },
     ],
     harmonyOptions: [
       {
-        ko: '영화음악 특유의 서스펜디드 애드나인 및 반음계 전조 서사 화성',
-        suno: 'evocative film-score harmonic twists using add9 suspensions, deceptive cadences, and poignant key lift',
+        ko: '영화음악 특유의 서스펜디드 add9·반음계 위장종지(Deceptive Cadence) 및 클라이맥스 키 리프트',
+        suno: 'evocative film-ballad harmonic twists using add9 suspensions, deceptive cadences, and poignant final-chorus key lift',
       },
     ],
     vocalPhrasingOptions: [
       {
-        ko: '속삭이는 독백에서 오케스트라 절정 벨팅으로 열리는 서사적 보컬 호흡',
-        suno: 'delicate narrative whisper phrasing swelling organically into soaring heartfelt emotional belt at climax',
+        ko: '속삭이는 근접 독백에서 균열(Crack)·헤드보이스·폭발적 서스테인으로 열리는 서사 프레이징',
+        suno: 'close-mic breathy hush in verses building through vulnerable voice crack to soaring open-vowel sustained climax notes',
       },
     ],
     dynamicOptions: [
       {
-        ko: '단독 피아노 정적에서 풀 오케스트라 카타르시스로 폭발하는 와이드 다이내믹 아크',
-        suno: 'wide cinematic dynamic arc rising from bare felt piano silence through tension bridge into sweeping finale',
+        ko: '단독 피아노/기타 정적(1절) → 1박 무음 대비(브릿지 끝) → 풀 보컬 레이어 절정 다이내믹',
+        suno: 'dramatic dynamic arc from exposed bare-instrument verse through 1-beat contrast drop into stacked vocal finale',
+      },
+    ],
+  },
+
+  // Dedicated Ballad Archetype (Piano / Acoustic / Classic Korean/English Ballads — naturally supports NO BASS & NO DRUMS!)
+  ballad_intimate: {
+    label: 'Intimate Ballad / Piano & Acoustic Vocal-Led',
+    bpmPool: ['66 BPM', '70 BPM', '72 BPM', '64 BPM', '74 BPM', '68 BPM'],
+    keyColors: ['Abmaj7', 'Fmaj9', 'Ebmaj7', 'C#m9', 'Bbmaj9', 'Dmaj9'],
+    bassOptions: [
+      {
+        ko: '베이스 악기 없이 피아노 왼손 옥타브·대선율 모티프가 4마디마다 변주되는 저역 설계',
+        suno: '4-bar evolving piano left-hand counter-melody and rich low-register open-fifth voicing without dedicated bass guitar',
+      },
+      {
+        ko: '어쿠스틱/나일론 기타 엄지 저음현이 4마디마다 선율을 바꾸며 보컬과 대위적으로 호흡',
+        suno: 'independent 4-bar fingerpicked nylon/steel thumb-bass arpeggio moving counter-melodically beneath vocal line',
+      },
+    ],
+    drumOptions: [
+      {
+        ko: '드럼 없는 자연 루바토 템포 밀당과 반주 코드 타건의 강약 변주',
+        suno: 'drumless expressive rubato timing gently pulling ahead and behind vocal phrases with nuanced accompaniment weight',
+      },
+      {
+        ko: '타악 없이 아르페지오 밀도와 서스테인 페달 울림으로 만드는 감성 리듬 포켓',
+        suno: 'organic percussion-free ballad flow shaped by asymmetric 4-bar arpeggio density and warm pedal bloom',
+      },
+    ],
+    hihatOptions: [
+      {
+        ko: '절과 후렴 경계·감정 절정 직전에 놓인 의도적 1박 침묵과 숨결 여백',
+        suno: 'deliberate 1-beat vocal breath rests and hushed pre-chorus silence pauses replacing steady percussive ticks',
+      },
+    ],
+    interactionOptions: [
+      {
+        ko: '보컬 프레이즈가 쉬는 마디 끝을 채우는 피아노/기타의 섬세한 콜앤리스폰스 필인',
+        suno: 'delicate call-and-response where solo piano motifs or acoustic guitar chimes answer strictly inside vocal pauses',
+      },
+    ],
+    harmonyOptions: [
+      {
+        ko: '전통적 4코드 루프를 피한 add9·분수 코드 전위와 예상치 못한 서브도미넌트 마이너 전환',
+        suno: 'expressive slash-chord lower-register voice leading, add9 voicings, and bittersweet minor-iv harmonic turns',
+      },
+    ],
+    vocalPhrasingOptions: [
+      {
+        ko: '가까이 속삭이는 인티메이트 오프닝에서 후렴의 짙은 흉성·가성 전환까지 입체적 프레이징',
+        suno: 'intimate close-mic behind-the-beat conversational verses rising into emotionally trembling chest-to-falsetto chorus phrasing',
+      },
+    ],
+    dynamicOptions: [
+      {
+        ko: '숨소리만 들리는 극미니멀 1절에서 클라이맥스 1박 정적 후 터지는 감정 폭발 아크',
+        suno: 'wide emotional dynamic arc from whisper-quiet exposed verse to 1-beat stripped pause before full vocal release',
       },
     ],
   },
@@ -445,6 +575,10 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
       {
         ko: '어쿠스틱 기타 저음현과 별개로 4마디마다 멜로디를 그리는 따뜻한 우드 베이스 리프',
         suno: '4-bar evolving warm melodic acoustic upright/P-bass line moving independently of guitar root strums',
+      },
+      {
+        ko: '베이스 없이 핑거스타일 어쿠스틱 기타의 얼터네이팅 저음현 모티프로 리듬과 저역 동시 견인',
+        suno: 'bassless warm fingerpicked acoustic guitar alternating thumb-bass counter-motif shifting every 4 bars',
       },
     ],
     drumOptions: [
@@ -461,8 +595,8 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
     ],
     interactionOptions: [
       {
-        ko: '핑거피킹 어쿠스틱 기타와 웜 우를리처/벨 키보드가 베이스 빈틈을 채우는 대화',
-        suno: 'conversational interplay between fingerpicked nylon/steel acoustic guitar, warm Wurlitzer, and melodic bass',
+        ko: '핑거피킹 어쿠스틱 기타와 웜 우를리처/벨 키보드가 여백을 주고받으며 채우는 대화',
+        suno: 'conversational interplay between fingerpicked nylon/steel acoustic guitar, warm Wurlitzer fills, and harmonic spaces',
       },
     ],
     harmonyOptions: [
@@ -513,8 +647,8 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
     ],
     interactionOptions: [
       {
-        ko: '베이스와 다른 박자 위치에서 화음/기타/건반이 주고받는 콜앤리스폰스 상호작용',
-        suno: 'distinct call-and-response interaction where guitar/keys answer inside rhythmic gaps left by the bass',
+        ko: '주 악기/건반/기타가 저역과 다른 박자 위치에서 주고받는 콜앤리스폰스 상호작용',
+        suno: 'distinct call-and-response interaction where keys/guitar answer inside rhythmic gaps left by the vocal and low register',
       },
     ],
     harmonyOptions: [
@@ -538,19 +672,99 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
   },
 };
 
-export function detectMusicArchetype(theme: Partial<Theme>, sopSpecs: {
-  isJapanese?: boolean;
-  isShellacVintage?: boolean;
-  isCinematic?: boolean;
-  isKoreanHipHopRnb?: boolean;
-  isKorEngMixed?: boolean;
-  isEnglishOnly?: boolean;
-}): MusicArchetype {
+export function parseSopArrangementConstraints(theme: Partial<Theme>, archetype: MusicArchetype): SopArrangementConstraints {
+  const fullText = `${theme.name || ''} ${theme.category || ''} ${theme.sop || ''}`;
+  const lower = fullText.toLowerCase();
+
+  // Extract explicit negative clauses (Exclude: ..., -term, forbidden, 금지, 제외)
+  const negativeChunks: string[] = [];
+  const excludeMatches = fullText.match(/exclude\s*:[^\n\r]*/gi) || [];
+  negativeChunks.push(...excludeMatches.map((s) => s.toLowerCase()));
+  const forbiddenMatches = fullText.match(/(?:forbidden|금지|제외|never\s*use|without|no\s+)[^.\n\r]*/gi) || [];
+  negativeChunks.push(...forbiddenMatches.map((s) => s.toLowerCase()));
+
+  const negativeText = negativeChunks.join(' ');
+  const explicitExcludeTokens: string[] = [];
+  const dashTokens = negativeText.match(/-[a-z0-9][a-z0-9\s-]*/gi) || [];
+  for (const tok of dashTokens) {
+    explicitExcludeTokens.push(tok.replace(/^-/, '').trim().toLowerCase());
+  }
+
+  const forbidsOrchestra = /\b(orchestra|orchestral|symphonic)\b|오케스트라/i.test(negativeText);
+  const forbidsStrings = forbidsOrchestra || /\b(string\s*section|strings|cello|violin|viola|contrabass)\b|현악|스트링|첼로/i.test(negativeText);
+  const forbidsBrass = /\b(brass|trumpet|saxophone|horn\s*section)\b|브라스|금관/i.test(negativeText);
+  const forbidsTimpani = /\b(timpani|orchestral\s*percussion|floor-?tom)\b|팀파니/i.test(negativeText);
+
+  const forbidsBass =
+    /\b(no\s*bass|without\s*bass|bassless|bass\s*forbidden)\b|(?:^|[\s,])-bass\b|(?:^|[\s,])-sub-?bass\b|베이스\s*(?:없|제외|금지)|베이스리스/i.test(fullText) ||
+    /\bsolo\s*piano\b|\bpiano\s*(?:and|&|\+)\s*vocal\s*only\b|\bacoustic\s*guitar\s*(?:and|&|\+)\s*vocal\s*only\b|피아노와\s*보컬만/i.test(lower);
+
+  const forbidsDrums =
+    /\b(no\s*drums?|without\s*drums?|drumless|unaccompanied|no\s*percussion|no\s*beats?)\b|(?:^|[\s,])-drums?\b|(?:^|[\s,])-percussion\b|드럼\s*(?:없|제외|금지)|무반주|퍼커션\s*(?:없|제외)/i.test(fullText) ||
+    /\bsolo\s*piano\b|\bpiano\s*(?:and|&|\+)\s*vocal\s*only\b|\bacoustic\s*guitar\s*(?:and|&|\+)\s*vocal\s*only\b|피아노와\s*보컬만/i.test(lower);
+
+  const forbidsHihat =
+    forbidsDrums || /\b(no\s*hi-?hat|without\s*hi-?hat)\b|(?:^|[\s,])-hi-?hat\b|(?:^|[\s,])-trap\s*hi-?hat\b|하이햇\s*(?:없|제외|금지)/i.test(fullText);
+
+  const positiveText = lower
+    .replace(/exclude\s*:[^\n\r]*/gi, '')
+    .replace(/금지[^\n\r]*/g, '')
+    .replace(/제외[^\n\r]*/g, '');
+
+  const isBalladTheme =
+    archetype === 'ballad_intimate' ||
+    archetype === 'cinematic_ost' ||
+    /\b(ballad|lullaby|piano\s*ballad|acoustic\s*ballad)\b|발라드/i.test(positiveText);
+
+  const isStrippedSoloSetting =
+    forbidsBass ||
+    forbidsDrums ||
+    /\b(solo\s*piano|piano\s*only|felt\s*piano\s*and\s*vocal|unplugged\s*solo|stripped-?down\s*ballad)\b|피아노\s*반주만|어쿠스틱\s*솔로|피아노와\s*보컬만/i.test(positiveText);
+
+  return {
+    forbidsOrchestra,
+    forbidsStrings,
+    forbidsBrass,
+    forbidsTimpani,
+    forbidsBass,
+    forbidsDrums,
+    forbidsHihat,
+    isStrippedSoloSetting,
+    isBalladTheme,
+    explicitExcludeTokens,
+  };
+}
+
+function isTagCompatibleWithConstraints(text: string, c: SopArrangementConstraints): boolean {
+  const l = text.toLowerCase();
+  if (c.forbidsOrchestra && /\b(orchestra|orchestral|symphonic)\b/.test(l)) return false;
+  if (c.forbidsStrings && /\b(cello|contrabass|violin|viola|string\s*section|soaring\s*strings)\b/.test(l)) return false;
+  if (c.forbidsBrass && /\b(brass|trumpet|clarinet|horn)\b/.test(l)) return false;
+  if (c.forbidsTimpani && /\b(timpani|floor-?tom)\b/.test(l)) return false;
+  if (c.forbidsBass && /\b(sub-?bass|808|bassline|bass\s*riff|bass\s*hook|upright\s*bass|p-bass|synth\s*bass|moog\s*sub)\b/.test(l)) return false;
+  if (c.forbidsDrums && /\b(kick|snare|drum|rimshot|brushed\s*kit|percussion|boom-?bap|trap\s*kick)\b/.test(l)) return false;
+  if (c.forbidsHihat && /\b(hi-?hat|shaker|ride\s*cymbal)\b/.test(l)) return false;
+  return true;
+}
+
+export function detectMusicArchetype(
+  theme: Partial<Theme>,
+  sopSpecs: {
+    isJapanese?: boolean;
+    isShellacVintage?: boolean;
+    isCinematic?: boolean;
+    isKoreanHipHopRnb?: boolean;
+    isKorEngMixed?: boolean;
+    isEnglishOnly?: boolean;
+  }
+): MusicArchetype {
   const combined = `${theme.name || ''} ${theme.category || ''} ${theme.sop || ''}`
     .toLowerCase()
     .replace(/exclude\s*:[^\n\r]*/gi, '')
     .replace(/금지[^\n\r]*/g, '')
     .replace(/제외[^\n\r]*/g, '');
+
+  const titleAndCat = `${theme.name || ''} ${theme.category || ''}`.toLowerCase();
 
   if (sopSpecs.isShellacVintage || /\b(1940|1950|shellac|phonograph|vintage\s*pop|78\s*rpm)\b/i.test(combined)) {
     return 'vintage_1940s_50s';
@@ -561,7 +775,7 @@ export function detectMusicArchetype(theme: Partial<Theme>, sopSpecs: {
   if (/\b(west\s*coast|freestyle\s*rap|g-funk|westside|lowrider)\b/i.test(combined)) {
     return 'west_coast_rap';
   }
-  if (sopSpecs.isCinematic || /\b(ost|cinematic|film\s*soundtrack|movie\s*ballad)\b/i.test(combined)) {
+  if (sopSpecs.isCinematic || /\b(ost|cinematic|film\s*soundtrack|movie\s*ballad|film-music)\b/i.test(combined)) {
     return 'cinematic_ost';
   }
   if (sopSpecs.isKoreanHipHopRnb || sopSpecs.isKorEngMixed) {
@@ -570,8 +784,14 @@ export function detectMusicArchetype(theme: Partial<Theme>, sopSpecs: {
   if (/\b(groove|retail\s*groove|chill\s*pop|feel-?good|sunday|cafe\s*pop|disco\s*pop|city\s*groove)\b/i.test(combined) || combined.includes('그루브')) {
     return 'groove_pop';
   }
+  if (/\b(ballad|piano\s*ballad|acoustic\s*ballad|torch\s*song)\b/i.test(titleAndCat) || titleAndCat.includes('발라드') || /\b(piano\s*ballad|power\s*ballad|stripped\s*ballad|vocal-led\s*ballad)\b/i.test(combined)) {
+    return 'ballad_intimate';
+  }
   if (/\b(acoustic|folk|indie\s*pop|coffee\s*house)\b/i.test(combined) || combined.includes('어쿠스틱')) {
     return 'acoustic_indie';
+  }
+  if (combined.includes('발라드') || /\bballad\b/i.test(combined)) {
+    return 'ballad_intimate';
   }
   return 'general_custom';
 }
@@ -584,6 +804,7 @@ export function generateTrackInnovationPlans(
   seedOffset?: number
 ): InnovationPlan[] {
   const archetype = detectMusicArchetype(theme, sopSpecs);
+  const constraints = parseSopArrangementConstraints(theme, archetype);
   const pool = ARCHETYPE_POOLS[archetype];
   const baseSeed = typeof seedOffset === 'number' ? seedOffset : Math.floor(Math.random() * 97);
 
@@ -610,10 +831,95 @@ export function generateTrackInnovationPlans(
       }
     }
 
-    const bass = pool.bassOptions[(baseSeed + i * 1) % pool.bassOptions.length];
-    const drum = pool.drumOptions[(baseSeed + i * 2 + 1) % pool.drumOptions.length];
-    const hihat = pool.hihatOptions[(baseSeed + i * 3 + 2) % pool.hihatOptions.length];
-    const interaction = pool.interactionOptions[(baseSeed + i * 1 + 2) % pool.interactionOptions.length];
+    // Decide whether this track uses bass/drums/hihat based on SOP rules AND theme musical diversity
+    let hasBass = !constraints.forbidsBass;
+    let hasDrums = !constraints.forbidsDrums;
+    let hasHihat = !constraints.forbidsHihat && hasDrums;
+
+    if (constraints.isStrippedSoloSetting) {
+      hasBass = !constraints.forbidsBass && false;
+      hasDrums = false;
+      hasHihat = false;
+    } else if (archetype === 'ballad_intimate') {
+      // Ballad playlist: rotate naturally between pure stripped piano/guitar (no bass/drums), drumless upright/felt warmth, and late-bloom rhythm ballads
+      const pattern = (baseSeed + i) % 3;
+      if (pattern === 0) {
+        hasBass = false;
+        hasDrums = false;
+        hasHihat = false;
+      } else if (pattern === 1) {
+        hasBass = !constraints.forbidsBass;
+        hasDrums = false;
+        hasHihat = false;
+      }
+    } else if (archetype === 'cinematic_ost') {
+      // Respect THEME_014023 8-lane diversity: some lanes (Lane 3 Raw Folk-Acoustic / Lane 8 Storybook Piano) omit bass/drums, others include restrained sub-bass/brushed pulse!
+      const pattern = (baseSeed + i) % 3;
+      if (pattern === 0) {
+        hasBass = false;
+        hasDrums = false;
+        hasHihat = false;
+      } else if (pattern === 1) {
+        hasBass = !constraints.forbidsBass;
+        hasDrums = !constraints.forbidsDrums;
+        hasHihat = false; // ballads don't force hi-hat ticks unless needed
+      }
+    } else if (archetype === 'acoustic_indie' && i % 2 === 1 && !/upright bass|drum/i.test(`${theme.name || ''}`)) {
+      // Mix unplugged bassless fingerstyle tracks into acoustic indie sets
+      hasBass = false;
+      hasDrums = false;
+      hasHihat = false;
+    }
+
+    const arrangementMode: ArrangementMode =
+      !hasBass && !hasDrums
+        ? 'stripped_ballad'
+        : !hasBass && hasDrums
+        ? 'bassless_percussive'
+        : hasBass && !hasDrums
+        ? 'drumless_melodic'
+        : 'full_rhythm';
+
+    const arrangementLabel =
+      arrangementMode === 'stripped_ballad'
+        ? '미니멀·베이스리스 편성 (피아노/어쿠스틱 중심)'
+        : arrangementMode === 'drumless_melodic'
+        ? '드럼리스 서정 편성 (저역·선율 중심)'
+        : arrangementMode === 'bassless_percussive'
+        ? '베이스리스 리듬 편성 (타악·코드 중심)'
+        : '풀 리듬 섹션 편성';
+
+    // Filter pools by SOP constraints to NEVER emit forbidden instruments (e.g. cello/strings/timpani in OST Ballad)
+    const validBassPool = hasBass
+      ? pool.bassOptions.filter((o) => isTagCompatibleWithConstraints(o.suno, constraints))
+      : BASSLESS_LEFT_HAND_POOL;
+    const validDrumPool = hasDrums
+      ? pool.drumOptions.filter((o) => isTagCompatibleWithConstraints(o.suno, constraints))
+      : DRUMLESS_PULSE_POOL;
+    const validHihatPool = hasHihat
+      ? pool.hihatOptions.filter((o) => isTagCompatibleWithConstraints(o.suno, constraints))
+      : HIHATLESS_SPACE_POOL;
+    const validInteractionPool = pool.interactionOptions.filter((o) =>
+      isTagCompatibleWithConstraints(o.suno, constraints)
+    );
+
+    const bassPoolToUse = validBassPool.length > 0 ? validBassPool : BASSLESS_LEFT_HAND_POOL;
+    const drumPoolToUse = validDrumPool.length > 0 ? validDrumPool : DRUMLESS_PULSE_POOL;
+    const hihatPoolToUse = validHihatPool.length > 0 ? validHihatPool : HIHATLESS_SPACE_POOL;
+    const interactionPoolToUse =
+      validInteractionPool.length > 0
+        ? validInteractionPool
+        : [
+            {
+              ko: '피아노/어쿠스틱 기타 선율 필인이 보컬 여백 사이에서 주고받는 섬세한 문답',
+              suno: 'delicate piano or clean acoustic guitar melodic fills answering strictly inside vocal breath spaces',
+            },
+          ];
+
+    const bass = bassPoolToUse[(baseSeed + i * 1) % bassPoolToUse.length];
+    const drum = drumPoolToUse[(baseSeed + i * 2 + 1) % drumPoolToUse.length];
+    const hihat = hihatPoolToUse[(baseSeed + i * 3 + 2) % hihatPoolToUse.length];
+    const interaction = interactionPoolToUse[(baseSeed + i * 1 + 2) % interactionPoolToUse.length];
     const harmony = pool.harmonyOptions[(baseSeed + i * 2) % pool.harmonyOptions.length];
     const vocalPhrasing =
       vocal === 'none'
@@ -629,6 +935,12 @@ export function generateTrackInnovationPlans(
       trackNumber: i + 1,
       archetype,
       archetypeLabel: pool.label,
+      arrangementMode,
+      arrangementLabel,
+      hasBass,
+      hasDrums,
+      hasHihat,
+      constraints,
       bpmSuggestion,
       keyColor,
       bassKo: bass.ko,
@@ -656,35 +968,122 @@ export function generateTrackInnovationPlans(
 
 export function formatInnovationPromptSection(plans: InnovationPlan[]): string {
   if (plans.length === 0) return '';
-  const blocks = plans.map(
-    (p) => `Track ${p.trackNumber} Unique Musical DNA (${p.bpmSuggestion}, Harmonic Color: ${p.keyColor}):
-  - Independent Bass Riff: ${p.bassSuno}
-  - Displaced Drum Groove: ${p.drumSuno}
-  - Hi-Hat / Percussion Rests: ${p.hihatSuno}
-  - Instrument Call-and-Response: ${p.interactionSuno}
+  const blocks = plans.map((p) => {
+    const bassTitle = p.hasBass
+      ? 'Independent Bass Riff'
+      : 'Low-Register Left-Hand / Accompaniment Counter-Motif (NO dedicated bass instrument)';
+    const drumTitle = p.hasDrums
+      ? 'Displaced Drum Groove'
+      : 'Organic Rubato / Chordal Pulse (NO drums)';
+    const hihatTitle = p.hasHihat
+      ? 'Hi-Hat / Percussion Rests'
+      : 'Intentional Silence & Breath Air-Pockets (NO hi-hat)';
+
+    return `Track ${p.trackNumber} Unique Musical DNA [${p.arrangementLabel}] (${p.bpmSuggestion}, Harmonic Color: ${p.keyColor}):
+  - ${bassTitle}: ${p.bassSuno}
+  - ${drumTitle}: ${p.drumSuno}
+  - ${hihatTitle}: ${p.hihatSuno}
+  - Accompaniment Call-and-Response: ${p.interactionSuno}
   - Harmonic / Melodic Freshness: ${p.harmonySuno}
   - Vocal / Lead Phrasing: ${p.vocalPhrasingSuno}
-  - Dynamic Arc Contrast: ${p.dynamicSuno}`
-  );
+  - Dynamic Arc Contrast: ${p.dynamicSuno}`;
+  });
+
+  const c = plans[0].constraints;
+  const exclusionReminders: string[] = [];
+  if (c.forbidsOrchestra || c.forbidsStrings || c.forbidsTimpani) {
+    exclusionReminders.push('STRICT SOP RESPECT: NEVER add orchestral strings, cello, brass, choir, or timpani if forbidden by the SOP.');
+  }
+  if (c.forbidsBass) {
+    exclusionReminders.push('STRICT SOP RESPECT: This theme omits bass instruments — NEVER add bass guitar, 808, or sub-bass; achieve low-end warmth via piano left-hand voicings or acoustic guitar lower strings.');
+  }
+  if (c.forbidsDrums) {
+    exclusionReminders.push('STRICT SOP RESPECT: This theme omits drums — NEVER add drum kits, kick, snare, or hi-hats; achieve rhythmic freshness through rubato phrasing, accompaniment motif evolution, and intentional silence rests.');
+  }
 
   return `
 ================================================================================
-ANTI-HOMOGENIZATION MUSICAL INNOVATION MATRIX (탈정형·차별화 사운드 설계 — ALL TRACKS)
+ANTI-HOMOGENIZATION MUSICAL INNOVATION MATRIX (테마 맞춤 탈정형 사운드 설계)
 ================================================================================
-To prevent Suno AI from generating repetitive, generic melodies, predictable backbeats, and static root-note basslines across dozens of songs, EVERY track MUST embed its assigned Unique Musical DNA below into BOTH its 750–950 char "stylePrompt" AND its [Section: Guide] cues inside "fullLyrics" (strictly inside "${plans[0].archetypeLabel}" SOP boundaries):
-
+To prevent Suno AI from generating repetitive, generic melodies, predictable harmonies, or flat rhythms across dozens of songs, EVERY track MUST embed its assigned Unique Musical DNA below into BOTH its 750–950 char "stylePrompt" AND its [Section: Guide] cues inside "fullLyrics" (strictly respecting "${plans[0].archetypeLabel}" instrumentation and NEVER forcing instruments omitted by the genre/ballad lane or SOP):
+${exclusionReminders.length > 0 ? '\n' + exclusionReminders.map((r) => `- ${r}`).join('\n') + '\n' : ''}
 ${blocks.join('\n\n')}
 
-PRE-OUTPUT 7-AXIS SELF-CRITIQUE REQUIREMENT:
-Before finalizing JSON, mentally audit EVERY track against these 7 criteria:
-1. 전체 그루브 (Overall Groove): Cohesive, natural, non-mechanical pocket
-2. 베이스 존재감 (Bass Presence): Clear, well-defined low-end presence
-3. 독립적인 베이스 리프 (Independent Bass Riff): Explicitly specifies a 4-bar evolving melodic bass riff/counterpoint (NEVER plain root-note bass)
-4. 싱코페이션 (Syncopation): Explicitly prescribes displaced kick positions & irregular hi-hat accents/rests breaking standard backbeat
-5. 악기 간 상호작용 (Instrument-Bass Call & Response): Explicitly choreographs guitar/keys/strings/synths answering in rhythmic spaces different from bass
-6. 보컬 프레이징 (Vocal Phrasing): Prescribes distinct rhythmic vocal phrasing & melodic cadence
-7. 전체 다이내믹 (Overall Dynamic Arc): Clear contrast between stripped verses, pre-chorus breath/breaks, and expanded choruses
-If ANY track feels generic on items 3, 4, or 5 ("미흡" or "보통"), revise its "stylePrompt" and section guides BEFORE outputting JSON!`;
+PRE-OUTPUT 7-AXIS THEME-AWARE SELF-CRITIQUE REQUIREMENT:
+Before finalizing JSON, audit EVERY track against its genre-appropriate 7 criteria (adapting naturally when a ballad/minimal track intentionally has NO bass or NO drums):
+1. Overall Groove / Flow: Cohesive, non-mechanical pocket or organic rubato breathing flow
+2. Low-End / Register Presence: Clear low-end bass presence OR rich piano left-hand / acoustic thumb-bass low-register resonance (never muddy)
+3. Independent Motif: 4-bar evolving melodic bass riff (if bass exists) OR 4-bar evolving left-hand/arpeggio counter-motif (if bassless ballad — NEVER static block chords)
+4. Syncopation & Intentional Silence: Displaced kicks & irregular hi-hat rests (if drums exist) OR rubato timing pulls, syncopated phrasing & 1-beat silence drops (if drumless ballad)
+5. Call & Response Interplay: Keys/guitar/vocals answering inside the spaces of the primary pulse/bass/vocal phrase
+6. Vocal Phrasing: Distinct conversational/emotional timing, register shifts, and breath nuance
+7. Dynamic Arc: Clear contrast between sparse stripped sections, silence drop, and expanded climax`;
+}
+
+function stripExcludeTail(styleLower: string): string {
+  return styleLower
+    .replace(/\bexclude\s*:.*$/is, '')
+    .replace(/(?:,\s*-[a-z0-9][a-z0-9\s-]*)+$/is, '')
+    .trim();
+}
+
+function resolveEffectiveTrackInstrumentation(track: Partial<TrackItem>, plan: InnovationPlan): {
+  usesBass: boolean;
+  usesDrums: boolean;
+  usesHihat: boolean;
+  modeLabel: string;
+} {
+  const styleRaw = (track.stylePrompt || '').toLowerCase();
+  const bodyWithoutExclude = stripExcludeTail(styleRaw);
+
+  const explicitlyBassless =
+    plan.constraints.forbidsBass ||
+    /\b(no\s*bass|without\s*bass|bassless|zero\s*bass|solo\s*piano|piano\s*(?:and|&)\s*vocal\s*only|acoustic\s*guitar\s*(?:and|&)\s*vocal\s*only|stripped\s*piano)\b/i.test(bodyWithoutExclude);
+  const explicitlyDrumless =
+    plan.constraints.forbidsDrums ||
+    /\b(no\s*drums?|without\s*drums?|drumless|no\s*percussion|solo\s*piano|rubato|unaccompanied)\b/i.test(bodyWithoutExclude);
+
+  const mentionsBass = /\b(bass|sub-?bass|808|contrabass|moog\s*sub|p-bass|upright\s*bass|bassline|fretless)\b/i.test(bodyWithoutExclude);
+  const mentionsDrums = /\b(drum|drums|kick|snare|rimshot|brushed\s*kit|beat|percussion|boom-?bap|trap)\b/i.test(bodyWithoutExclude);
+  const mentionsHihat = /\b(hi-?hat|cymbal|shaker|ride)\b/i.test(bodyWithoutExclude);
+
+  const isBalladOrMinimal =
+    plan.archetype === 'ballad_intimate' ||
+    plan.archetype === 'cinematic_ost' ||
+    plan.archetype === 'acoustic_indie' ||
+    plan.constraints.isBalladTheme ||
+    plan.constraints.isStrippedSoloSetting;
+
+  let usesBass = plan.hasBass;
+  let usesDrums = plan.hasDrums;
+  let usesHihat = plan.hasHihat;
+
+  if (explicitlyBassless) usesBass = false;
+  else if (isBalladOrMinimal && !mentionsBass && !plan.hasBass) usesBass = false;
+  else if (isBalladOrMinimal && !mentionsBass && !plan.constraints.forbidsBass && styleRaw.length > 200) {
+    usesBass = false;
+  }
+
+  if (explicitlyDrumless) {
+    usesDrums = false;
+    usesHihat = false;
+  } else if (isBalladOrMinimal && !mentionsDrums && styleRaw.length > 200) {
+    usesDrums = false;
+    usesHihat = false;
+  } else if (isBalladOrMinimal && usesDrums && !mentionsHihat) {
+    usesHihat = false;
+  }
+
+  const modeLabel =
+    !usesBass && !usesDrums
+      ? '베이스·드럼 없는 미니멀 발라드/어쿠스틱 편성'
+      : !usesBass && usesDrums
+      ? '베이스리스 퍼커시브 편성'
+      : usesBass && !usesDrums
+      ? '드럼리스 멜로딕 편성'
+      : '풀 리듬 섹션 편성';
+
+  return { usesBass, usesDrums, usesHihat, modeLabel };
 }
 
 export function evaluateTrackMusicalCraft(
@@ -693,23 +1092,39 @@ export function evaluateTrackMusicalCraft(
   siblingPrompts: string[] = []
 ): TrackCraftAudit {
   const style = (track.stylePrompt || '').toLowerCase();
+  const styleBody = stripExcludeTail(style);
   const lyrics = (track.fullLyrics || '').toLowerCase();
-  const combined = `${style} ${lyrics}`;
+  const combined = `${styleBody} ${lyrics}`;
 
-  const hasGroove = /(groove|pocket|swing|bounce|rhythm|laid-?back|tight|organic|driving|pulse)/i.test(combined);
-  const hasBassPresence = /(bass|sub-?bass|808|low-?end|contrabass|cello|moog|p-bass|upright bass)/i.test(style);
-  const hasIndependentBass = /(4-bar|evolving|independent|melodic bass|counter-?melod|octave pop|turnaround|walking line|pitch-?glide|contrapuntal|bass riff|bass hook)/i.test(style);
-  const hasSyncopation = /(displaced|syncopat|off-?beat|anticipating|broken-?pocket|irregular|intentional.*rest|air-?pocket|ghost|backbeat|double-?tap|rubato|asymmetric)/i.test(style);
-  const hasInteraction = /(call-and-response|interlock|answer|dialogue|interplay|counter-?line|trading|rhythmic gaps|spaces left by)/i.test(combined);
-  const hasVocalPhrasing = /(phrasing|cadence|behind-the-beat|ahead-of-beat|syncopated.*vocal|conversational|falsetto|chest voice|breath|whisper|ad-lib|lead phrasing)/i.test(combined);
-  const hasDynamic = /(dynamic|crescendo|climax|stripped|dropout|pause|silence|contrast|bloom|swell|wide.*chorus|intimate.*verse|bridge)/i.test(combined);
+  const { usesBass, usesDrums, usesHihat, modeLabel } = resolveEffectiveTrackInstrumentation(track, plan);
+
+  const hasGrooveOrFlow = usesDrums
+    ? /(groove|pocket|swing|bounce|rhythm|laid-?back|tight|organic|driving|pulse)/i.test(combined)
+    : /(rubato|flow|breathing|organic|lyricism|phrase|sway|unhurried|pulse|swell|intimate)/i.test(combined);
+
+  const hasBassPresence = usesBass
+    ? /(bass|sub-?bass|808|low-?end|moog|p-bass|upright bass|fretless)/i.test(styleBody)
+    : /(left-?hand|low-?register|lower-?register|lower-?string|open-?fifth|octave|felt piano|felt-piano|acoustic piano|nylon|fingerpick|thumb|warm low|pedal|resonance|voicing)/i.test(styleBody);
+
+  const hasIndependentMotif = usesBass
+    ? /(4-bar|evolving|independent|melodic bass|counter-?melod|octave pop|turnaround|walking line|pitch-?glide|contrapuntal|bass riff|bass hook)/i.test(styleBody)
+    : /(4-bar|evolving|independent|counter-?melod|counter-?line|arpeggio|voicing|passing-?tone|fingerpick|turnaround|slash-?chord|motif)/i.test(styleBody);
+
+  const hasSyncopationOrSpace = usesDrums
+    ? /(displaced|syncopat|off-?beat|anticipating|broken-?pocket|irregular|intentional.*rest|air-?pocket|ghost|backbeat|double-?tap|rubato|asymmetric)/i.test(styleBody)
+    : /(rubato|behind-the-beat|ahead-of-beat|silence|pause|breath|rest|syncopat|asymmetric|fermata|air-?pocket|1-beat|stripped|drop)/i.test(combined);
+
+  const hasInteraction = /(call-and-response|interlock|answer|dialogue|interplay|counter-?line|trading|rhythmic gaps|spaces left by|fill|vocal pauses|breath gaps)/i.test(combined);
+  const hasVocalPhrasing = /(phrasing|cadence|behind-the-beat|ahead-of-beat|syncopated.*vocal|conversational|falsetto|chest voice|breath|whisper|ad-lib|lead phrasing|crack|vibrato|sustain|belt|hush)/i.test(combined);
+  const hasDynamic = /(dynamic|crescendo|climax|stripped|dropout|pause|silence|contrast|bloom|swell|wide.*chorus|intimate.*verse|bridge|escalation|release)/i.test(combined);
 
   // Check similarity against sibling tracks in the same playlist
-  const myTokens = new Set(style.split(/[^a-z0-9-]+/).filter((w) => w.length > 3));
+  const myTokens = new Set(styleBody.split(/[^a-z0-9-]+/).filter((w) => w.length > 3));
   let maxOverlap = 0;
   for (const sib of siblingPrompts) {
     if (!sib || sib === track.stylePrompt) continue;
-    const sibTokens = new Set(sib.toLowerCase().split(/[^a-z0-9-]+/).filter((w) => w.length > 3));
+    const sibBody = stripExcludeTail(sib.toLowerCase());
+    const sibTokens = new Set(sibBody.split(/[^a-z0-9-]+/).filter((w) => w.length > 3));
     if (myTokens.size === 0 || sibTokens.size === 0) continue;
     let common = 0;
     for (const tok of myTokens) {
@@ -721,39 +1136,59 @@ export function evaluateTrackMusicalCraft(
 
   const criteria: CraftAuditCriterion[] = [
     {
-      item: '전체 그루브',
-      result: hasGroove && maxOverlap < 0.78 ? '우수' : hasGroove ? '양호' : '보통',
-      judgment: hasGroove
-        ? '장르 정체성에 맞춘 자연스럽고 탄력 있는 포켓 형성'
-        : '리듬 포켓 및 그루브 결속 키워드 보강 필요',
+      item: usesDrums ? '전체 그루브' : '전체 호흡 및 흐름',
+      result: hasGrooveOrFlow && maxOverlap < 0.78 ? '우수' : hasGrooveOrFlow ? '양호' : '보통',
+      judgment: hasGrooveOrFlow
+        ? usesDrums
+          ? '장르 정체성에 맞춘 자연스럽고 탄력 있는 포켓 형성'
+          : '드럼 없이도 곡의 호흡과 서정적 템포 흐름이 매끄럽게 유지됨'
+        : usesDrums
+        ? '리듬 포켓 및 그루브 결속 키워드 보강 필요'
+        : '루바토 호흡 및 자연스러운 프레이즈 흐름 디렉션 보강 필요',
     },
     {
-      item: '베이스 존재감',
+      item: usesBass ? '베이스 존재감' : '저음역 공명 (베이스리스)',
       result: hasBassPresence ? '우수' : '미흡',
       judgment: hasBassPresence
-        ? '저음역 질감과 악기 정체성이 선명하게 정의됨'
-        : '저음 악기 및 베이스 톤 디렉션 부족',
+        ? usesBass
+          ? '저음역 질감과 베이스 악기 정체성이 선명하게 정의됨'
+          : '별도 베이스 악기 없이 피아노 왼손/기타 저음현 공명으로 저역 균형 확보'
+        : usesBass
+        ? '저음 악기 및 베이스 톤 디렉션 부족'
+        : '베이스 없는 편성에서 피아노 왼손/기타 저역 보이싱 명세 보강 필요',
     },
     {
-      item: '독립적인 베이스 리프',
-      result: hasIndependentBass ? '우수' : hasBassPresence ? '미흡' : '미흡',
-      judgment: hasIndependentBass
-        ? '4마디 단위 변주와 대위적 멜로디 베이스 훅 반영 완료'
-        : '단순 루트음 위주 우려 — 기억에 남는 4마디 독립 리프 강화 필요',
+      item: usesBass ? '독립적인 베이스 리프' : '왼손·반주 독립 모티프',
+      result: hasIndependentMotif ? '우수' : '미흡',
+      judgment: hasIndependentMotif
+        ? usesBass
+          ? '4마디 단위 변주와 대위적 멜로디 베이스 훅 반영 완료'
+          : '단순 코드 연타가 아닌 4마디 변주 왼손/아르페지오 독립 선율 설계 완료'
+        : usesBass
+        ? '단순 루트음 위주 우려 — 기억에 남는 4마디 독립 리프 강화 필요'
+        : '뻔한 정박 코드 반주 우려 — 4마디마다 변주되는 왼손 대선율/아르페지오 필요',
     },
     {
-      item: '싱코페이션',
-      result: hasSyncopation ? '우수' : '보통',
-      judgment: hasSyncopation
-        ? '킥 위치 이동 및 불규칙 하이햇·의도적 쉼표로 정형 백비트 탈피'
-        : '리듬적 변화는 있으나 강한 엇박 대비·쉼표 설계 부족',
+      item: usesDrums ? '싱코페이션' : '프레이징 여백·밀당',
+      result: hasSyncopationOrSpace ? '우수' : '보통',
+      judgment: hasSyncopationOrSpace
+        ? usesDrums
+          ? '킥 위치 이동 및 불규칙 하이햇·의도적 쉼표로 정형 백비트 탈피'
+          : '루바토 박자 밀당과 의도적 1박 침묵·숨결 여백으로 기계적 정박 탈피'
+        : usesDrums
+        ? '리듬적 변화는 있으나 강한 엇박 대비·쉼표 설계 부족'
+        : '드럼 없는 곡의 생명인 프레이즈 밀당과 1박 무음 여백 설계 보강 필요',
     },
     {
-      item: '악기 간 상호작용',
+      item: usesBass ? '악기 간 상호작용' : '반주-보컬 문답',
       result: hasInteraction ? '우수' : '보통',
       judgment: hasInteraction
-        ? '기타·건반·현악이 베이스 여백에서 콜앤리스폰스로 대화함'
-        : '베이스와 화성 악기 간 박자 분리 및 응답 설계 뚜렷하지 않음',
+        ? usesBass
+          ? '기타·건반이 베이스 여백에서 콜앤리스폰스로 대화함'
+          : '피아노/기타 필인이 보컬 호흡 여백 사이에서 섬세하게 응답함'
+        : usesBass
+        ? '베이스와 화성 악기 간 박자 분리 및 응답 설계 뚜렷하지 않음'
+        : '보컬 휴지기에 파고드는 반주 필인/콜앤리스폰스 설계 보강 필요',
     },
     {
       item: '보컬 프레이징',
@@ -766,18 +1201,37 @@ export function evaluateTrackMusicalCraft(
       item: '전체 다이내믹',
       result: hasDynamic ? '우수' : '양호',
       judgment: hasDynamic
-        ? '절-프리코러스 브레이크-후렴 확장의 명암 대비가 안정적으로 설계됨'
+        ? '절-브릿지 정적 대비-후렴 확장의 명암이 안정적으로 설계됨'
         : '섹션 간 밀도 대비 및 브레이크 포인트 추가 권장',
     },
   ];
 
+  const effectiveBassTag = usesBass
+    ? plan.bassKo
+    : BASSLESS_LEFT_HAND_POOL[plan.trackNumber % BASSLESS_LEFT_HAND_POOL.length].ko;
+  const effectiveDrumTag = usesDrums
+    ? plan.drumKo
+    : DRUMLESS_PULSE_POOL[plan.trackNumber % DRUMLESS_PULSE_POOL.length].ko;
+  const effectiveHihatTag = usesHihat
+    ? plan.hihatKo
+    : HIHATLESS_SPACE_POOL[plan.trackNumber % HIHATLESS_SPACE_POOL.length].ko;
+
   return {
     archetypeLabel: plan.archetypeLabel,
+    arrangementLabel: modeLabel,
     refined: false,
+    signatureLabels: {
+      bass: usesBass ? '베이스' : '저음 공명/반주',
+      drum: usesDrums ? '드럼' : '리듬 호흡/밀당',
+      hihat: usesHihat ? '하이햇' : '여백·쉼표 설계',
+      interaction: usesBass ? '악기 대화' : '반주-보컬 문답',
+      vocalPhrasing: '보컬 프레이징',
+      harmony: '화성 색채',
+    },
     signatureTags: {
-      bass: plan.bassKo,
-      drum: plan.drumKo,
-      hihat: plan.hihatKo,
+      bass: effectiveBassTag,
+      drum: effectiveDrumTag,
+      hihat: effectiveHihatTag,
       interaction: plan.interactionKo,
       vocalPhrasing: plan.vocalPhrasingKo,
       harmony: plan.harmonyKo,
@@ -800,13 +1254,12 @@ function fitStylePromptLength(baseBody: string, excludeClause: string, minLen = 
 
   let result = joinWithExclude(cleanBody);
 
-  // If shorter than minLen, enrich gently with crisp mix/mastering precision tags (still keeping SOP hygiene)
   const enrichmentPool = [
     'analog console headroom',
-    'clear rhythmic separation',
+    'clear melodic separation',
     'tactile transient clarity',
     'balanced mid-range warmth',
-    'wide stereophonic field',
+    'natural studio room depth',
     'polished playlist mastering',
   ];
   let idx = 0;
@@ -819,11 +1272,12 @@ function fitStylePromptLength(baseBody: string, excludeClause: string, minLen = 
     idx++;
   }
 
-  // If longer than maxLen, trim earlier generic filler segments while preserving innovation directives & exclude clause
   if (result.length > maxLen) {
     const parts = workingBody.split(',').map((s) => s.trim()).filter(Boolean);
     const keepCritical = (segment: string) =>
-      /(4-bar|evolving|independent|displaced|syncopat|irregular|rest|call-and-response|interlock|vocal|bpm|phrasing|maj9|add11|dorian|dynamic|contrast|shellac|phonograph|g-funk|808|rhodes|guitar|cello)/i.test(segment);
+      /(4-bar|evolving|independent|displaced|syncopat|irregular|rest|silence|rubato|call-and-response|interlock|vocal|bpm|phrasing|maj9|add11|add9|dorian|dynamic|contrast|shellac|phonograph|g-funk|808|rhodes|guitar|piano|bassless|drumless)/i.test(
+        segment
+      );
 
     while (joinWithExclude(parts.join(', ')).length > maxLen && parts.length > 6) {
       const expendableIdx = parts.findIndex((seg, pIdx) => pIdx > 1 && !keepCritical(seg));
@@ -857,6 +1311,8 @@ export function refineTrackWithCraftAudit(
     };
   }
 
+  const { usesBass, usesDrums, usesHihat } = resolveEffectiveTrackInstrumentation(track, plan);
+
   let rawStyle = (track.stylePrompt || '').trim();
   let excludeClause = '';
   const excludeMatch = rawStyle.match(/(Exclude\s*:.*)$/i) || rawStyle.match(/((?:,\s*-[a-z0-9][a-z0-9\s-]*)+)$/i);
@@ -868,22 +1324,56 @@ export function refineTrackWithCraftAudit(
   const additions: string[] = [];
   const lower = rawStyle.toLowerCase();
 
-  if (!/(4-bar|evolving|independent|melodic bass|counter-?melod|octave pop|turnaround|walking line|pitch-?glide|contrapuntal)/i.test(lower)) {
-    additions.push(plan.bassSuno);
+  // Strictly match instrumentation reality: NEVER inject bass/drums/hihat into a bassless/drumless ballad or SOP-forbidden track!
+  const effectiveBassDirective = usesBass
+    ? plan.bassSuno
+    : BASSLESS_LEFT_HAND_POOL[plan.trackNumber % BASSLESS_LEFT_HAND_POOL.length].suno;
+  const effectiveDrumDirective = usesDrums
+    ? plan.drumSuno
+    : DRUMLESS_PULSE_POOL[plan.trackNumber % DRUMLESS_PULSE_POOL.length].suno;
+  const effectiveHihatDirective = usesHihat
+    ? plan.hihatSuno
+    : HIHATLESS_SPACE_POOL[plan.trackNumber % HIHATLESS_SPACE_POOL.length].suno;
+
+  if (
+    usesBass
+      ? !/(4-bar|evolving|independent|melodic bass|counter-?melod|octave pop|turnaround|walking line|pitch-?glide|contrapuntal)/i.test(lower)
+      : !/(4-bar|evolving|independent|counter-?melod|arpeggio|left-?hand|thumb-?bass|open-?fifth)/i.test(lower)
+  ) {
+    if (isTagCompatibleWithConstraints(effectiveBassDirective, plan.constraints)) {
+      additions.push(effectiveBassDirective);
+    }
   }
-  if (!/(displaced|syncopat|off-?beat|broken-?pocket|irregular|intentional.*rest|ghost)/i.test(lower)) {
-    additions.push(plan.drumSuno, plan.hihatSuno);
+
+  if (
+    usesDrums
+      ? !/(displaced|syncopat|off-?beat|broken-?pocket|irregular|intentional.*rest|ghost)/i.test(lower)
+      : !/(rubato|behind-the-beat|silence|pause|1-beat|arpeggio syncopation|breath)/i.test(lower)
+  ) {
+    if (isTagCompatibleWithConstraints(effectiveDrumDirective, plan.constraints)) {
+      additions.push(effectiveDrumDirective);
+    }
+    if (isTagCompatibleWithConstraints(effectiveHihatDirective, plan.constraints)) {
+      additions.push(effectiveHihatDirective);
+    }
+  } else if (usesHihat && !/(hi-?hat|shaker|ride)/i.test(lower)) {
+    if (isTagCompatibleWithConstraints(effectiveHihatDirective, plan.constraints)) {
+      additions.push(effectiveHihatDirective);
+    }
   }
-  if (!/(call-and-response|interlock|answer|dialogue|interplay|spaces left by)/i.test(lower)) {
-    additions.push(plan.interactionSuno);
+
+  if (!/(call-and-response|interlock|answer|dialogue|interplay|spaces left by|vocal pauses|breath gaps)/i.test(lower)) {
+    if (isTagCompatibleWithConstraints(plan.interactionSuno, plan.constraints)) {
+      additions.push(plan.interactionSuno);
+    }
   }
-  if (!/(maj9|add11|dorian|modal|passing chord|chromatic|6\/9|minor 11|deceptive|slash chord)/i.test(lower)) {
+  if (!/(maj9|add11|add9|dorian|modal|passing chord|chromatic|6\/9|minor 11|deceptive|slash-?chord)/i.test(lower)) {
     additions.push(plan.harmonySuno);
   }
-  if (!/(phrasing|cadence|behind-the-beat|ahead-of-beat|conversational)/i.test(lower)) {
+  if (!/(phrasing|cadence|behind-the-beat|ahead-of-beat|conversational|breath)/i.test(lower)) {
     additions.push(plan.vocalPhrasingSuno);
   }
-  if (!/(dynamic|contrast|bloom|dropout|stripped|climax)/i.test(lower)) {
+  if (!/(dynamic|contrast|bloom|dropout|stripped|climax|1-beat)/i.test(lower)) {
     additions.push(plan.dynamicSuno);
   }
   if (!/\bbpm\b/i.test(lower)) {
@@ -896,14 +1386,14 @@ export function refineTrackWithCraftAudit(
 
   const finalStylePrompt = fitStylePromptLength(enhancedBody, excludeClause, 760, 945);
 
-  // Lightly enrich [Verse 1] / [Chorus] guides if generic (preserving clean single-bracket hygiene)
   let enhancedLyrics = track.fullLyrics || '';
-  if (enhancedLyrics && !/(call-and-response|4-bar|displaced|syncopat|counter)/i.test(enhancedLyrics)) {
+  if (enhancedLyrics && !/(call-and-response|4-bar|displaced|syncopat|counter|rubato|pause)/i.test(enhancedLyrics)) {
+    const safeVerseHint = `${effectiveBassDirective.split(',')[0]}, ${effectiveDrumDirective.split(',')[0]}`;
     enhancedLyrics = enhancedLyrics
       .replace(/^\[Verse 1(?::\s*([^\]]+))?\]$/m, (_, existing) =>
         existing
-          ? `[Verse 1: ${existing.trim()}, ${plan.verseGuideHint}]`
-          : `[Verse 1: ${plan.verseGuideHint}]`
+          ? `[Verse 1: ${existing.trim()}, ${safeVerseHint}]`
+          : `[Verse 1: ${safeVerseHint}]`
       )
       .replace(/^\[Chorus(?::\s*([^\]]+))?\]$/m, (_, existing) =>
         existing
@@ -934,18 +1424,26 @@ export function buildRefinementPromptForAI(
 ): string {
   const details = weakItems
     .map(({ track, plan, audit }) => {
+      const { usesBass, usesDrums } = resolveEffectiveTrackInstrumentation(track, plan);
       const weakCriteria = audit.criteria
         .filter((c) => c.result === '미흡' || c.result === '보통')
         .map((c) => `  * ${c.item} (${c.result}): ${c.judgment}`)
         .join('\n');
-      return `Track ${track.trackNumber} ("${track.title}"):
+
+      const bassTarget = usesBass
+        ? plan.bassSuno
+        : BASSLESS_LEFT_HAND_POOL[plan.trackNumber % BASSLESS_LEFT_HAND_POOL.length].suno;
+      const drumTarget = usesDrums
+        ? `${plan.drumSuno}; ${plan.hihatSuno}`
+        : `${DRUMLESS_PULSE_POOL[plan.trackNumber % DRUMLESS_PULSE_POOL.length].suno}; ${HIHATLESS_SPACE_POOL[plan.trackNumber % HIHATLESS_SPACE_POOL.length].suno}`;
+
+      return `Track ${track.trackNumber} ("${track.title}") [${audit.arrangementLabel || plan.arrangementLabel}]:
 Current stylePrompt: "${track.stylePrompt}"
 7-Axis Audit Gaps:
 ${weakCriteria}
-Mandatory Innovation Targets to weave naturally into stylePrompt (strictly 760–940 chars total, preserving Exclude terms & "${themeName}" SOP):
-  - Bass: ${plan.bassSuno}
-  - Drum: ${plan.drumSuno}
-  - Hi-Hat: ${plan.hihatSuno}
+Theme-Safe Innovation Targets to weave naturally into stylePrompt (strictly 760–940 chars total, honoring ALL Exclude/forbidden rules in "${themeName}" SOP):
+  - Low-Register / Counter-Motif: ${bassTarget}
+  - Rhythm / Breathing Space: ${drumTarget}
   - Call & Response: ${plan.interactionSuno}
   - Harmony: ${plan.harmonySuno}
   - Vocal Phrasing: ${plan.vocalPhrasingSuno}
@@ -953,12 +1451,13 @@ Mandatory Innovation Targets to weave naturally into stylePrompt (strictly 760�
     })
     .join('\n\n');
 
-  return `PRE-OUTPUT MUSICAL QUALITY REFINEMENT PASS (최종 출력 전 7항목 자가 검증 및 보완)
-The following track(s) scored "미흡" or "보통" on independent bass riff, syncopation, or instrument interaction and risked sounding homogenized:
+  return `PRE-OUTPUT MUSICAL QUALITY REFINEMENT PASS (테마·편성 맞춤 7항목 자가 검증 및 보완)
+The following track(s) risked sounding repetitive or generic on motif independence, rhythmic phrasing/syncopation, or call-and-response interaction:
 
 ${details}
 
-Rewrite ONLY the "stylePrompt" (strictly 760–940 English chars, dense comma-separated Suno tags) and optional improved "[Verse 1: ...]" / "[Chorus: ...]" tag headers so ALL 7 musical criteria reach "우수/양호". Keep track titles and sung lyric text unchanged.
+CRITICAL: NEVER add bass instruments or drums to stripped/bassless/drumless ballad tracks, and NEVER add instruments forbidden by the theme's SOP (such as orchestral strings/cello/timpani).
+Rewrite ONLY the "stylePrompt" (strictly 760–940 English chars, dense comma-separated Suno tags) and optional improved "[Verse 1: ...]" / "[Chorus: ...]" tag headers so ALL 7 theme-specific criteria reach "우수/양호". Keep track titles and sung lyric text unchanged.
 Respond ONLY with valid JSON:
 {
   "refinedTracks": [

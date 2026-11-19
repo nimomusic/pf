@@ -32,7 +32,16 @@ export interface CraftAuditCriterion {
 
 export interface TrackCraftAudit {
   archetypeLabel: string;
+  arrangementLabel?: string;
   refined: boolean;
+  signatureLabels?: {
+    bass?: string;
+    drum?: string;
+    hihat?: string;
+    interaction?: string;
+    vocalPhrasing?: string;
+    harmony?: string;
+  };
   signatureTags: {
     bass: string;
     drum: string;

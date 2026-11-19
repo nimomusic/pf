@@ -380,6 +380,11 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                                 <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
                                 7항목 사운드 차별화 검증 완료
                               </span>
+                              {track.craftAudit.arrangementLabel && (
+                                <span className="text-[10px] font-semibold bg-emerald-100/80 text-emerald-800 px-2 py-0.5 rounded border border-emerald-200">
+                                  {track.craftAudit.arrangementLabel}
+                                </span>
+                              )}
                               <span className="text-[10px] font-semibold bg-white text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
                                 {track.craftAudit.refined ? '자동 보완 적용됨' : '1차 기준 통과'}
                               </span>
@@ -400,12 +405,12 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                           {expandedAuditTrack === track.trackNumber && (
                             <div className="mt-3 space-y-2.5">
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] bg-white p-2.5 rounded-lg border border-emerald-100">
-                                <div><strong className="text-slate-700">베이스:</strong> {track.craftAudit.signatureTags.bass}</div>
-                                <div><strong className="text-slate-700">드럼:</strong> {track.craftAudit.signatureTags.drum}</div>
-                                <div><strong className="text-slate-700">하이햇:</strong> {track.craftAudit.signatureTags.hihat}</div>
-                                <div><strong className="text-slate-700">악기 대화:</strong> {track.craftAudit.signatureTags.interaction}</div>
-                                <div><strong className="text-slate-700">보컬 프레이징:</strong> {track.craftAudit.signatureTags.vocalPhrasing}</div>
-                                <div><strong className="text-slate-700">화성 색채:</strong> {track.craftAudit.signatureTags.harmony}</div>
+                                <div><strong className="text-slate-700">{track.craftAudit.signatureLabels?.bass || '베이스'}:</strong> {track.craftAudit.signatureTags.bass}</div>
+                                <div><strong className="text-slate-700">{track.craftAudit.signatureLabels?.drum || '드럼'}:</strong> {track.craftAudit.signatureTags.drum}</div>
+                                <div><strong className="text-slate-700">{track.craftAudit.signatureLabels?.hihat || '하이햇'}:</strong> {track.craftAudit.signatureTags.hihat}</div>
+                                <div><strong className="text-slate-700">{track.craftAudit.signatureLabels?.interaction || '악기 대화'}:</strong> {track.craftAudit.signatureTags.interaction}</div>
+                                <div><strong className="text-slate-700">{track.craftAudit.signatureLabels?.vocalPhrasing || '보컬 프레이징'}:</strong> {track.craftAudit.signatureTags.vocalPhrasing}</div>
+                                <div><strong className="text-slate-700">{track.craftAudit.signatureLabels?.harmony || '화성 색채'}:</strong> {track.craftAudit.signatureTags.harmony}</div>
                               </div>
 
                               <div className="overflow-x-auto bg-white rounded-lg border border-emerald-100">
