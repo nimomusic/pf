@@ -8,11 +8,15 @@ import seedThemes from './data/themes.json' with { type: 'json' };
 import { buildCuratedYoutubePackage } from './src/utils/youtubePackageBuilder.ts';
 import {
   buildRefinementPromptForAI,
+  detectSopEraMode,
+  enforceContemporaryEraInStylePrompt,
   enforceTrackVocalGender,
   evaluateTrackMusicalCraft,
   formatInnovationPromptSection,
   generateTrackInnovationPlans,
+  getCurrentTemporalContext,
   refineTrackWithCraftAudit,
+  stripSopNegativeClauses,
 } from './src/utils/musicalCraftEngine.ts';
 
 dotenv.config();
@@ -1319,6 +1323,33 @@ app.post(['/api/generate', '/generate'], async (req: Request, res: Response) => 
       return;
     }
 
+    const sopEraMode = detectSopEraMode(theme);
+    const temporalCtx = getCurrentTemporalContext();
+    const positiveSeasonText = stripSopNegativeClauses(
+      `${theme.name || ''} ${theme.category || ''} ${theme.sop || ''} ${cleanLyricConcept}`
+    );
+    const hasExplicitSeasonOrHoliday =
+      /(크리스마스|성탄|연말|캐롤|christmas|xmas|holiday|santa|겨울\s*눈|함박눈|가을비|rainy\s*autumn|봄바람|벚꽃|한여름|바닷가|cherry\s*blossom|spring\s*breeze|summer\s*beach)/i.test(
+        positiveSeasonText
+      );
+    const eraAndSeasonMandate =
+      sopEraMode === 'contemporary'
+        ? `[CRITICAL CONTEMPORARY ERA (${temporalCtx.year}) & CURRENT SEASON (${temporalCtx.isoDate}) MANDATE]
+- ACTIVE ERA LOCK: The SOP does NOT direct a 1940s/1950s/1970s/retro sound (or explicitly forbids dated sonic tropes). Therefore, ALL tracks, stylePrompts, instruments, production polish, and YouTube packaging MUST be strictly anchored in **${temporalCtx.year} contemporary modern production**!
+- STRICTLY FORBIDDEN ERA TERMS: NEVER write "1970s", "1940s", "1950s", "vintage", "retro", "warm analog studio depth", "analog tape", "tube saturation", "shellac", or "oldies" in any stylePrompt or lyric tag! Use crisp modern descriptors ("crisp ${temporalCtx.year} modern studio clarity", "modern synth bass", "clean electric guitar", "polished contemporary master") and ALWAYS include "-1970s, -vintage, -retro" in stylePrompt Exclude!
+- CURRENT DATE SEASON LOCK: Today's real-world date is **${temporalCtx.isoDate}** (Current season: **${temporalCtx.seasonEn} / ${temporalCtx.seasonKo}**). ${
+            hasExplicitSeasonOrHoliday
+              ? 'An explicit season/holiday was positively directed in the SOP or Lyric Concept — honor that explicit season naturally.'
+              : `No other season or holiday was requested, so naturally reflect TODAY'S current **${temporalCtx.seasonEn} (${temporalCtx.seasonKo})** atmosphere across imagery, titles, descriptions, hashtags, and thumbnail scenery — and STRICTLY NEVER hallucinate rain ("가을비") or winter snow unless requested!`
+          }`
+        : `[CRITICAL ERA (${sopEraMode.toUpperCase()}) & CURRENT SEASON (${temporalCtx.isoDate}) MANDATE]
+- HISTORICAL ERA LOCK: Preserve the SOP's explicitly requested historical era (${sopEraMode}) authentically across instruments, mix texture, and thumbnail art direction.
+- CURRENT DATE SEASON LOCK: Today's real-world date is **${temporalCtx.isoDate}** (Current season: **${temporalCtx.seasonEn} / ${temporalCtx.seasonKo}**). ${
+            hasExplicitSeasonOrHoliday
+              ? 'An explicit season/holiday was directed in the SOP or Lyric Concept — honor that explicit season.'
+              : `No specific season was requested, so default environmental atmosphere and seasonal tags cleanly to today's **${temporalCtx.seasonEn} (${temporalCtx.seasonKo})** without inventing unrequested rain or snow.`
+          }`;
+
     const innovationPlans = generateTrackInnovationPlans(theme, sopSpecs, effectiveTrackCount, vocal);
     const innovationPromptSection = formatInnovationPromptSection(innovationPlans);
 
@@ -1517,6 +1548,8 @@ ${languageRule}
 
 ${vocalGenderMandate}
 
+${eraAndSeasonMandate}
+
 ================================================================================
 CRITICAL MASTER DIRECTIVE: 100% STRICT ADHERENCE TO THE USER'S PROVIDED SOP
 ================================================================================
@@ -1557,7 +1590,7 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 - In every track's stylePrompt, capture in comma-separated depth:
   (1) The exact acoustic sound identity, playback texture, and micro-genre defined in the current SOP
   (2) Specific instruments, arrangement progression, and rhythmic groove defined in the current SOP
-  (3) Era and emotion-accurate vocal delivery, timbre, age/gender, and dynamics defined in the current SOP
+  (3) Era and emotion-accurate vocal delivery, timbre, age/gender, and dynamics defined in the current SOP (defaulting strictly to ${temporalCtx.year} contemporary sound unless an older historical era is explicitly defined positively in the SOP)
   (4) Specific BPM tempo and energy flow defined in the current SOP
   (5) Spatial mix character, stereo panorama, and mastering texture
   (6) Negative exclusion keywords (Exclude: -...)
@@ -1608,7 +1641,7 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
   - targetLength: e.g. "3:15"
 
 6. [YOUTUBE UPLOAD PACKAGE (youtube)]
-- Produce a high-CTR editorial YouTube playlist upload package matching the active theme ("${theme.name}"), lyric concept, era, culture, lyric storyline, season, mood, and tracks:
+- Today's real-world date is ${temporalCtx.isoDate} (Season: ${temporalCtx.seasonKo} / ${temporalCtx.seasonEn}). Produce a high-CTR editorial YouTube playlist upload package matching the active theme ("${theme.name}"), lyric concept, ${sopEraMode === 'contemporary' ? `${temporalCtx.year} contemporary era` : 'the SOP historical era'}, culture, lyric storyline, ${hasExplicitSeasonOrHoliday ? 'the explicitly requested season/holiday' : `today's current ${temporalCtx.seasonKo} (${temporalCtx.seasonEn}) season`}, mood, and tracks:
   - "titleKo": Craft a genuine Korean YouTube music-channel viral playlist title (like top curated channels: 𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | ...). Use an emotional/conversational hook + scene/mood + purposeful emojis + pipe-separated genre & listening-space tags (e.g., "𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 찬바람 부니까 네 생각이 나 💙 겨울 무드 달콤 러브송 🎧 | Groovy R&B • Chill Mood | 카페음악 • 매장음악", "𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 커피 한 잔만 마시러 했는데, 어느새 세 시간 ☕️ | Chill Groove Pop • 카페음악 • 노동요", "𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | '우연히 틀었는데, 분위기가 미쳤음 ✨🎧' | 감성 힙합 • R&B • Pop Groove").
     * Adapt dynamically to ANY theme (Groove Pop, Korean R&B Hip-Hop, J-POP Electronic R&B, 1940s–50s Vintage Pop, 70s Soul Funk, West Coast Rap, Cinematic OST, Christmas, etc.) AND any custom lyric concept.
     * STRICTLY BANNED AI CLICHÉS: NEVER write generic titles like "~와 함께하는 신나는 하루 | 플레이리스트" or bare "| 플레이리스트" without genre/mood tags!
@@ -1667,7 +1700,7 @@ CRITICAL: "tracks" MUST contain EXACTLY ${effectiveTrackCount} track objects ("t
   }
 }`;
 
-    const standardSystemInstruction = `You are an expert AI music playlist producer and Suno prompt engineer for theme "${theme.name}" (${theme.category || 'Music'}). Follow the user SOP with 100% strict fidelity—NEVER mix in J-POP/Japanese or any other theme's genre/language unless explicitly required by this theme's SOP. CRITICAL MANDATORY RULES: (1) ALWAYS generate the EXACT number of tracks requested in Target Track Count (e.g., if ${effectiveTrackCount} tracks are requested, the "tracks" JSON array MUST contain all ${effectiveTrackCount} distinct tracks numbered 1 through ${effectiveTrackCount}, never just 1 track!). (2) Style prompts MUST be dense, comma-separated musical keywords and sound design tags matching "${theme.name}" (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries; DO NOT write narrative sentences like "This track embodies the essence of..."), while ALWAYS protecting catchy singable vocal melodies, pitch accuracy, and a steady groove pocket (NEVER write timing/tuning-destabilizing terms like "ahead-of-beat", "behind-the-beat", "breaking 4/4", "off-grid", "irregular rests", or "voice crack"). (3) Tag & Line Break Hygiene: Every section tag MUST use single square brackets [Section: Guide] (NEVER curly braces {}, NEVER nested parentheses [(...)], and NEVER repeat the section prefix inside the guide such as [Verse 1: Verse 1: ...]). Put every tag on its own line followed by \\n, separate sections with \\n\\n, NEVER split single words onto separate lines, NEVER repeat parenthesized guides underneath [Outro: ...] or [Instrumental Interlude: ...], and emit [End] AT MOST ONCE at the very end. (4) Instrumental Sections Hygiene: [Intro: ...], [Outro: ...], [Piano Solo: ...], and [Instrumental Interlude: ...] MUST CONTAIN ZERO SUNG LYRICS! (5) STRICT VOCAL GENDER LOCK (${vocalLabel} -> ${perTrackVocalSummary}): User's vocal selection ALWAYS overrides any gender written in the SOP! EVERY track's stylePrompt, metaInfo.vocal, and section guides MUST explicitly lock to a single vocal gender ("solo male lead vocal, male voice" + "-female vocals", OR "solo female lead vocal, female voice" + "-male vocals", OR "pure instrumental, no vocals" + "-vocals, -singing")—NEVER omit gender or write "androgynous" or conflicting gender cues! Strictly match the exact lyric language of "${theme.name}"'s SOP (${isJapanese ? '100% Pure Japanese titles and lyrics, ZERO Korean' : isPureEnglish ? '100% Pure English titles and lyrics' : isKorEng ? 'Korean titles and Korean-English code-switching lyrics' : 'exact language specified in the SOP'}). Every song title MUST be a natural 1-4 word core phrase/keyword actually sung inside that track's [Chorus] lyrics — NEVER use AI clichés like "Empty Spaces", "Sweet Confession", "Silent Echoes", "Whispers in the Dark", or verbatim preset concept labels! (6) Strictly respect tag prohibitions such as omitting [Intro], [Outro], and [End] when forbidden in the SOP. (7) For the YouTube Upload Package ("youtube"), craft high-CTR curated Korean/English playlist titles ("𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | <hook + emoji> | <genre • space tags>", NEVER generic clichés like "~와 함께하는 신나는 하루 | 플레이리스트"), follow the exact 5-block YouTube description structure (2-line scene intro → 2-line use-cases & warm wish → "🎧 Tracklist" followed by blank lines with ZERO numbered songs or timestamps → "📌" sound focus & subscribe CTA → 8-9 space-separated hashtags; NEVER write AI clichés like "경험하세요/만끽하세요/빠져보세요"), output "tracklist" WITHOUT any (0:00) timestamps, EXACTLY 5 SEO hashtags in "hashtags", and make "thumbnailPrompt" a single unified 16:9 center-focused photorealistic editorial photography prompt of AT LEAST 2,200 characters matching the lyric language culture (${isJapanese ? 'Japanese setting & Japanese subject' : isPureEnglish ? 'Western setting & Western subject' : 'Korean setting & Korean subject'}), exact historical era/subculture (e.g. 1940s-1950s vintage, 1970s soul funk, West Coast freestyle rap, Christmas carols), and actual lyric mood, with STRICTLY ZERO text and NO split-screen.${cleanLyricConcept ? ` (8) MANDATORY LYRIC CONCEPT: ALL tracks, lyrics, and YouTube visuals MUST focus on the user concept: "${cleanLyricConcept}".${hasFirstSightConcept ? ' IMPORTANT: "첫눈에 반한 감정" strictly means LOVE AT FIRST SIGHT (instant spark on first eye contact), NEVER winter snow or "first snow"!' : ''}` : ''} Respond strictly in valid JSON.`;
+    const standardSystemInstruction = `You are an expert AI music playlist producer and Suno prompt engineer for theme "${theme.name}" (${theme.category || 'Music'}). Follow the user SOP with 100% strict fidelity—NEVER mix in J-POP/Japanese or any other theme's genre/language unless explicitly required by this theme's SOP. CRITICAL MANDATORY RULES: (1) ALWAYS generate the EXACT number of tracks requested in Target Track Count (e.g., if ${effectiveTrackCount} tracks are requested, the "tracks" JSON array MUST contain all ${effectiveTrackCount} distinct tracks numbered 1 through ${effectiveTrackCount}, never just 1 track!). (2) Style prompts MUST be dense, comma-separated musical keywords and sound design tags matching "${theme.name}" (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries; DO NOT write narrative sentences like "This track embodies the essence of..."), while ALWAYS protecting catchy singable vocal melodies, pitch accuracy, and a steady groove pocket (NEVER write timing/tuning-destabilizing terms like "ahead-of-beat", "behind-the-beat", "breaking 4/4", "off-grid", "irregular rests", or "voice crack"). ${sopEraMode === 'contemporary' ? `ERA LOCK (${temporalCtx.year} CONTEMPORARY): NEVER output "1970s", "vintage", "retro", "analog tape", or "warm analog studio depth" in stylePrompt—anchor strictly in ${temporalCtx.year} modern crisp production and add -1970s, -vintage, -retro to Exclude.` : 'Preserve the SOP explicit historical era faithfully.'} SEASON LOCK (Today is ${temporalCtx.isoDate} = ${temporalCtx.seasonEn}/${temporalCtx.seasonKo}): ${hasExplicitSeasonOrHoliday ? 'Follow the explicitly requested season/holiday.' : `Align subtle atmosphere and visuals with current ${temporalCtx.seasonKo}/${temporalCtx.seasonEn} without inventing unrequested rain ("가을비") or winter snow.`} (3) Tag & Line Break Hygiene: Every section tag MUST use single square brackets [Section: Guide] (NEVER curly braces {}, NEVER nested parentheses [(...)], and NEVER repeat the section prefix inside the guide such as [Verse 1: Verse 1: ...]). Put every tag on its own line followed by \\n, separate sections with \\n\\n, NEVER split single words onto separate lines, NEVER repeat parenthesized guides underneath [Outro: ...] or [Instrumental Interlude: ...], and emit [End] AT MOST ONCE at the very end. (4) Instrumental Sections Hygiene: [Intro: ...], [Outro: ...], [Piano Solo: ...], and [Instrumental Interlude: ...] MUST CONTAIN ZERO SUNG LYRICS! (5) STRICT VOCAL GENDER LOCK (${vocalLabel} -> ${perTrackVocalSummary}): User's vocal selection ALWAYS overrides any gender written in the SOP! EVERY track's stylePrompt, metaInfo.vocal, and section guides MUST explicitly lock to a single vocal gender ("solo male lead vocal, male voice" + "-female vocals", OR "solo female lead vocal, female voice" + "-male vocals", OR "pure instrumental, no vocals" + "-vocals, -singing")—NEVER omit gender or write "androgynous" or conflicting gender cues! Strictly match the exact lyric language of "${theme.name}"'s SOP (${isJapanese ? '100% Pure Japanese titles and lyrics, ZERO Korean' : isPureEnglish ? '100% Pure English titles and lyrics' : isKorEng ? 'Korean titles and Korean-English code-switching lyrics' : 'exact language specified in the SOP'}). Every song title MUST be a natural 1-4 word core phrase/keyword actually sung inside that track's [Chorus] lyrics — NEVER use AI clichés like "Empty Spaces", "Sweet Confession", "Silent Echoes", "Whispers in the Dark", or verbatim preset concept labels! (6) Strictly respect tag prohibitions such as omitting [Intro], [Outro], and [End] when forbidden in the SOP. (7) For the YouTube Upload Package ("youtube"), craft high-CTR curated Korean/English playlist titles ("𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | <hook + emoji> | <genre • space tags>", NEVER generic clichés like "~와 함께하는 신나는 하루 | 플레이리스트"), follow the exact 5-block YouTube description structure (2-line scene intro → 2-line use-cases & warm wish → "🎧 Tracklist" followed by blank lines with ZERO numbered songs or timestamps → "📌" sound focus & subscribe CTA → 8-9 space-separated hashtags; NEVER write AI clichés like "경험하세요/만끽하세요/빠져보세요"), output "tracklist" WITHOUT any (0:00) timestamps, EXACTLY 5 SEO hashtags in "hashtags", and make "thumbnailPrompt" a single unified 16:9 center-focused photorealistic editorial photography prompt of AT LEAST 2,200 characters matching the lyric language culture (${isJapanese ? 'Japanese setting & Japanese subject' : isPureEnglish ? 'Western setting & Western subject' : 'Korean setting & Korean subject'}), exact era/subculture (${sopEraMode === 'contemporary' ? `${temporalCtx.year} modern contemporary setting` : 'SOP historical era'}), and actual lyric mood, with STRICTLY ZERO text and NO split-screen.${cleanLyricConcept ? ` (8) MANDATORY LYRIC CONCEPT: ALL tracks, lyrics, and YouTube visuals MUST focus on the user concept: "${cleanLyricConcept}".${hasFirstSightConcept ? ' IMPORTANT: "첫눈에 반한 감정" strictly means LOVE AT FIRST SIGHT (instant spark on first eye contact), NEVER winter snow or "first snow"!' : ''}` : ''} Respond strictly in valid JSON.`;
 
     // Shared post-processor: guarantees exact track count (with AI continuation if AI returned fewer),
     // sequential 1..N numbering, clean titles, clean lyrics, and synchronized YouTube tracklist.
@@ -1686,7 +1719,7 @@ CRITICAL: "tracks" MUST contain EXACTLY ${effectiveTrackCount} track objects ("t
         .join('; ');
       return `
 You previously generated ${startNumber - 1} track(s) for this playlist, but the user requested EXACTLY ${effectiveTrackCount} tracks.
-Generate the remaining ${missingCount} NEW, DISTINCT track(s) (trackNumber ${startNumber} to ${effectiveTrackCount}) following the exact same SOP, language rules, LOCKED VOCAL GENDER (${subsetGenderLock}), 750-950 character stylePrompt requirement, and full 3-minute lyrics structure.
+Generate the remaining ${missingCount} NEW, DISTINCT track(s) (trackNumber ${startNumber} to ${effectiveTrackCount}) following the exact same SOP, language rules, LOCKED VOCAL GENDER (${subsetGenderLock}), ${sopEraMode === 'contemporary' ? `${temporalCtx.year} contemporary modern era (NEVER output 1970s, vintage, retro, or warm analog studio depth)` : `SOP historical era (${sopEraMode})`}, current date season (${temporalCtx.isoDate} = ${temporalCtx.seasonEn}/${temporalCtx.seasonKo} unless another season/holiday was directed), 750-950 character stylePrompt requirement, and full 3-minute lyrics structure.
 Every track's "title" MUST be a memorable 1–4 word core phrase/word actually sung verbatim in that track's [Chorus] (NO AI clichés like "Empty Spaces" or "Sweet Confession").
 NEVER repeat section names inside bracket guides (write [Verse 1: ...], NEVER [Verse 1: Verse 1: ...]), ALWAYS specify the track's locked vocal gender explicitly inside stylePrompt, metaInfo.vocal, and section guides, and ALWAYS protect pitch-true catchy melodies and steady locked groove pocket.
 Do NOT repeat these existing song titles: ${existingTitles.map(t => `"${t}"`).join(', ') || '(none)'}.${cleanLyricConcept ? `\nALL new tracks MUST also faithfully express the Lyric Concept: "${cleanLyricConcept}".${hasFirstSightConcept ? ' Remember: "첫눈에 반한 감정" means LOVE AT FIRST SIGHT, NEVER first snow/winter!' : ''}` : ''}
@@ -1748,6 +1781,9 @@ Respond ONLY with valid JSON:
 
       let normalizedTracks = rawTracks.map((tr: any, idx: number) => {
         const plan = innovationPlans[idx] || innovationPlans[0];
+        const eraCleanedStyle = tr?.stylePrompt
+          ? enforceContemporaryEraInStylePrompt(String(tr.stylePrompt), sopEraMode, temporalCtx.year, 945)
+          : tr?.stylePrompt;
         const genderLocked = enforceTrackVocalGender(
           {
             ...tr,
@@ -1757,6 +1793,7 @@ Respond ONLY with valid JSON:
               cleanTitleLang,
               sopSpecs.isJapanese ? '新曲' : cleanTitleLang === 'korean' ? '새로운 트랙' : `Track ${idx + 1}`
             ),
+            ...(eraCleanedStyle ? { stylePrompt: eraCleanedStyle } : {}),
             fullLyrics: formatAndCleanLyrics(tr?.fullLyrics || '', sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro)
           },
           plan.vocalGender
@@ -1810,11 +1847,18 @@ Respond ONLY with valid JSON:
                   );
                 }
               }
+              const nextStylePrompt =
+                typeof patch.stylePrompt === 'string' && patch.stylePrompt.length >= 650
+                  ? patch.stylePrompt.trim()
+                  : tr.stylePrompt;
               return {
                 ...tr,
-                stylePrompt: typeof patch.stylePrompt === 'string' && patch.stylePrompt.length >= 650
-                  ? patch.stylePrompt.trim()
-                  : tr.stylePrompt,
+                stylePrompt: enforceContemporaryEraInStylePrompt(
+                  String(nextStylePrompt || ''),
+                  sopEraMode,
+                  temporalCtx.year,
+                  945
+                ),
                 fullLyrics: updatedLyrics,
               };
             });
@@ -2219,9 +2263,9 @@ function generateCreativePlaylistData(theme: any, trackCount: number, vocal: str
 
   let trackTemplates: Array<{ title: string; mood: string; style: string; lyrics: string; metaInfo?: any }> = [];
 
-  const isSoulFunk70s = /\b(1970|1970s|70s|70's|soul\s*funk|vintage\s*soul|motown|disco\s*funk)\b|소울\s*펑크|70년대/i.test(
-    `${theme.name || ''} ${theme.category || ''} ${theme.sop || ''}`
-  );
+  const simEraMode = detectSopEraMode(theme);
+  const simTemporal = getCurrentTemporalContext();
+  const isSoulFunk70s = simEraMode === 'historical_1970s';
 
   if (sopSpecs.isShellacVintage) {
     trackTemplates = [
@@ -2840,18 +2884,20 @@ Our unforgettable late night drive`
       }
     ];
   } else {
-    // Dynamic extraction from user SOP for custom registered themes (e.g., Chill Groove Pop, Cafe Pop, Lounge)
+    // Dynamic extraction from user SOP for custom registered themes (e.g., Offbeat Indie Groove Pop, Cafe Pop, Lounge)
     const rawSop = theme.sop || '';
+    const positiveSopCheck = stripSopNegativeClauses(`${theme.name || ''} ${theme.category || ''} ${rawSop}`);
     const styleMatch = rawSop.match(/(?:Style(?:\s+of\s+Music)?(?:\s+Prompt)?(?:\s+지침)?\s*[:]\s*['"]?)([^'"\n\r]+)/i);
-    const isGrooveStyle = /groove|chill|pop|lounge|cafe|feel-?good/i.test(`${theme.name || ''} ${theme.category || ''} ${rawSop}`);
+    const isGrooveStyle = /groove|chill|pop|lounge|cafe|feel-?good/i.test(positiveSopCheck);
     const bpmMatch = rawSop.match(/(\d{2,3})\s*(?:~|-|\/)?\s*(\d{2,3})?\s*bpm/i);
-    const customBpm = bpmMatch ? `${bpmMatch[1]} BPM` : isGrooveStyle ? '104 BPM' : '94 BPM';
+    const customBpm = bpmMatch ? `${bpmMatch[1]} BPM` : isGrooveStyle ? '114 BPM' : '94 BPM';
 
-    const customStyle = styleMatch && styleMatch[1].trim() && styleMatch[1].trim().length >= 300
+    const rawCustomStyle = styleMatch && styleMatch[1].trim() && styleMatch[1].trim().length >= 300
       ? styleMatch[1].trim()
       : isGrooveStyle
-      ? `English groove pop, chill indie R&B, sophisticated retail groove pop, ${theme.name}, ${customBpm}, muted Rhodes electric piano chords, warm analog synth bass, tight dry drum breaks, subtle funky rhythm guitar comping, ${vocalTag}, smooth laid-back phrasing, clear vocal presence, dry vocal mix, raw vocal texture, front-and-center vocals, minimal backing, warm analog saturation, wide stereo field, unintrusive EQ, polished streaming-ready master, -heavy distortion, -aggressive trap, -dark orchestral, -j-pop, -muddy bass`
-      : `${theme.category || theme.name}, faithful to ${theme.name} SOP, crisp acoustic and warm electric instrumentation, ${vocalTag}, ${customBpm}, balanced rhythmic pocket groove, clear studio-grade lead vocal presence, wide stereophonic imaging, polished commercial playlist mastering, -harsh distortion, -muddy bass`;
+      ? `Offbeat indie groove pop, ${simTemporal.year} contemporary rhythmic clarity, sophisticated modern playlist groove, ${theme.name}, ${customBpm}, self-moving melodic electric bass riff, elastic pocket drums with crisp snappy wood snare, off-beat clean electric guitar phrasing and Rhodes fills, ${vocalTag}, smooth laid-back phrasing, clear pitch-true vocal presence, dry lead vocal mix, front-and-center vocals, minimal backing, crisp ${simTemporal.year} modern studio clarity, wide stereo panorama, unintrusive EQ, polished streaming-ready master, -1970s, -vintage, -retro, -heavy distortion, -aggressive trap, -dark orchestral, -j-pop, -muddy bass`
+      : `${theme.category || theme.name}, ${simTemporal.year} contemporary production faithful to ${theme.name} SOP, crisp acoustic and clean electric instrumentation, ${vocalTag}, ${customBpm}, balanced rhythmic pocket groove, clear studio-grade lead vocal presence, wide stereophonic imaging, polished commercial playlist mastering, -1970s, -vintage, -retro, -harsh distortion, -muddy bass`;
+    const customStyle = enforceContemporaryEraInStylePrompt(rawCustomStyle, simEraMode, simTemporal.year, 945);
 
     const simVocalLabel =
       vocal === 'female' ? 'Mid-20s female vocal, smooth laid-back vocal, warm chest voice, effortless delivery' :
@@ -2864,29 +2910,29 @@ Our unforgettable late night drive`
       ? [
           {
             title: useEnglishSimTitle ? 'Sunday Groove' : '일요일의 리듬',
-            mood: 'Warm Sunday café sunlight, breezy romantic groove and gentle excitement',
+            mood: `${simTemporal.year} ${simTemporal.seasonEn} city sunlight, breezy offbeat groove and gentle kinetic spark`,
             metaInfo: {
               vocal: simVocalLabel,
-              genre: theme.category || 'English Groove Pop, Chill Indie R&B',
-              mood: 'Feel-Good Romantic Groove',
+              genre: theme.category || 'Contemporary Offbeat Indie Groove Pop',
+              mood: 'Feel-Good Contemporary Groove',
               bpm: customBpm,
               targetLength: '3:08'
             },
             style: customStyle,
-            lyrics: `${sopSpecs.forbidsIntroOutro ? '' : '[Intro: Warm Rhodes chords, crisp pocket rimshot and bouncy bass groove]\n\n'}[Verse 1: Smooth laid-back vocal, muted Rhodes piano and subtle hi-hats]\nSunlight slipping past the corner glass\nWatching every quiet morning pass\nHeartbeat settling in an easy pace\nSmiling softly in this warm bright space\n\n[Pre-Chorus: Gentle falsetto lift, warm analog synth bass enters]\nEvery glance feels effortless and true\nFinding steady rhythm next to you\nNothing rushing how the moment moves\nSettling deeper in this easy groove\n\n[Chorus: Full chest voice, tight dry drum breaks and funky guitar comping]\nCaught inside a Sunday groove with you\nTurning quiet mornings bright and new\nEvery little laugh feels light and free\nMoving in the sweetest harmony\nHold this easy frequency tonight\nEverything feels balanced in the light\n\n[Verse 2: Rhythmic delivery, bouncy bassline and clean guitar]\nTalking softly as the hours slide\nNothing hidden, nothing left to hide\nEven silence carries warmth between\nSoftest pulse that we have ever seen\n\n[Chorus: Full chest voice, tight dry drum breaks and funky guitar comping]\nCaught inside a Sunday groove with you\nTurning quiet mornings bright and new\nEvery little laugh feels light and free\nMoving in the sweetest harmony\n\n[Bridge: Stripped-down Rhodes chords, intimate close-mic vocal]\nEvening light is glowing amber gold\nStories waiting gently to unfold\nPromising another weekend soon\nHumming softly to the same sweet tune\n\n[Final Chorus: Warm stacked harmonies, full groove arrangement]\nCaught inside a Sunday groove with you\nTurning quiet mornings bright and new\nEvery little laugh feels light and free\nMoving in the sweetest harmony${sopSpecs.forbidsIntroOutro ? '' : '\n\n[Outro: Rhodes and clean guitar riff fading gently]\n[End]'}`
+            lyrics: `${sopSpecs.forbidsIntroOutro ? '' : '[Intro: Melodic electric bass motif with crisp rimshot and clean off-beat guitar chords]\n\n'}[Verse 1: Smooth laid-back vocal, sparse Rhodes chords and open pocket hi-hats]\nSunlight slipping past the corner glass\nWatching every quiet morning pass\nHeartbeat settling in an easy pace\nSmiling softly in this bright fresh space\n\n[Pre-Chorus: Gentle falsetto lift, melodic modern synth bass enters]\nEvery glance feels effortless and true\nFinding steady rhythm next to you\nNothing rushing how the moment moves\nSettling deeper in this easy groove\n\n[Chorus: Full chest voice, tight elastic drums and clean guitar counterpoint]\nCaught inside a Sunday groove with you\nTurning quiet mornings bright and new\nEvery little laugh feels light and free\nMoving in the sweetest harmony\nHold this easy frequency tonight\nEverything feels balanced in the light\n\n[Verse 2: Rhythmic delivery, independent bassline and clean guitar fills]\nTalking softly as the hours slide\nNothing hidden, nothing left to hide\nEven silence carries spark between\nCleanest pulse that we have ever seen\n\n[Chorus: Full chest voice, tight elastic drums and clean guitar counterpoint]\nCaught inside a Sunday groove with you\nTurning quiet mornings bright and new\nEvery little laugh feels light and free\nMoving in the sweetest harmony\n\n[Bridge: Stripped-down Rhodes chords, intimate close-mic vocal]\nEvening light is glowing amber gold\nStories waiting gently to unfold\nPromising another weekend soon\nHumming softly to the same sweet tune\n\n[Final Chorus: Crisp stacked harmonies, full modern groove arrangement]\nCaught inside a Sunday groove with you\nTurning quiet mornings bright and new\nEvery little laugh feels light and free\nMoving in the sweetest harmony${sopSpecs.forbidsIntroOutro ? '' : '\n\n[Outro: Rhodes and clean guitar riff fading gently]\n[End]'}`
           },
           {
             title: useEnglishSimTitle ? 'Next Sunday' : '다음 일요일',
-            mood: 'Sweet sunset farewell with warm anticipation for next weekend',
+            mood: `Crisp ${simTemporal.year} late-afternoon bounce with playful offbeat interplay`,
             metaInfo: {
               vocal: simVocalLabel,
-              genre: theme.category || 'English Groove Pop, Chill Indie R&B',
-              mood: 'Sunny Warmth & Sweet Anticipation',
+              genre: theme.category || 'Contemporary Offbeat Indie Groove Pop',
+              mood: 'Sunny Momentum & Playful Groove',
               bpm: customBpm,
               targetLength: '3:12'
             },
             style: customStyle,
-            lyrics: `${sopSpecs.forbidsIntroOutro ? '' : '[Intro: Bouncy clean guitar riff and warm electric piano shimmer]\n\n'}[Verse 1: Relaxed warm vocal, tight brushed drum pocket]\nGolden hour drifting through the street\nEvery word feels warm and softly sweet\nUsed to walk these quiet blocks alone\nNow I hate to see the evening go\n\n[Pre-Chorus: Smooth analog bass walkup, airy vocal harmony]\nLingering beneath the corner light\nNeither of us wants to say goodnight\n\n[Chorus: Crisp pop vocal, funky guitar stabs and steady bass groove]\nSee you next Sunday when the sun comes round\nBest kind of feeling in this quiet town\nFrom a shy glance in the morning haze\nTo the brightest part of all my days\nKeep that smile until the week runs through\nSunday belongs to me and you\n\n[Verse 2: Warm neo-soul phrasing, soft Rhodes shimmer]\nCounting down the days till we rewind\nEvery passing memory shines bright\nSimple moments turning into gold\nSweetest feeling we could ever hold\n\n[Final Chorus: Uplifting chorus with smooth layered harmonies]\nSee you next Sunday when the sun comes round\nBest kind of feeling in this quiet town\nFrom a shy glance in the morning haze\nTo the brightest part of all my days${sopSpecs.forbidsIntroOutro ? '' : '\n\n[Outro: Mellow Rhodes chords resolving gently]\n[End]'}`
+            lyrics: `${sopSpecs.forbidsIntroOutro ? '' : '[Intro: Bouncy clean guitar riff and Rhodes shimmer over self-moving bass]\n\n'}[Verse 1: Relaxed conversational vocal, tight snappy pocket drums]\nGolden hour drifting through the street\nEvery word feels bright and effortlessly sweet\nUsed to walk these quiet blocks alone\nNow I hate to see the evening go\n\n[Pre-Chorus: Smooth melodic bass walkup, airy vocal harmony]\nLingering beneath the corner light\nNeither of us wants to say goodnight\n\n[Chorus: Crisp modern pop vocal, offbeat guitar phrasing and melodic bass groove]\nSee you next Sunday when the sun comes round\nBest kind of feeling in this quiet town\nFrom a shy glance in the morning haze\nTo the brightest part of all my days\nKeep that smile until the week runs through\nSunday belongs to me and you\n\n[Verse 2: Smooth rhythmic phrasing, light Rhodes shimmer]\nCounting down the days till we rewind\nEvery passing memory shines bright\nSimple moments turning into gold\nSweetest feeling we could ever hold\n\n[Final Chorus: Uplifting chorus with crisp layered harmonies]\nSee you next Sunday when the sun comes round\nBest kind of feeling in this quiet town\nFrom a shy glance in the morning haze\nTo the brightest part of all my days${sopSpecs.forbidsIntroOutro ? '' : '\n\n[Outro: Clean Rhodes chords resolving gently]\n[End]'}`
           }
         ]
       : [
@@ -2934,8 +2980,8 @@ Our unforgettable late night drive`
       ? `${template.mood} · 가사 컨셉: ${cleanConcept}`
       : template.mood;
 
-    // Ensure per-track vocal gender tag even when 'random' was chosen across multiple tracks
-    let trackStyle = template.style;
+    // Ensure per-track vocal gender tag and contemporary 2026 era enforcement
+    let trackStyle = enforceContemporaryEraInStylePrompt(template.style, simEraMode, simTemporal.year, 945);
     if (vocal === 'random' && i > 0 && simPlans[0]?.vocalGender !== plan.vocalGender) {
       const targetTag = vocalTagForGender(plan.vocalGender);
       trackStyle = trackStyle.replace(vocalTag, targetTag);

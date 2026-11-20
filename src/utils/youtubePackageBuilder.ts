@@ -1,4 +1,9 @@
 import type { Theme, TrackItem, YoutubePackage } from '../types.ts';
+import {
+  detectSopEraMode,
+  getCurrentTemporalContext,
+  stripSopNegativeClauses,
+} from './musicalCraftEngine.ts';
 
 export type LyricCulture = 'korean' | 'japanese' | 'western';
 
@@ -122,6 +127,8 @@ export function extractLyricMoodDetails(
   lyricConcept: string = '',
   theme: Partial<Theme> = {}
 ): LyricMoodDetails {
+  const temporal = getCurrentTemporalContext();
+  const eraMode = detectSopEraMode(theme);
   const fullText = [
     theme.name || '',
     theme.category || '',
@@ -131,19 +138,22 @@ export function extractLyricMoodDetails(
     .join(' ')
     .toLowerCase();
 
-  const has1940 = /\b(1940|1940s|40s|40's|shellac|78\s*rpm|phonograph)\b/i.test(fullText) || fullText.includes('1940');
-  const has1950 = /\b(1950|1950s|50s|50's|doo-wop|diner|jukebox)\b/i.test(fullText) || fullText.includes('1950');
-  const has1970 = /\b(1970|1970s|70s|70's|soul\s*funk|motown|disco\s*funk)\b/i.test(fullText) || fullText.includes('70년대');
   const eraLabel =
-    has1940 && has1950
-      ? '1940s–1950s'
-      : has1950
-      ? '1950s'
-      : has1940
-      ? '1940s'
-      : has1970
+    eraMode === 'historical_1940s_50s'
+      ? /\b1950/i.test(fullText) && !/\b1940/i.test(fullText)
+        ? '1950s'
+        : /\b1940/i.test(fullText) && !/\b1950/i.test(fullText)
+        ? '1940s'
+        : '1940s–1950s'
+      : eraMode === 'historical_1970s'
       ? '1970s'
-      : 'contemporary';
+      : eraMode === 'historical_retro'
+      ? /\b1990/i.test(fullText)
+        ? '1990s'
+        : /\b1980/i.test(fullText)
+        ? '1980s'
+        : 'retro'
+      : `${temporal.year} contemporary`;
 
   const rainy = /\b(rain|rainy|raindrops|umbrella|wet pavement|drizzle)\b/i.test(fullText) ||
     /(빗소리|비\s*내리|가을비|비\s*오는|우산|젖은\s*거리|雨)/.test(fullText);
@@ -227,6 +237,8 @@ export function detectSceneProfile(
   tracks: Array<Partial<TrackItem>> = [],
   extraContext: string = ''
 ): SceneProfile {
+  const temporal = getCurrentTemporalContext();
+  const eraMode = detectSopEraMode(theme);
   const culture = detectLyricCulture(theme, tracks, lyricConcept);
   const moodDetails = extractLyricMoodDetails(tracks, lyricConcept, theme);
 
@@ -234,17 +246,14 @@ export function detectSceneProfile(
     .map((t) => `${t.title || ''} ${t.mood || ''} ${t.metaInfo?.genre || ''} ${t.fullLyrics || ''}`)
     .join(' ');
   const activeContext = `${extraContext} ${lyricConcept} ${trackAndLyricsText} ${theme.name || ''} ${theme.category || ''}`.toLowerCase();
-  const sopContext = `${theme.sop || ''}`
-    .toLowerCase()
-    .replace(/exclude\s*:[^\n\r]*/gi, '')
-    .replace(/금지[^\n\r]*/g, '')
-    .replace(/제외[^\n\r]*/g, '');
+  const sopContext = stripSopNegativeClauses(`${theme.sop || ''}`).toLowerCase();
   const combined = `${activeContext} ${sopContext}`;
 
-  // 1a. Era-Specific: 1970s Vintage Soul & Funk / Motown / Retro Groove
+  // 1a. Era-Specific: 1970s Vintage Soul & Funk / Motown / Retro Groove (strictly only when positively historical 1970s!)
   if (
-    /\b(1970|1970s|70s|70's|soul\s*funk|vintage\s*soul|motown|disco\s*funk)\b/i.test(`${theme.name || ''} ${theme.category || ''} ${sopContext}`) ||
-    /70년대|소울\s*펑크/.test(combined)
+    eraMode === 'historical_1970s' ||
+    (/\b(soul\s*funk|vintage\s*soul|motown|disco\s*funk|1970s)\b|70년대|소울\s*펑크/i.test(`${theme.name || ''} ${theme.category || ''} ${lyricConcept}`) &&
+      eraMode !== 'contemporary')
   ) {
     return {
       key: 'vintage_70s_soul_funk',
@@ -266,11 +275,10 @@ export function detectSceneProfile(
 
   // 1b. Era-Specific: 1940s–1950s Vintage Pop / Shellac / Doo-Wop / Swing
   if (
-    /\b(1940|1940s|40s|40's|1950|1950s|50s|50's|shellac|phonograph|78\s*rpm|gramophone|doo-wop|vintage\s*pop)\b/i.test(combined) ||
-    combined.includes('1940') ||
-    combined.includes('1950')
+    eraMode === 'historical_1940s_50s' ||
+    /\b(1940|1940s|1950|1950s|shellac|phonograph|78\s*rpm|gramophone|doo-wop|vintage\s*pop)\b/i.test(`${theme.name || ''} ${theme.category || ''} ${sopContext}`)
   ) {
-    const eraStr = moodDetails.eraLabel !== 'contemporary' ? moodDetails.eraLabel : '1940s–1950s';
+    const eraStr = eraMode === 'historical_1940s_50s' ? moodDetails.eraLabel : '1940s–1950s';
     return {
       key: 'vintage_1940s_50s',
       culture,
@@ -309,7 +317,7 @@ export function detectSceneProfile(
     return {
       key: 'christmas_holiday',
       culture,
-      eraLabel: 'contemporary',
+      eraLabel: `${temporal.year} contemporary`,
       seasonEn: 'snow-dusted Christmas Eve twilight',
       seasonKo: '눈 내리는 크리스마스 이브',
       locationEn:
@@ -339,10 +347,10 @@ export function detectSceneProfile(
     return {
       key: 'west_coast_rap',
       culture: 'western',
-      eraLabel: 'contemporary',
-      seasonEn: 'golden-hour California afternoon fading into warm West Coast sunset',
-      seasonKo: '황금빛 노을이 물드는 미국 서부 LA 오후',
-      locationEn: 'palm-lined Los Angeles Crenshaw / Venice boulevard bathed in warm Pacific sunset light with classic lowrider chrome reflections',
+      eraLabel: eraMode === 'historical_retro' ? moodDetails.eraLabel : `${temporal.year} contemporary`,
+      seasonEn: `golden-hour ${temporal.seasonAdjectiveEn} California sunset`,
+      seasonKo: `노을이 물드는 미국 서부 LA ${temporal.seasonKo} 오후`,
+      locationEn: 'palm-lined Los Angeles Crenshaw / Venice boulevard bathed in warm Pacific sunset light with sleek West Coast coupe silhouettes',
       locationKo: '야자수와 노을이 빛나는 미국 서부 LA 로스앤젤레스 거리',
       genreLabelEn: 'West Coast Freestyle Rap',
       genreLabelKo: '웨스트 코스트 프리스타일 랩',
@@ -370,7 +378,17 @@ export function detectSceneProfile(
     /\b(street|boulevard|sidewalk|avenue|alley)\b/i.test(activeContext) ||
     /(?:^|[\s,])(?:거리|골목|산책길|돌담길)(?:에서|를|에|가|의|\s|$)/.test(activeContext);
 
-  // 4. Sunday / Cozy Cafe (localized by culture!)
+  // Seasonal foliage helper matching real current date when no explicit weather/season overrides
+  const seasonTreesEn =
+    temporal.seasonKey === 'spring'
+      ? 'fresh spring street trees and soft blossoms'
+      : temporal.seasonKey === 'summer'
+      ? 'sunlit lush summer street trees'
+      : temporal.seasonKey === 'autumn'
+      ? 'crisp late-autumn golden and amber street trees'
+      : 'bare winter branches and warm evergreen café planters';
+
+  // 4. Sunday / Cozy Cafe (localized by culture + current real-world season!)
   if (
     /\b(sunday|brunch|coffee|cafe|café)\b/i.test(activeContext) ||
     /(일요일|주말\s*카페|브런치|커피\s*한\s*잔|단골\s*카페|카페\s*창가)/.test(activeContext)
@@ -379,24 +397,24 @@ export function detectSceneProfile(
       return {
         key: 'sunday_cafe',
         culture,
-        eraLabel: 'contemporary',
-        seasonEn: 'bright, sun-warmed Sunday late morning',
-        seasonKo: '햇살이 포근하게 스며드는 일요일 오전',
+        eraLabel: `${temporal.year} contemporary`,
+        seasonEn: `${temporal.seasonEn} Sunday morning`,
+        seasonKo: `${temporal.seasonFullKo} 일요일 오전`,
         locationEn:
           culture === 'korean'
-            ? 'sunlit Seoul Seongsu-dong artisan neighborhood café with warm oak tables, creamy latte art, and lush street trees outside panoramic glass windows'
+            ? `modern ${temporal.year} Seoul Seongsu-dong artisan neighborhood café with warm oak tables, creamy latte art, and ${seasonTreesEn} outside panoramic glass windows`
             : culture === 'japanese'
-            ? 'sun-warmed Kichijoji Tokyo neighborhood café with cedar counters, pour-over glass coffee, and sunlit green maple trees outside'
-            : 'sun-drenched SoHo or London neighborhood café with warm oak tables, artisanal latte art, and leafy sunlit brownstone streets outside',
+            ? `modern ${temporal.year} Kichijoji Tokyo neighborhood café with cedar counters, pour-over glass coffee, and ${seasonTreesEn} outside`
+            : `modern ${temporal.year} SoHo or London neighborhood café with warm oak tables, artisanal latte art, and ${seasonTreesEn} outside`,
         locationKo:
           culture === 'korean'
-            ? '따스한 햇살이 드는 서울 성수동 감성 카페'
+            ? `${temporal.seasonKo} 햇살이 드는 서울 성수동 감성 카페`
             : culture === 'japanese'
-            ? '햇살이 스며드는 도쿄 키치조지 감성 카페'
-            : '따스한 햇살과 원목 테이블이 있는 감성 서양 카페',
+            ? `${temporal.seasonKo} 햇살이 스며드는 도쿄 키치조지 감성 카페`
+            : `${temporal.seasonKo} 햇살이 비추는 감성 모던 카페`,
         genreLabelEn: 'Sunday Cafe Vibes',
         genreLabelKo: '기분 좋아지는 일요일 카페 플리',
-        moodLabelEn: 'Warm Sunlit Sunday Cafe Groove',
+        moodLabelEn: 'Modern Sunday Cafe Groove',
         moodLabelKo: '여유롭고 포근한 일요일 카페 감성',
       };
     }
@@ -407,7 +425,7 @@ export function detectSceneProfile(
     return {
       key: 'rainy_autumn',
       culture,
-      eraLabel: 'contemporary',
+      eraLabel: `${temporal.year} contemporary`,
       seasonEn: 'misty golden-crimson autumn afternoon after rain',
       seasonKo: '가을비 내린 촉촉한 오후',
       locationEn:
@@ -432,10 +450,12 @@ export function detectSceneProfile(
     return {
       key: 'tokyo_rain',
       culture: 'japanese',
-      eraLabel: 'contemporary',
-      seasonEn: moodDetails.weatherCues.rainy ? 'rainy indigo midnight in Tokyo' : 'quiet indigo twilight in Tokyo',
-      seasonKo: '고요한 도쿄의 푸른 밤',
-      locationEn: 'minimalist Tokyo Shibuya / Nakameguro high-rise apartment window looking out onto luminous city towers and twilight neon haze',
+      eraLabel: `${temporal.year} contemporary`,
+      seasonEn: moodDetails.weatherCues.rainy
+        ? `rainy ${temporal.seasonAdjectiveEn} indigo midnight in Tokyo`
+        : `crisp ${temporal.seasonAdjectiveEn} indigo twilight in Tokyo`,
+      seasonKo: `고요한 도쿄의 ${temporal.seasonKo} 푸른 밤`,
+      locationEn: `contemporary ${temporal.year} Tokyo Shibuya / Nakameguro high-rise apartment window looking out onto luminous city towers and twilight neon haze`,
       locationKo: '도쿄 시부야 창가와 네온 야경이 어우러진 공간',
       genreLabelEn: 'Electronic R&B J-Pop',
       genreLabelKo: '일렉트로닉 R&B J-POP',
@@ -444,30 +464,40 @@ export function detectSceneProfile(
     };
   }
 
-  // 7. Chill Groove Pop / Retail Groove Pop (localized by culture!)
-  if (activeContext.includes('groove') || activeContext.includes('그루브') || activeContext.includes('chill pop') || activeContext.includes('retail groove')) {
+  // 7. Contemporary Groove Pop / Offbeat Indie Groove (localized by culture + current real-world season!)
+  if (
+    activeContext.includes('groove') ||
+    activeContext.includes('groovy') ||
+    activeContext.includes('그루브') ||
+    activeContext.includes('chill pop') ||
+    activeContext.includes('retail groove') ||
+    sopContext.includes('groovy pop') ||
+    sopContext.includes('groove pop')
+  ) {
     return {
       key: 'romantic_groove',
       culture,
-      eraLabel: 'contemporary',
-      seasonEn: moodDetails.weatherCues.midnight ? 'warm ambient evening glow' : 'warm golden-lit afternoon in a sunlit city neighborhood',
-      seasonKo: '따스하고 세련된 도심 오후',
+      eraLabel: `${temporal.year} contemporary`,
+      seasonEn: moodDetails.weatherCues.midnight
+        ? `crisp ${temporal.seasonAdjectiveEn} ambient evening glow`
+        : `${temporal.seasonEn} afternoon in a stylish ${temporal.year} city neighborhood`,
+      seasonKo: `${temporal.seasonFullKo} 도심 오후`,
       locationEn:
         culture === 'korean'
-          ? 'trendy Seoul Hannam-dong / Seongsu sunlit terrace café with warm brick facades and clean modern greenery'
-          : 'sunlit SoHo New York or Silver Lake boutique café terrace with warm brick townhouses and golden afternoon sunbeams',
+          ? `modern ${temporal.year} Seoul Hannam-dong / Seongsu architectural terrace café with clean glass facades and ${seasonTreesEn}`
+          : `stylish ${temporal.year} SoHo New York or Silver Lake modern café street with sleek architecture and ${seasonTreesEn}`,
       locationKo:
         culture === 'korean'
-          ? '햇살이 스며드는 서울 한남동·성수동 감각적인 테라스'
-          : '햇살이 스며드는 뉴욕 소호 감성 카페 테라스',
-      genreLabelEn: 'Chill Groove Pop',
+          ? `${temporal.seasonKo} 햇살이 스며드는 서울 한남동·성수동 감각적인 테라스`
+          : `${temporal.seasonKo} 빛이 머무는 도심 모던 카페 테라스`,
+      genreLabelEn: 'Modern Indie Groove Pop',
       genreLabelKo: '기분 좋아지는 그루브 팝 모음',
-      moodLabelEn: 'Effortless Urban Groove',
-      moodLabelKo: '세련되고 기분 좋아지는 그루브 팝',
+      moodLabelEn: 'Effortless 2026 Indie Groove',
+      moodLabelKo: '세련되고 기분 좋아지는 모던 그루브 팝',
     };
   }
 
-  // 8. R&B / Hip-Hop / Midnight Drive (localized by culture!)
+  // 8. R&B / Hip-Hop / Midnight Drive (localized by culture + current real-world season!)
   if (
     combined.includes('알앤비') ||
     combined.includes('힙합') ||
@@ -481,13 +511,13 @@ export function detectSceneProfile(
     return {
       key: 'night_drive',
       culture,
-      eraLabel: 'contemporary',
-      seasonEn: 'late-night cool city breeze past midnight',
-      seasonKo: '감각적인 새벽 도심의 밤',
+      eraLabel: `${temporal.year} contemporary`,
+      seasonEn: `crisp ${temporal.seasonAdjectiveEn} late-night city air past midnight`,
+      seasonKo: `선선한 ${temporal.seasonKo} 새벽 도심의 밤`,
       locationEn:
         culture === 'korean'
-          ? 'midnight Seoul Han River riverside boulevard and Banpo Bridge city lights framed cleanly from inside a sleek dark sedan'
-          : 'midnight metropolitan riverside expressway and glowing city skyline seen through sleek sedan glass',
+          ? `midnight ${temporal.year} Seoul Han River riverside boulevard and Banpo Bridge city lights framed cleanly from inside a sleek dark sedan`
+          : `midnight ${temporal.year} metropolitan riverside expressway and glowing city skyline seen through sleek sedan glass`,
       locationKo:
         culture === 'korean'
           ? '한강 야경과 서울 강변북로가 스치는 새벽 드라이브'
@@ -499,18 +529,20 @@ export function detectSceneProfile(
     };
   }
 
-  // 9. Cinematic OST / Ballad (localized by culture!)
+  // 9. Cinematic OST / Ballad (localized by culture + current real-world season!)
   if (combined.includes('ost') || combined.includes('cinematic') || combined.includes('movie') || combined.includes('ballad') || combined.includes('발라드')) {
     return {
       key: 'cinematic_ost',
       culture,
-      eraLabel: 'contemporary',
-      seasonEn: moodDetails.weatherCues.rainy ? 'melancholic rainy dusk' : 'melancholic golden-hour sunset',
-      seasonKo: '노을이 스며드는 서정적인 오후',
+      eraLabel: `${temporal.year} contemporary`,
+      seasonEn: moodDetails.weatherCues.rainy
+        ? `melancholic rainy ${temporal.seasonAdjectiveEn} dusk`
+        : `serene golden-hour ${temporal.seasonAdjectiveEn} sunset`,
+      seasonKo: `${temporal.seasonKo} 노을이 스며드는 서정적인 오후`,
       locationEn:
         culture === 'korean'
-          ? 'quiet modern Seoul Namsan hillside terrace and tall timber-framed window overlooking soft amber sunset rooftops'
-          : 'sun-drenched quiet European stone balcony and tall French doors overlooking golden cobblestone rooftops',
+          ? `quiet modern Seoul Namsan hillside terrace and tall timber-framed window overlooking ${temporal.seasonAdjectiveEn} amber sunset rooftops`
+          : `sun-drenched quiet European stone balcony and tall French doors overlooking ${temporal.seasonAdjectiveEn} golden rooftops`,
       locationKo:
         culture === 'korean'
           ? '서울 남산 노을빛이 머무는 고요한 시네마틱 창가'
@@ -522,25 +554,34 @@ export function detectSceneProfile(
     };
   }
 
-  // 10. Sunny Autumn Cafe
+  // 10. Seasonal Acoustic / Cafe (explicit autumn if written, otherwise respects current date's real season!)
   if (activeContext.includes('autumn') || activeContext.includes('가을') || activeContext.includes('acoustic') || activeContext.includes('어쿠스틱')) {
+    const isExplicitAutumn = activeContext.includes('autumn') || activeContext.includes('가을');
+    const effSeasonKey = isExplicitAutumn ? 'autumn' : temporal.seasonKey;
+    const effSeasonKo = isExplicitAutumn ? '햇살 좋은 선선한 가을 오후' : `${temporal.seasonFullKo} 오후`;
+    const effSeasonEn = isExplicitAutumn ? 'crisp golden autumn afternoon' : `${temporal.seasonEn} afternoon`;
+    const effTreesEn =
+      effSeasonKey === 'autumn'
+        ? 'golden ginkgo leaves along a historic stone wall'
+        : seasonTreesEn;
+
     return {
       key: 'sunny_autumn_cafe',
       culture,
-      eraLabel: 'contemporary',
-      seasonEn: 'crisp golden autumn afternoon',
-      seasonKo: '햇살 좋은 선선한 가을 오후',
+      eraLabel: `${temporal.year} contemporary`,
+      seasonEn: effSeasonEn,
+      seasonKo: effSeasonKo,
       locationEn:
         culture === 'korean'
-          ? 'warm wooden Seoul Bukchon / Seochon café window overlooking golden ginkgo leaves along a traditional Korean stone wall'
-          : 'warm wooden café terrace with panoramic glass windows facing golden autumn foliage and historic stone walls',
+          ? `warm modern wooden Seoul Bukchon / Seochon café window overlooking ${effTreesEn}`
+          : `warm wooden café terrace with panoramic glass windows facing ${effTreesEn}`,
       locationKo:
         culture === 'korean'
-          ? '황금빛 은행나무와 서울 돌담길이 보이는 감성 카페 창가'
-          : '황금빛 가을 단풍이 보이는 감성 카페 창가',
-      genreLabelEn: 'Good Day Autumn Pop',
-      genreLabelKo: '여유롭고 기분 좋은 가을 카페 플리',
-      moodLabelEn: 'Autumn Café Breeze',
+          ? `${isExplicitAutumn ? '가을' : temporal.seasonKo} 햇살과 서울 돌담길이 보이는 감성 카페 창가`
+          : `${isExplicitAutumn ? '가을' : temporal.seasonKo} 빛이 스며드는 감성 카페 창가`,
+      genreLabelEn: isExplicitAutumn ? 'Good Day Autumn Pop' : 'Good Day Acoustic Pop',
+      genreLabelKo: isExplicitAutumn ? '여유롭고 기분 좋은 가을 카페 플리' : '여유롭고 기분 좋은 어쿠스틱 카페 플리',
+      moodLabelEn: isExplicitAutumn ? 'Autumn Café Breeze' : 'Contemporary Acoustic Café Breeze',
       moodLabelKo: '카페음악 • 노동요 감성 플리',
     };
   }
@@ -548,21 +589,21 @@ export function detectSceneProfile(
   return {
     key: 'romantic_groove',
     culture,
-    eraLabel: 'contemporary',
-    seasonEn: 'warm golden-lit afternoon in a sunlit city neighborhood',
-    seasonKo: '따스한 햇살과 기분 좋은 바람이 부는 오후',
+    eraLabel: `${temporal.year} contemporary`,
+    seasonEn: `${temporal.seasonEn} afternoon in a vibrant ${temporal.year} city neighborhood`,
+    seasonKo: `${temporal.seasonFullKo} 도심 오후`,
     locationEn:
       culture === 'korean'
-        ? 'sunlit Seoul Seongsu-dong café terrace with warm brick architecture and soft afternoon greenery'
-        : 'sunlit SoHo sidewalk café table with warm brick townhouses and lush sunlit street trees',
+        ? `modern ${temporal.year} Seoul Seongsu-dong café terrace with clean architectural lines and ${seasonTreesEn}`
+        : `modern ${temporal.year} SoHo sidewalk café table with brick townhouses and ${seasonTreesEn}`,
     locationKo:
       culture === 'korean'
-        ? '햇살이 스며드는 서울 성수동 감성 카페 거리'
-        : '햇살이 스며드는 도심 골목 카페와 설레는 거리',
-    genreLabelEn: 'Good Day Groove Pop',
+        ? `${temporal.seasonKo} 빛이 스며드는 서울 성수동 감성 카페 거리`
+        : `${temporal.seasonKo} 빛이 머무는 도심 감성 카페 거리`,
+    genreLabelEn: 'Good Day Modern Groove Pop',
     genreLabelKo: '기분 좋아지는 그루브 팝 모음',
-    moodLabelEn: 'Feel-Good Romantic Groove',
-    moodLabelKo: '듣는 순간 설레고 기분 좋아지는 그루브 팝',
+    moodLabelEn: 'Feel-Good Contemporary Groove',
+    moodLabelKo: '듣는 순간 설레고 기분 좋아지는 모던 그루브 팝',
   };
 }
 
@@ -573,7 +614,16 @@ export function normalizeFiveHashtags(
   tracks: Array<Partial<TrackItem>> = [],
   extraContext: string = ''
 ): string {
+  const temporal = getCurrentTemporalContext();
   const scene = detectSceneProfile(theme, lyricConcept, tracks, extraContext);
+  const seasonHashtag =
+    temporal.seasonKey === 'spring'
+      ? '#springvibes'
+      : temporal.seasonKey === 'summer'
+      ? '#summervibes'
+      : temporal.seasonKey === 'autumn'
+      ? '#autumnmood'
+      : '#wintervibes';
   const extracted = (rawHashtags || '')
     .match(/#[a-zA-Z0-9_\uAC00-\uD7AF\u3040-\u30FF\u4E00-\u9FAF]+/g) || [];
 
@@ -583,16 +633,16 @@ export function normalizeFiveHashtags(
 
   const poolByScene: Record<SceneProfile['key'], string[]> = {
     christmas_holiday: ['#playlist', '#christmas', '#carol', '#wintervibes', '#holidaypop'],
-    sunday_cafe: ['#playlist', '#groovepop', '#cafe', '#sundayvibes', '#feelgood'],
+    sunday_cafe: ['#playlist', '#groovepop', '#cafe', '#sundayvibes', seasonHashtag],
     rainy_autumn: ['#playlist', '#autumnpop', '#groovepop', '#rainyday', '#cafe'],
-    sunny_autumn_cafe: ['#playlist', '#autumnpop', '#gooddaypop', '#acousticpop', '#cafe'],
-    romantic_groove: ['#playlist', '#groovepop', '#gooddaypop', '#chillpop', '#cafe'],
-    night_drive: ['#playlist', '#chillrnb', '#koreanrnb', '#nightdrive', '#lounge'],
+    sunny_autumn_cafe: ['#playlist', seasonHashtag, '#gooddaypop', '#acousticpop', '#cafe'],
+    romantic_groove: ['#playlist', '#groovepop', '#indiepop', seasonHashtag, '#cafe'],
+    night_drive: ['#playlist', '#chillrnb', '#koreanrnb', '#nightdrive', seasonHashtag],
     tokyo_rain: ['#playlist', '#jpop', '#citypop', '#electronicrnb', '#midnight'],
     vintage_1940s_50s: ['#playlist', '#vintagepop', '#1950spop', '#1940sjazz', '#retrolounge'],
     vintage_70s_soul_funk: ['#playlist', '#vintagesoul', '#70sfunk', '#soulfunk', '#retrovinyl'],
     west_coast_rap: ['#playlist', '#westcoastrap', '#freestylerap', '#gfunk', '#hiphop'],
-    cinematic_ost: ['#playlist', '#cinematicost', '#emotionalballad', '#filmmusic', '#healing'],
+    cinematic_ost: ['#playlist', '#cinematicost', '#emotionalballad', '#filmmusic', seasonHashtag],
   };
 
   const result: string[] = [];
@@ -673,27 +723,37 @@ function buildPhotorealisticSceneBase(
     ? 'Crisp natural winter chill and soft drifting snowflakes gently kiss coats and window frames.'
     : '';
 
+  const temporal = getCurrentTemporalContext();
+  const wardrobeBySeasonEn =
+    temporal.seasonKey === 'spring'
+      ? 'relaxed contemporary spring knitwear and light tailored jacket'
+      : temporal.seasonKey === 'summer'
+      ? 'breezy contemporary summer linen shirt and effortless light layers'
+      : temporal.seasonKey === 'autumn'
+      ? 'modern tailored late-autumn wool cardigan or light trench coat over crisp contemporary knitwear'
+      : 'cozy contemporary winter cashmere sweater and tailored wool coat';
+
   const scenes: Record<SceneProfile['key'], { setting: string; subject: string; props: string; lighting: string; optics: string }> = {
     sunday_cafe: {
-      setting: `Set inside ${scene.locationEn} on a peaceful ${scene.seasonEn}, a single expansive floor-to-ceiling timber-framed window occupies the backdrop, revealing softly blurred sunlit trees and neighborhood architecture outside.`,
-      subject: `Positioned naturally right along the central axis of the frame at a handcrafted oak table, a candid ${woman} wearing relaxed knitwear sits comfortably beside a warm ceramic mug, ${moodDetails.expressionEn} while gentle morning light catches loose strands of hair.`,
-      props: `Drawing the eye inward along the wooden table perspective sit ${moodDetails.motifPhraseEn}, a speckled artisanal stoneware latte cup with velvety microfoam art, a small clear glass bud vase with fresh wildflowers, and an open linen journal. ${weatherOverlayNote}`,
-      lighting: `${moodDetails.lightingMoodEn}, casting soft natural window-pane light across the oak tabletop and melting background café silhouettes into creamy honey-toned optical bokeh.`,
-      optics: `Shot on a full-frame Leica SL2-S paired with a 35mm f/1.8 APO prime lens at ISO 400 and f/2.0 aperture, preserving natural skin texture, knitwear fiber detail, and authentic Kodak Portra 400 organic film grain.`,
+      setting: `Set inside ${scene.locationEn} on a peaceful ${scene.seasonEn}, a single expansive floor-to-ceiling timber-framed window occupies the backdrop, revealing softly blurred ${temporal.seasonAdjectiveEn} trees and contemporary ${temporal.year} street life outside.`,
+      subject: `Positioned naturally right along the central axis of the frame at a handcrafted oak table, a candid ${woman} wearing ${wardrobeBySeasonEn} sits comfortably beside a warm ceramic mug, ${moodDetails.expressionEn} while crisp seasonal light catches loose strands of hair.`,
+      props: `Drawing the eye inward along the wooden table perspective sit ${moodDetails.motifPhraseEn}, a speckled artisanal stoneware latte cup with velvety microfoam art, a small clear glass bud vase, and an open linen journal. ${weatherOverlayNote}`,
+      lighting: `${moodDetails.lightingMoodEn}, casting soft natural window-pane light across the oak tabletop and melting background café silhouettes into creamy contemporary bokeh.`,
+      optics: `Shot on a full-frame Leica SL2-S paired with a 35mm f/1.8 APO prime lens at ISO 400 and f/2.0 aperture, preserving realistic skin texture, natural fabric detail, and crisp ${temporal.year} modern editorial color grading.`,
     },
     christmas_holiday: {
       setting: `Captured in one cohesive street-level frame at ${scene.locationEn} during a festive ${scene.seasonEn}, warm architectural facades lead directly toward a towering illuminated Christmas tree sparkling at the central background horizon beneath winter trees wrapped in golden fairy lights.`,
       subject: `Centered cleanly in the foreground at eye level, ${couple} dressed in cozy winter wool coats and plush knit scarves share warm holiday coffee cups while softly blurred festive pedestrians stroll peacefully behind them, ${moodDetails.expressionEn}.`,
       props: `Tactile seasonal details anchor the center: warm matte ceramic or holiday paper cups releasing soft winter steam, golden Christmas tree ornaments glowing in bokeh, evergreen wreaths, gift ribbons, and fresh snowflakes glistening across coats and stone pavement.`,
-      lighting: `Cool twilight indigo winter sky harmonizes with warm 2700K storefront radiance and shimmering golden Christmas lights, wrapping the central figures and festive horizon in rich Kodak Portra 400 holiday warmth.`,
-      optics: `Shot on a full-frame Leica SL2-S with a 35mm f/1.8 APO prime lens at ISO 800 and f/2.0 aperture, rendering realistic winter wool textures, authentic facial features, sparkling specular holiday bokeh, and organic 35mm film grain.`,
+      lighting: `Cool twilight indigo winter sky harmonizes with warm 2700K storefront radiance and shimmering golden Christmas lights, wrapping the central figures and festive horizon in rich holiday warmth.`,
+      optics: `Shot on a full-frame Leica SL2-S with a 35mm f/1.8 APO prime lens at ISO 800 and f/2.0 aperture, rendering realistic winter wool textures, authentic facial features, sparkling specular holiday bokeh, and crisp modern photography clarity.`,
     },
     west_coast_rap: {
-      setting: `Captured in one uninterrupted 16:9 street-level frame along a ${scene.locationEn} during a ${scene.seasonEn}, towering California fan palms silhouette sharply against a warm amber-peach Pacific sky while vintage lowrider chrome and neighborhood storefronts sit cleanly in soft background depth.`,
-      subject: `Anchored right at the center focal point in front of a parked classic West Coast coupe or analog neighborhood vocal booth, an authentic contemporary Western male hip-hop artist in an oversized crisp heavyweight tee, open plaid flannel, tailored Dickies trousers, sunglasses, and subtle silver chain leans naturally near a vintage chrome condenser mic or car hood, ${moodDetails.expressionEn}.`,
-      props: `Grounding the authentic modern US West Coast hip-hop identity: a classic candy-painted lowrider silhouette gleaming softly behind him, concrete sidewalk palm shadows, studio headphones or notebook of handwritten freestyle bars, and warm California golden-hour atmosphere with zero AI neon clichés.`,
+      setting: `Captured in one uninterrupted 16:9 street-level frame along a ${scene.locationEn} during a ${scene.seasonEn}, towering California fan palms silhouette sharply against a warm amber-peach Pacific sky while classic coupe chrome and neighborhood storefronts sit cleanly in soft background depth.`,
+      subject: `Anchored right at the center focal point in front of a parked West Coast coupe or modern neighborhood vocal studio, an authentic contemporary Western male hip-hop artist in an oversized crisp heavyweight tee, open plaid flannel or lightweight jacket, tailored Dickies trousers, sunglasses, and subtle silver chain leans naturally near the hood or condenser mic, ${moodDetails.expressionEn}.`,
+      props: `Grounding the authentic modern US West Coast hip-hop identity: sleek California boulevard pavement, crisp palm shadows, studio headphones or notebook of handwritten freestyle bars, and golden-hour Pacific atmosphere with zero AI neon clichés.`,
       lighting: `${moodDetails.lightingMoodEn}, bathing the central figure and palm-lined avenue in authentic Los Angeles sunset backlight, warm rim highlights, rich shadows, and crisp cinematic contrast.`,
-      optics: `Photographed on an anamorphic 35mm cinema lens with Leica SL2-S / Cinestill aesthetic at ISO 400 and f/2.0 aperture, preserving realistic skin pores, cotton fabric folds, subtle chrome reflections, and crisp 35mm film grain.`,
+      optics: `Photographed on a 35mm cinema prime lens on Leica SL2-S at ISO 400 and f/2.0 aperture, preserving realistic skin pores, cotton fabric folds, subtle chrome reflections, and crisp ${temporal.year} editorial clarity.`,
     },
     vintage_1940s_50s: {
       setting: `Set inside ${scene.locationEn} during an ${scene.seasonEn}, period-authentic ${scene.eraLabel} walnut wainscoting, patterned vintage wallpaper, lace curtains, and brass wall sconces frame one cohesive mid-century sanctuary—strictly zero modern smartphones, laptops, or digital screens anywhere.`,
@@ -714,21 +774,21 @@ function buildPhotorealisticSceneBase(
       subject: `Anchored near the heart of the sunlit wet intersection, a stylish ${woman} holding a clear dome umbrella pauses gracefully in a tailored beige trench coat and soft wool scarf amidst drifting autumn leaves, ${moodDetails.expressionEn}.`,
       props: `Mirror-like raindrops shimmer across dark wet asphalt, vibrant maple and ginkgo leaves scatter along wet curbs, and atmospheric city trees recede smoothly into soft depth.`,
       lighting: `${moodDetails.lightingMoodEn}, intensifying fiery amber and crimson leaf pigments against luminous wet pavement reflections.`,
-      optics: `Shot on a full-frame Leica SL2-S 35mm f/1.8 APO lens with authentic Kodak Portra 400 color rendition, natural skin detail, and organic film grain.`,
+      optics: `Shot on a full-frame Leica SL2-S 35mm f/1.8 APO lens with modern editorial color depth, natural skin detail, and crisp optical realism.`,
     },
     sunny_autumn_cafe: {
-      setting: `Photographed inside ${scene.locationEn} during a ${scene.seasonEn}, a sweeping frameless glass window reveals golden autumn leaves glowing gently along quiet neighborhood streets outside.`,
-      subject: `Seated near the centered focal window at a warm oak table, a serene ${woman} in a soft oatmeal cashmere knit rests lightly beside her coffee cup, ${moodDetails.expressionEn} as crisp autumn light rims her hair.`,
-      props: `Leading smoothly to center stand ${moodDetails.motifPhraseEn}, matte ceramic tableware, an open hardcover book, and delicate fallen ginkgo leaves resting on the exterior stone sill. ${weatherOverlayNote}`,
-      lighting: `Low-angle honey-gold autumn sunlight pours cleanly through golden foliage across the wooden interior, balancing bright window clarity with warm natural shadows.`,
-      optics: `Shot on a full-frame Leica SL2-S 35mm f/1.8 APO prime lens at f/2.0 with Kodak Portra 400 tonal harmony and zero CGI gloss.`,
+      setting: `Photographed inside ${scene.locationEn} during a ${scene.seasonEn}, a sweeping frameless glass window reveals ${temporal.seasonAdjectiveEn} street trees glowing gently along quiet modern neighborhood streets outside.`,
+      subject: `Seated near the centered focal window at a warm oak table, a serene ${woman} in ${wardrobeBySeasonEn} rests lightly beside her coffee cup, ${moodDetails.expressionEn} as crisp seasonal daylight rims her hair.`,
+      props: `Leading smoothly to center stand ${moodDetails.motifPhraseEn}, matte ceramic tableware, an open hardcover book, and delicate seasonal details outside the glass sill. ${weatherOverlayNote}`,
+      lighting: `Low-angle ${temporal.seasonAdjectiveEn} daylight pours cleanly through the glass window across the wooden interior, balancing crisp clarity with soft natural shadows.`,
+      optics: `Shot on a full-frame Leica SL2-S 35mm f/1.8 APO prime lens at f/2.0 with contemporary ${temporal.year} editorial tonal harmony and zero CGI gloss.`,
     },
     romantic_groove: {
-      setting: `Captured in one cohesive widescreen frame along ${scene.locationEn} during a ${scene.seasonEn}, warm brick facades, glowing café awnings, and natural neighborhood foliage frame an inviting urban atmosphere.`,
-      subject: `Positioned as the clear central anchor at a cozy table, a candid ${woman} in effortless stylish knitwear and light casual layers sits comfortably beside a warm porcelain drink, ${moodDetails.expressionEn}.`,
-      props: `Carefully arranged foreground props guide the eye to center: ${moodDetails.motifPhraseEn}, handmade speckled ceramic cup, subtle sunglasses, and sunlit greenery glowing smoothly behind. ${weatherOverlayNote}`,
-      lighting: `${moodDetails.lightingMoodEn}, creating luminous rim highlights and creamy optical bokeh across the neighborhood backdrop.`,
-      optics: `Shot on a full-frame Leica SL2-S 35mm f/1.8 APO lens with Kodak Portra 400 natural skin tones and fine film grain.`,
+      setting: `Captured in one cohesive widescreen contemporary ${temporal.year} frame along ${scene.locationEn} during a ${scene.seasonEn}, clean architectural facades, glowing café awnings, and ${temporal.seasonAdjectiveEn} street atmosphere frame a fresh modern urban vibe.`,
+      subject: `Positioned as the clear central anchor at a stylish modern café table, a candid ${woman} in ${wardrobeBySeasonEn} sits comfortably beside a matte stoneware drink, ${moodDetails.expressionEn}.`,
+      props: `Carefully arranged foreground props guide the eye to center: ${moodDetails.motifPhraseEn}, sleek modern ceramic cup, clean everyday accessories, and ${temporal.seasonAdjectiveEn} daylight glowing smoothly behind—strictly zero retro/vintage props unless requested. ${weatherOverlayNote}`,
+      lighting: `${moodDetails.lightingMoodEn}, creating crisp contemporary rim highlights and creamy optical bokeh across the ${temporal.seasonAdjectiveEn} city backdrop.`,
+      optics: `Shot on a full-frame Leica SL2-S 35mm f/1.8 APO lens with crisp ${temporal.year} contemporary digital-editorial color grading, natural skin tones, and refined optical sharpness.`,
     },
     night_drive: {
       setting: `Framed cleanly from inside ${scene.locationEn} during a ${scene.seasonEn}, distant illuminated bridge cables and city skyline bokeh streak softly past clean dark glass in one unified perspective.`,
@@ -954,7 +1014,12 @@ function isWeakYoutubeTitle(rawTitle: string, isKorean: boolean): boolean {
   return false;
 }
 
-function isWeakYoutubeDescription(rawDesc: string, isKorean: boolean, sceneKey?: SceneProfile['key']): boolean {
+function isWeakYoutubeDescription(
+  rawDesc: string,
+  isKorean: boolean,
+  sceneKey?: SceneProfile['key'],
+  eraMode: 'contemporary' | 'historical_1940s_50s' | 'historical_1970s' | 'historical_retro' = 'contemporary'
+): boolean {
   const d = (rawDesc || '').trim();
   if (!d || d.length < 160) return true;
 
@@ -971,6 +1036,25 @@ function isWeakYoutubeDescription(rawDesc: string, isKorean: boolean, sceneKey?:
     sceneKey &&
     sceneKey !== 'rainy_autumn' &&
     /(가을비 내린 촉촉한 오후|가을비의 차분한 감성|misty golden-crimson autumn afternoon after rain|rainy-day autumn)/i.test(d)
+  ) {
+    return true;
+  }
+
+  // Reject unrequested 70s/vintage phrasing when the SOP targets contemporary 2026
+  if (
+    eraMode === 'contemporary' &&
+    /(70년대|1970년대|빈티지\s*소울|레트로\s*아날로그|1970s\s+analog|vintage\s+retro\s+sound)/i.test(d)
+  ) {
+    return true;
+  }
+
+  // Reject unrequested snow/winter when neither winter/christmas nor current season is winter
+  const temporal = getCurrentTemporalContext();
+  if (
+    sceneKey &&
+    sceneKey !== 'christmas_holiday' &&
+    temporal.seasonKey !== 'winter' &&
+    /(소복이 눈 내리는|눈 내리는 겨울 도심|snow drifting over)/i.test(d)
   ) {
     return true;
   }
@@ -1206,34 +1290,43 @@ function buildEditorialTitlePair(
     };
   }
 
+  const temporal = getCurrentTemporalContext();
+  const seasonEmoji =
+    temporal.seasonKey === 'spring'
+      ? '🌷✨'
+      : temporal.seasonKey === 'summer'
+      ? '🌊✨'
+      : temporal.seasonKey === 'autumn'
+      ? '🍂🎧'
+      : '🧣🎧';
   const defaultByScene: Record<SceneProfile['key'], { ko: string; en: string }> = {
     christmas_holiday: {
       ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 와, 이런 노래라면 크리스마스가 너무 기다려지잖아...🎄❄️ 첫 곡부터 기분 설레는 플리 | ${suffix.ko}`,
       en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | If Christmas Sounds Like This, December Can't Come Soon Enough 🎄❄️ | ${suffix.en}`,
     },
     sunday_cafe: {
-      ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 커피 한 잔만 마시러 했는데, 어느새 세 시간 ☕️ | ${suffix.ko}`,
-      en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | Came In for One Coffee, Stayed Three Hours ☕️🎧 | ${suffix.en}`,
+      ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | ${temporal.seasonFullKo} 커피 한 잔만 마시러 했는데, 어느새 세 시간 ☕️ | ${suffix.ko}`,
+      en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | ${temporal.seasonEn.charAt(0).toUpperCase() + temporal.seasonEn.slice(1)} Coffee That Turned Into Three Hours ☕️🎧 | ${suffix.en}`,
     },
     rainy_autumn: {
       ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 너와 걷던 그 거리, 가을비 내린 날 하루 종일 틀어두고 싶은 플리 🍁🌧️ | ${suffix.ko}`,
       en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | Rain-Kissed Autumn Streets & All-Day Feel-Good Pop 🍁🌧️ | ${suffix.en}`,
     },
     sunny_autumn_cafe: {
-      ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 햇살 좋은 창가, 틀어두면 공간 분위기 200% 올라가는 팝송 🍂☀️ | ${suffix.ko}`,
-      en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | Sunlit Café Window & Effortless Acoustic Warmth 🍂☀️ | ${suffix.en}`,
+      ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | ${temporal.seasonFullKo} 창가, 틀어두면 공간 분위기 200% 올라가는 팝송 ${seasonEmoji} | ${suffix.ko}`,
+      en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | Sunlit ${temporal.seasonEn.charAt(0).toUpperCase() + temporal.seasonEn.slice(1)} Café Window & Effortless Acoustic Warmth ${seasonEmoji} | ${suffix.en}`,
     },
     romantic_groove: {
-      ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 우연히 틀었는데, 첫 곡부터 분위기 미쳤음 ✨🎧 | ${suffix.ko}`,
-      en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | Pressed Play Once and the Whole Room Caught the Vibe ✨🎧 | ${suffix.en}`,
+      ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | ${temporal.seasonFullKo} 요즘, 우연히 틀었는데 첫 곡부터 분위기 미쳤음 ${seasonEmoji} | ${suffix.ko}`,
+      en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | ${temporal.seasonEn.charAt(0).toUpperCase() + temporal.seasonEn.slice(1)} Grooves — Pressed Play Once and Caught the Vibe ${seasonEmoji} | ${suffix.en}`,
     },
     night_drive: {
-      ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 새벽 공기 마시며 듣는 적당히 몽환적인 칠 알앤비 힙합 🌙🚘 | ${suffix.ko}`,
-      en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | Midnight City Lights & Smooth Nocturnal R&B Hip-Hop 🌙🚘 | ${suffix.en}`,
+      ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | ${temporal.seasonKo} 새벽 공기 마시며 듣는 적당히 몽환적인 칠 알앤비 힙합 🌙🚘 | ${suffix.ko}`,
+      en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | ${temporal.seasonAdjectiveEn.charAt(0).toUpperCase() + temporal.seasonAdjectiveEn.slice(1)} Midnight City Lights & Smooth Nocturnal R&B Hip-Hop 🌙🚘 | ${suffix.en}`,
     },
     tokyo_rain: {
-      ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 이 음악을 듣는 순간, 비 내리는 도쿄의 밤이 시작된다 🌧️🌃 | ${suffix.ko}`,
-      en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | Rain Against Tokyo Glass & Deep Electronic R&B 🌧️🌃 | ${suffix.en}`,
+      ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 이 음악을 듣는 순간, ${temporal.seasonKo} 도쿄의 밤이 시작된다 🌃🎧 | ${suffix.ko}`,
+      en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | ${temporal.seasonAdjectiveEn.charAt(0).toUpperCase() + temporal.seasonAdjectiveEn.slice(1)} Tokyo Night & Deep Electronic R&B 🌃🎧 | ${suffix.en}`,
     },
     vintage_1940s_50s: {
       ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 오래된 축음기 바늘 소리처럼 따뜻한 ${scene.eraLabel} 빈티지 팝 감성 📻🕯️ | ${suffix.ko}`,
@@ -1248,8 +1341,8 @@ function buildEditorialTitlePair(
       en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | Pacific Sunset Cruise — Raw West Coast Freestyle & G-Funk 🌴🔥 | ${suffix.en}`,
     },
     cinematic_ost: {
-      ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 영화 엔딩 크레딧이 올라간 뒤에도 오래 남는 깊은 여운 🎬🌙 | ${suffix.ko}`,
-      en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | Lingering Scenes After the Credits Roll — Cinematic OST Ballads 🎬🌙 | ${suffix.en}`,
+      ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | ${temporal.seasonKo} 밤, 영화 엔딩 크레딧이 올라간 뒤에도 오래 남는 깊은 여운 🎬🌙 | ${suffix.ko}`,
+      en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | ${temporal.seasonAdjectiveEn.charAt(0).toUpperCase() + temporal.seasonAdjectiveEn.slice(1)} Dusk Scenes After the Credits Roll — Cinematic OST Ballads 🎬🌙 | ${suffix.en}`,
     },
   };
 
@@ -1281,6 +1374,24 @@ function buildEditorialDescriptionPair(
     tagsEn: string;
   }
 
+  const temporal = getCurrentTemporalContext();
+  const seasonHashKo =
+    temporal.seasonKey === 'spring'
+      ? '#봄플레이리스트'
+      : temporal.seasonKey === 'summer'
+      ? '#여름플레이리스트'
+      : temporal.seasonKey === 'autumn'
+      ? '#늦가을플레이리스트'
+      : '#겨울플레이리스트';
+  const seasonHashEn =
+    temporal.seasonKey === 'spring'
+      ? '#SpringVibes'
+      : temporal.seasonKey === 'summer'
+      ? '#SummerVibes'
+      : temporal.seasonKey === 'autumn'
+      ? '#LateAutumnMood'
+      : '#WinterVibes';
+
   const byScene: Record<SceneProfile['key'], DescConfig> = {
     christmas_holiday: {
       line1Ko: `소복이 눈 내리는 겨울 도심, 반짝이는 조명 아래 따뜻함과 설렘을 더해주는 크리스마스 그루브 팝 플레이리스트입니다.`,
@@ -1299,20 +1410,20 @@ function buildEditorialDescriptionPair(
       tagsEn: `#ChristmasPlaylist #CafeMusic #StoreBGM #HolidayPop #GroovePop #WinterDrive #WorkBGM #XmasVibes #CozyPlaylist`,
     },
     sunday_cafe: {
-      line1Ko: `햇살이 부드럽게 스며드는 여유로운 카페 창가, 기분 좋은 설렘과 포근한 온기를 더해주는 그루브 팝 플레이리스트입니다.`,
+      line1Ko: `${temporal.seasonFullKo} 햇살이 스며드는 여유로운 카페 창가, 기분 좋은 설렘과 온기를 더해주는 모던 그루브 팝 플레이리스트입니다.`,
       line2Ko: `대화를 방해하지 않으면서도 리듬감이 살아있는 세련된 사운드로 카페, 매장, 그리고 당신의 주말 일상을 특별하게 채워보세요. ☕️🎧`,
       situationsKo: `트렌디한 카페·편집숍 BGM은 물론, 주말 드라이브, 브런치 타임, 집중이 필요한 작업 시간에도 기분 좋게 어울립니다.`,
-      wishKo: `기분 좋은 그루브와 함께 감각적이고 여유로운 하루 보내세요!`,
-      pinKo: `📌 이 영상은 머무는 공간의 공기를 기분 좋게 바꿔주는 세련된 그루브 사운드를 지향합니다.`,
+      wishKo: `기분 좋은 ${temporal.seasonKo} 그루브와 함께 감각적이고 여유로운 하루 보내세요!`,
+      pinKo: `📌 이 영상은 머무는 공간의 공기를 기분 좋게 바꿔주는 세련된 현대 사운드를 지향합니다.`,
       ctaKo: `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 기분 좋은 음악 일상을 함께 나눠주세요!`,
-      tagsKo: `#그루브팝 #카페음악 #매장BGM #일요일플레이리스트 #감성팝송 #GroovePop #브런치BGM #노동요 #CafePlaylist`,
-      line1En: `Sunlight spilling across warm oak café tables, this Sunday groove pop playlist brings effortless warmth and an uplifting spark to your day.`,
-      line2En: `Crafted with smooth, conversation-friendly grooves to elevate coffee shops, retail spaces, and unhurried weekend mornings. ☕️🎧`,
+      tagsKo: `#그루브팝 #카페음악 #매장BGM #일요일플레이리스트 ${seasonHashKo} #GroovePop #브런치BGM #노동요 #CafePlaylist`,
+      line1En: `${temporal.seasonEn.charAt(0).toUpperCase() + temporal.seasonEn.slice(1)} light spilling across warm oak café tables, this ${temporal.year} Sunday groove pop playlist brings fresh warmth and rhythmic spark to your day.`,
+      line2En: `Crafted with clean, conversation-friendly grooves to elevate coffee shops, retail spaces, and unhurried weekend mornings. ☕️🎧`,
       situationsEn: `Perfect for boutique café & store BGM, weekend brunch, sunlit drives, and creative study or work sessions.`,
-      wishEn: `Have an inspiring, feel-good day carried by warm rhythms and sunny vibes!`,
-      pinEn: `📌 Curated to bring refined groove-driven ambiance that elevates every room you step into.`,
+      wishEn: `Have an inspiring, feel-good ${temporal.seasonAdjectiveEn} day carried by fresh modern rhythms!`,
+      pinEn: `📌 Curated to bring refined ${temporal.year} groove-driven ambiance that elevates every room you step into.`,
       ctaEn: `If this playlist brightened your day, please subscribe, like, and turn on notifications to share more vibes together!`,
-      tagsEn: `#GroovePop #SundayCafe #CafeMusic #StoreBGM #FeelGoodPop #BrunchVibes #ChillPlaylist #WorkMusic #RetailBGM`,
+      tagsEn: `#GroovePop #SundayCafe #CafeMusic #StoreBGM ${seasonHashEn} #BrunchVibes #ChillPlaylist #WorkMusic #ModernPop`,
     },
     rainy_autumn: {
       line1Ko: `촉촉하게 젖은 가을 거리와 낙엽 사이, 차분한 여운과 기분 좋은 리듬을 함께 전하는 감성 그루브 팝 플레이리스트입니다.`,
@@ -1331,68 +1442,68 @@ function buildEditorialDescriptionPair(
       tagsEn: `#AutumnPlaylist #RainyDayMusic #CafeMusic #StoreBGM #AutumnPop #GroovePop #StudyBGM #CozyVibes #FeelGoodMix`,
     },
     sunny_autumn_cafe: {
-      line1Ko: `선선한 가을 바람과 황금빛 햇살 아래, 편안하고 기분 좋은 온기를 더해주는 어쿠스틱 그루브 팝 플레이리스트입니다.`,
-      line2Ko: `과하지 않으면서도 경쾌하게 흐르는 리듬으로 카페, 쇼룸, 그리고 당신의 오후 일상을 더욱 감각적으로 채워보세요. 🍂☀️`,
+      line1Ko: `${scene.seasonKo}, 편안하고 기분 좋은 온기를 더해주는 어쿠스틱 그루브 팝 플레이리스트입니다.`,
+      line2Ko: `과하지 않으면서도 경쾌하게 흐르는 리듬으로 카페, 쇼룸, 그리고 당신의 오후 일상을 더욱 감각적으로 채워보세요. 🎧☀️`,
       situationsKo: `감성 카페·매장 BGM은 물론, 나른한 오후 산책과 드라이브, 작업 및 노동요로도 자연스럽게 스며듭니다.`,
-      wishKo: `따스한 가을 햇살처럼 기분 좋고 편안한 하루 보내세요!`,
-      pinKo: `📌 이 영상은 일상의 공간을 기분 좋게 감싸는 따뜻한 사운드를 지향합니다.`,
+      wishKo: `맑고 기분 좋은 계절의 온기처럼 편안한 하루 보내세요!`,
+      pinKo: `📌 이 영상은 일상의 공간을 기분 좋게 감싸는 세련된 어쿠스틱 사운드를 지향합니다.`,
       ctaKo: `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 기분 좋은 플레이리스트를 함께 나눠주세요!`,
-      tagsKo: `#가을팝송 #카페음악 #매장BGM #어쿠스틱플리 #기분좋아지는음악 #GoodDayPop #AutumnVibes #노동요 #CafeBGM`,
-      line1En: `Crisp autumn air and golden afternoon sunbeams, this feel-good acoustic pop mix delivers effortless warmth and breezy groove.`,
-      line2En: `Smoothly balanced for sunlit cafés, curated retail floors, and relaxing everyday listening. 🍂☀️`,
-      situationsEn: `Great for café & boutique BGM, golden-hour walks, afternoon drives, and light-hearted daily productivity.`,
-      wishEn: `Wishing you a bright, unhurried day filled with warm autumn sunshine!`,
-      pinEn: `📌 Curated to wrap everyday spaces in clean, uplifting acoustic warmth.`,
+      tagsKo: `${seasonHashKo} #카페음악 #매장BGM #어쿠스틱플리 #기분좋아지는음악 #GoodDayPop #IndiePop #노동요 #CafeBGM`,
+      line1En: `${scene.seasonEn.charAt(0).toUpperCase() + scene.seasonEn.slice(1)}, this feel-good contemporary acoustic pop mix delivers clean warmth and breezy groove.`,
+      line2En: `Smoothly balanced for modern cafés, curated retail floors, and relaxing everyday listening. 🎧☀️`,
+      situationsEn: `Great for café & boutique BGM, scenic walks, afternoon drives, and lighthearted daily productivity.`,
+      wishEn: `Wishing you a bright, unhurried day wrapped in fresh seasonal energy!`,
+      pinEn: `📌 Curated to wrap everyday spaces in crisp, uplifting ${temporal.year} acoustic warmth.`,
       ctaEn: `Subscribe, like, and turn on notifications if this mix brought warmth to your day!`,
-      tagsEn: `#AutumnPop #AcousticPlaylist #CafeMusic #StoreBGM #GoodDayPop #SunnyVibes #WorkBGM #ChillPop #MorningPlaylist`,
+      tagsEn: `${seasonHashEn} #AcousticPlaylist #CafeMusic #StoreBGM #GoodDayPop #IndiePop #WorkBGM #ChillPop #MorningPlaylist`,
     },
     romantic_groove: {
-      line1Ko: `도심의 기분 좋은 햇살과 세련된 무드 아래, 일상에 설렘과 생기를 더해주는 칠 그루브 팝 플레이리스트입니다.`,
-      line2Ko: `신나면서도 부담스럽지 않은 탄탄한 리듬으로 카페, 매장, 그리고 당신의 하루를 한층 더 감각적으로 채워보세요. 🎧✨`,
-      situationsKo: `트렌디한 매장·카페 BGM은 물론, 시티 드라이브, 작업·노동요, 가벼운 홈파티 시간에도 분위기를 단번에 끌어올려 줍니다.`,
-      wishKo: `기분 좋은 리듬의 여운과 함께 감각적이고 설레는 하루 보내세요!`,
-      pinKo: `📌 이 영상은 머무는 공간에 세련된 무드와 리듬감을 더하는 사운드를 지향합니다.`,
+      line1Ko: `${temporal.seasonFullKo} 도심의 기분 좋은 공기와 세련된 ${temporal.year} 무드 아래, 일상에 설렘과 생기를 더해주는 모던 인디 그루브 팝 플레이리스트입니다.`,
+      line2Ko: `단조로움을 벗어난 탄력 있는 베이스 리프와 산뜻한 리듬으로 카페, 매장, 그리고 당신의 하루를 한층 더 감각적으로 채워보세요. 🎧✨`,
+      situationsKo: `트렌디한 매장·카페 BGM은 물론, 시티 드라이브, 작업·노동요, 가벼운 모임 시간에도 분위기를 단번에 끌어올려 줍니다.`,
+      wishKo: `기분 좋은 ${temporal.seasonKo} 리듬의 여운과 함께 감각적이고 설레는 하루 보내세요!`,
+      pinKo: `📌 이 영상은 머무는 공간에 신선한 ${temporal.year} 모던 리듬과 세련된 무드를 더하는 사운드를 지향합니다.`,
       ctaKo: `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 감각적인 음악 취향을 함께 나눠주세요!`,
-      tagsKo: `#그루브팝 #플레이리스트 #카페음악 #매장BGM #칠팝 #GroovePop #ChillPop #드라이브음악 #노동요`,
-      line1En: `Golden city daylight and crisp modern rhythm, this chill groove pop playlist adds instant sparkle and effortless poise to your day.`,
-      line2En: `Balanced with punchy basslines and airy keys to elevate cafés, retail spaces, and everyday creative routines. 🎧✨`,
+      tagsKo: `#그루브팝 #플레이리스트 #카페음악 #매장BGM ${seasonHashKo} #GroovePop #IndiePop #드라이브음악 #노동요`,
+      line1En: `${temporal.seasonEn.charAt(0).toUpperCase() + temporal.seasonEn.slice(1)} city air and crisp ${temporal.year} modern rhythm, this offbeat indie groove pop playlist adds fresh sparkle and kinetic poise to your day.`,
+      line2En: `Driven by melodic bass riffs and airy clean guitars to elevate modern cafés, retail spaces, and everyday creative routines. 🎧✨`,
       situationsEn: `Built for stylish café & store BGM, city drives, daily focus work, and laid-back evening gatherings.`,
-      wishEn: `Enjoy an uplifting, stylish day carried by smooth modern grooves!`,
-      pinEn: `📌 Curated for effortless modern atmosphere and polished space-filling sound.`,
+      wishEn: `Enjoy an uplifting, stylish ${temporal.seasonAdjectiveEn} day carried by crisp modern grooves!`,
+      pinEn: `📌 Curated for fresh ${temporal.year} offbeat groove architecture and polished space-filling clarity.`,
       ctaEn: `If you enjoyed the playlist, subscribe, like, and turn on notifications to stay tuned for every new mix!`,
-      tagsEn: `#GroovePop #ChillPop #Playlist #CafeMusic #StoreBGM #DriveMusic #WorkBGM #GoodVibes #ModernPop`,
+      tagsEn: `#GroovePop #IndiePop #Playlist #CafeMusic #StoreBGM ${seasonHashEn} #WorkBGM #ModernPop #ChillGroove`,
     },
     night_drive: {
-      line1Ko: `도시의 불빛이 번지는 늦은 밤과 새벽 사이, 감각적인 그루브와 짙은 여운을 더해주는 칠 알앤비 힙합 플레이리스트입니다.`,
-      line2Ko: `묵직한 808 베이스와 몽환적인 리듬으로 새벽 드라이브, 작업실, 그리고 당신의 밤 시간을 더욱 깊이 있게 채워보세요. 🌙🚘`,
+      line1Ko: `${temporal.seasonKo} 도시의 불빛이 번지는 늦은 밤과 새벽 사이, 감각적인 그루브와 짙은 여운을 더해주는 칠 알앤비 힙합 플레이리스트입니다.`,
+      line2Ko: `묵직한 808 베이스와 세련된 리듬으로 새벽 드라이브, 작업실, 그리고 당신의 밤 시간을 더욱 깊이 있게 채워보세요. 🌙🚘`,
       situationsKo: `한적한 새벽 드라이브는 물론, 야간 작업·코딩, 혼술·휴식 시간, 감각적인 쇼룸 BGM으로도 완벽하게 어울립니다.`,
-      wishKo: `도시의 밤공기와 함께 감각적이고 몰입감 깊은 밤 보내세요!`,
-      pinKo: `📌 이 영상은 밤의 공기와 도시의 감성을 가장 세련되게 담아내는 사운드를 지향합니다.`,
+      wishKo: `${temporal.seasonKo} 밤공기와 함께 감각적이고 몰입감 깊은 밤 보내세요!`,
+      pinKo: `📌 이 영상은 오늘의 도시 밤공기와 감성을 가장 세련되게 담아내는 ${temporal.year} 사운드를 지향합니다.`,
       ctaKo: `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 늦은 밤 플레이리스트를 함께 나눠주세요!`,
-      tagsKo: `#한국알앤비 #감성힙합 #새벽감성 #느좋플리 #드라이브음악 #KoreanRnB #ChillHipHop #작업실BGM #NightDrive`,
-      line1En: `Neon reflections gliding across midnight boulevards, this nocturnal chill R&B and hip-hop mix delivers lush atmosphere and effortless pocket.`,
-      line2En: `Anchored by warm Rhodes chords and deep gliding bass to color late-night drives, studio sessions, and after-hours calm. 🌙🚘`,
+      tagsKo: `#한국알앤비 #감성힙합 #새벽감성 #느좋플리 ${seasonHashKo} #드라이브음악 #KoreanRnB #ChillHipHop #NightDrive`,
+      line1En: `City lights gliding across ${temporal.seasonAdjectiveEn} midnight boulevards, this nocturnal chill R&B and hip-hop mix delivers sleek ${temporal.year} atmosphere and effortless pocket.`,
+      line2En: `Anchored by crisp Rhodes chords and deep gliding bass to color late-night drives, studio sessions, and after-hours calm. 🌙🚘`,
       situationsEn: `Tailored for midnight highway drives, late-night creative work, solo unwind hours, and moody lounge BGM.`,
-      wishEn: `Have a deeply immersive, stylish night wrapped in smooth nocturnal vibes!`,
-      pinEn: `📌 Curated to capture sleek nocturnal aesthetics and deep late-night sound design.`,
+      wishEn: `Have a deeply immersive, stylish ${temporal.seasonAdjectiveEn} night wrapped in smooth nocturnal vibes!`,
+      pinEn: `📌 Curated to capture sleek ${temporal.year} nocturnal aesthetics and modern R&B sound design.`,
       ctaEn: `Subscribe, like, and turn on notifications to share more late-night R&B sessions together!`,
-      tagsEn: `#KoreanRnB #ChillHipHop #NightDrive #LateNightVibes #AestheticRnB #StudyBeats #MidnightMix #LoungeBGM #SlowJam`,
+      tagsEn: `#KoreanRnB #ChillHipHop #NightDrive #LateNightVibes ${seasonHashEn} #StudyBeats #MidnightMix #LoungeBGM #ModernRnB`,
     },
     tokyo_rain: {
-      line1Ko: `푸른 어스름이 내려앉은 도쿄의 밤창가, 도시적 고독과 섬세한 울림을 전하는 일렉트로닉 R&B J-POP 플레이리스트입니다.`,
-      line2Ko: `투명한 신스 질감과 절제된 리듬으로 혼자만의 밤, 사색의 시간, 그리고 조용한 공간을 깊이 있게 채워보세요. 🌧️🌃`,
-      situationsKo: `비 오는 날 감성 휴식은 물론, 밤 산책, 집중이 필요한 작업 시간, 고요한 라운지 BGM으로도 깊은 몰입감을 선사합니다.`,
-      wishKo: `차분하고 세련된 도쿄 밤의 여운과 함께 고요하고 아름다운 시간 보내세요!`,
-      pinKo: `📌 이 영상은 여백과 도시적 정서를 정교하게 담아낸 하이엔드 사운드를 지향합니다.`,
+      line1Ko: `${temporal.seasonKo}의 푸른 어스름이 내려앉은 도쿄의 밤창가, 도시적 고독과 섬세한 울림을 전하는 일렉트로닉 R&B J-POP 플레이리스트입니다.`,
+      line2Ko: `투명한 신스 질감과 절제된 리듬으로 혼자만의 밤, 사색의 시간, 그리고 조용한 공간을 깊이 있게 채워보세요. 🌃🎧`,
+      situationsKo: `고요한 밤 휴식은 물론, 밤 산책, 집중이 필요한 작업 시간, 세련된 라운지 BGM으로도 깊은 몰입감을 선사합니다.`,
+      wishKo: `차분하고 세련된 ${temporal.seasonKo} 밤의 여운과 함께 고요하고 아름다운 시간 보내세요!`,
+      pinKo: `📌 이 영상은 여백과 도시적 정서를 정교하게 담아낸 ${temporal.year} 하이엔드 사운드를 지향합니다.`,
       ctaKo: `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 깊이 있는 플레이리스트를 함께 나눠주세요!`,
-      tagsKo: `#제이팝 #일본알앤비 #도쿄감성 #새벽플레이리스트 #일렉트로닉알앤비 #JPOP #AltPop #비오는날음악 #CityVibes`,
-      line1En: `Indigo twilight overlooking quiet Tokyo windows, this electronic R&B J-pop playlist blends urban solitude with razor-sharp sonic elegance.`,
-      line2En: `Glassy synth layers and restrained midnight grooves bring quiet emotional depth to late-night focus and rainy evenings. 🌧️🌃`,
-      situationsEn: `Ideal for rainy-night reflection, solo late-night walks, deep studio focus, and minimalist lounge spaces.`,
-      wishEn: `Spend a serene, deeply evocative night inside these refined Tokyo soundscapes!`,
-      pinEn: `📌 Curated around atmospheric space, nocturnal clarity, and modern Japanese alt-pop artistry.`,
+      tagsKo: `#제이팝 #일본알앤비 #도쿄감성 #새벽플레이리스트 ${seasonHashKo} #JPOP #AltPop #CityVibes #NightBGM`,
+      line1En: `${temporal.seasonAdjectiveEn.charAt(0).toUpperCase() + temporal.seasonAdjectiveEn.slice(1)} indigo twilight overlooking quiet Tokyo windows, this ${temporal.year} electronic R&B J-pop playlist blends urban solitude with razor-sharp sonic elegance.`,
+      line2En: `Glassy synth layers and restrained midnight grooves bring quiet emotional depth to late-night focus and calm evenings. 🌃🎧`,
+      situationsEn: `Ideal for late-night reflection, solo walks, deep studio focus, and minimalist modern lounge spaces.`,
+      wishEn: `Spend a serene, deeply evocative ${temporal.seasonAdjectiveEn} evening inside these refined Tokyo soundscapes!`,
+      pinEn: `📌 Curated around atmospheric space, nocturnal clarity, and contemporary Japanese alt-pop artistry.`,
       ctaEn: `If this mix moved you, please subscribe, like, and hit notifications to explore more nocturnal sessions!`,
-      tagsEn: `#JPOP #ElectronicRnB #TokyoNight #AltPop #RainyVibes #MidnightPlaylist #CityPopMood #StudyMusic #LateNightChill`,
+      tagsEn: `#JPOP #ElectronicRnB #TokyoNight #AltPop ${seasonHashEn} #MidnightPlaylist #CityPopMood #StudyMusic #LateNightChill`,
     },
     vintage_1940s_50s: {
       line1Ko: `오래된 축음기에서 흘러나오는 따뜻한 바늘 소리처럼, 시대를 초월한 낭만을 전하는 ${scene.eraLabel} 빈티지 팝 플레이리스트입니다.`,
@@ -1545,7 +1656,7 @@ function buildEditorialDescriptionPair(
       wishKo = `예측할 수 없는 매력처럼 기분 좋게 미소 지어지는 하루 보내세요!`;
       pinKo = `📌 이 영상은 콘셉트 특유의 재치와 생동감 있는 리듬을 살린 맞춤형 사운드를 지향합니다.`;
       ctaKo = `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 유쾌한 플레이리스트를 함께 나눠주세요!`;
-      tagsKo = `${themeTagKo} #플레이리스트 #카페음악 #매장BGM #기분전환 #노동요`;
+      tagsKo = `${themeTagKo} ${seasonHashKo} #플레이리스트 #카페음악 #매장BGM #기분전환 #노동요`;
 
       const subjectEn = enConceptFocus ? `"${enConceptFocus}"` : 'this playful everyday story';
       line1En = `Playful, witty, and effortlessly charismatic — this ${cleanGenreLabelEn} playlist turns the quirky charm of ${subjectEn} into a fresh, cohesive groove.`;
@@ -1554,7 +1665,7 @@ function buildEditorialDescriptionPair(
       wishEn = `Have a bright, smiling day full of unexpected fun and effortless rhythm!`;
       pinEn = `📌 Curated to translate playful storytelling and fresh sonic character into every track.`;
       ctaEn = `If these grooves made you smile, subscribe, like, and hit the bell to share more concept mixes together!`;
-      tagsEn = `${themeTagEn} #PlayfulVibes #CafeMusic #StoreBGM #DailyMoodLift #WorkBGM`;
+      tagsEn = `${themeTagEn} ${seasonHashEn} #PlayfulVibes #CafeMusic #StoreBGM #DailyMoodLift #WorkBGM`;
     } else if (isEmpowering || isStressReliefOrJoy) {
       line1Ko = `${hook.koEmotionDesc} ${cleanGenreLabelKo} 플레이리스트입니다.`;
       line2Ko = `탄탄한 그루브와 산뜻하게 뻗는 사운드로 답답한 일상을 환기하고, 나만의 속도로 하루의 에너지를 채워보세요. 🔥✨`;
@@ -1562,7 +1673,7 @@ function buildEditorialDescriptionPair(
       wishKo = `주저 없이 나아가는 경쾌한 리듬과 함께 당당하고 빛나는 하루 보내세요!`;
       pinKo = `📌 이 영상은 리스너의 텐션과 자신감을 자연스럽게 끌어올리는 세련된 사운드를 지향합니다.`;
       ctaKo = `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 긍정적인 에너지를 함께 나눠주세요!`;
-      tagsKo = `${themeTagKo} #기분전환음악 #플레이리스트 #드라이브음악 #노동요 #자존감BGM`;
+      tagsKo = `${themeTagKo} ${seasonHashKo} #기분전환음악 #플레이리스트 #드라이브음악 #노동요 #자존감BGM`;
 
       line1En = `Built with uplifting momentum — ${hook.enEmotionDesc}, this ${cleanGenreLabelEn} playlist locks into an effortless, confident stride.`;
       line2En = `Crisp grooves and bright harmonic lift bring clarity and fresh drive to commutes, studios, and bustling retail spaces. 🔥✨`;
@@ -1570,7 +1681,7 @@ function buildEditorialDescriptionPair(
       wishEn = `Keep moving at your own pace and enjoy an empowered, luminous day!`;
       pinEn = `📌 Curated to elevate everyday confidence and momentum through distinctive, polished production.`;
       ctaEn = `If this mix boosted your mood, subscribe, like, and hit notifications to stay tuned for every new release!`;
-      tagsEn = `${themeTagEn} #ConfidenceMix #DriveMusic #WorkoutBGM #WorkPlaylist #PositiveVibes`;
+      tagsEn = `${themeTagEn} ${seasonHashEn} #ConfidenceMix #DriveMusic #WorkoutBGM #WorkPlaylist #PositiveVibes`;
     } else if (isHeartbreak) {
       line1Ko = `누구에게도 쉽게 꺼내지 못한 마음의 결을 조용히 어루만지는, ${hook.koEmotionDesc} ${cleanGenreLabelKo} 플레이리스트입니다.`;
       line2Ko = `과장 없이 스며드는 보컬과 섬세한 여백의 사운드로 혼자만의 밤, 사색의 공간, 그리고 고요한 시간을 깊이 있게 채워보세요. 🌙🎧`;
@@ -1578,7 +1689,7 @@ function buildEditorialDescriptionPair(
       wishKo = `어지러운 마음 끝자락에 따뜻한 위로가 조용히 머무는 밤 되세요!`;
       pinKo = `📌 이 영상은 과도한 꾸밈 대신 진솔한 감정의 여백과 밀도를 담아낸 사운드를 지향합니다.`;
       ctaKo = `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 깊은 여운의 플레이리스트를 함께 나눠주세요!`;
-      tagsKo = `${themeTagKo} #새벽감성 #이별플레이리스트 #사색음악 #밤산책BGM #위로음악`;
+      tagsKo = `${themeTagKo} ${seasonHashKo} #새벽감성 #이별플레이리스트 #사색음악 #밤산책BGM #위로음악`;
 
       line1En = `Quietly honest and deeply resonant — ${hook.enEmotionDesc}, this ${cleanGenreLabelEn} playlist stays close through unguarded midnight hours.`;
       line2En = `Uncluttered arrangements and intimate vocal nuance fill solo evenings, reflective drives, and calm nocturnal rooms. 🌙🎧`;
@@ -1586,44 +1697,44 @@ function buildEditorialDescriptionPair(
       wishEn = `May these gentle melodies bring quiet comfort and steady warmth to your night!`;
       pinEn = `📌 Curated around emotional sincerity, intimate space, and refined vocal storytelling.`;
       ctaEn = `If these songs resonated with you, subscribe, like, and turn on notifications to share more late-night mixes!`;
-      tagsEn = `${themeTagEn} #LateNightMood #EmotionalPlaylist #NightWalkBGM #HealingMusic #QuietHours`;
+      tagsEn = `${themeTagEn} ${seasonHashEn} #LateNightMood #EmotionalPlaylist #NightWalkBGM #HealingMusic #QuietHours`;
     } else if (hasExplicitSeason) {
       // Genuine explicit season/era/subculture concept (Christmas, Rainy Autumn, 1940s-50s, West Coast)
       line1Ko = `${scene.seasonKo}, ${hook.koEmotionDesc} ${cleanGenreLabelKo} 플레이리스트입니다.`;
       line1En = `${scene.seasonEn.charAt(0).toUpperCase() + scene.seasonEn.slice(1)} — ${hook.enEmotionDesc}, this ${cleanGenreLabelEn} playlist sets the exact mood.`;
     } else if (isRomantic) {
-      line1Ko = `마음 한켠에 기분 좋은 온기가 피어오르는 순간, ${hook.koEmotionDesc} ${cleanGenreLabelKo} 플레이리스트입니다.`;
-      line2Ko = `부드럽고 설레는 멜로디와 세련된 리듬으로 데이트 공간, 카페, 그리고 당신의 다정한 일상을 더욱 특별하게 채워보세요. 💌🎧`;
+      line1Ko = `${temporal.seasonKo}의 다정한 공기가 스며드는 순간, ${hook.koEmotionDesc} ${cleanGenreLabelKo} 플레이리스트입니다.`;
+      line2Ko = `부드럽고 설레는 멜로디와 세련된 ${temporal.year} 리듬으로 데이트 공간, 카페, 그리고 당신의 다정한 일상을 더욱 특별하게 채워보세요. 💌🎧`;
       situationsKo = `분위기 좋은 카페·매장 BGM은 물론, 나란히 걷는 산책, 기분 좋은 주말 드라이브, 작업 시간에도 설렘을 더해줍니다.`;
-      wishKo = `다정한 설렘이 오래 머무는 따뜻하고 기분 좋은 하루 보내세요!`;
+      wishKo = `${temporal.seasonKo}의 다정한 설렘이 오래 머무는 따뜻하고 기분 좋은 하루 보내세요!`;
       pinKo = `📌 이 영상은 일상의 장면을 한층 다정하고 감각적으로 물들이는 사운드를 지향합니다.`;
       ctaKo = `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 설레는 음악 일상을 함께 나눠주세요!`;
-      tagsKo = `${themeTagKo} #설렘플레이리스트 #달콤한팝 #카페음악 #매장BGM #데이트음악`;
+      tagsKo = `${themeTagKo} ${seasonHashKo} #설렘플레이리스트 #달콤한팝 #카페음악 #매장BGM #데이트음악`;
 
-      line1En = `Warm, tender, and full of subtle sparks — ${hook.enEmotionDesc}, this ${cleanGenreLabelEn} playlist captures that effortless glow.`;
+      line1En = `Warm, tender, and full of ${temporal.seasonAdjectiveEn} sparks — ${hook.enEmotionDesc}, this ${temporal.year} ${cleanGenreLabelEn} playlist captures that effortless glow.`;
       line2En = `Silky rhythms and inviting harmonies brighten cafés, date nights, and gentle everyday routines. 💌🎧`;
-      situationsEn = `Ideal for cozy café & lounge BGM, sunny weekend drives, afternoon walks, and easygoing creative focus.`;
-      wishEn = `Wishing you a sweet, sunlit day wrapped in warm melodies and good company!`;
+      situationsEn = `Ideal for cozy café & lounge BGM, weekend drives, afternoon walks, and easygoing creative focus.`;
+      wishEn = `Wishing you a sweet ${temporal.seasonAdjectiveEn} day wrapped in warm melodies and good company!`;
       pinEn = `📌 Curated to turn ordinary moments into warm, memorable listening scenes.`;
       ctaEn = `If this playlist brightened your mood, subscribe, like, and hit the bell to share more curated mixes!`;
-      tagsEn = `${themeTagEn} #RomanticVibes #CafeMusic #StoreBGM #WeekendDrive #SweetPlaylist`;
+      tagsEn = `${themeTagEn} ${seasonHashEn} #RomanticVibes #CafeMusic #StoreBGM #WeekendDrive #SweetPlaylist`;
     } else {
-      line1Ko = `'${conceptFocus}'의 고유한 분위기와 장면들을 감각적인 사운드로 풀어낸 ${cleanGenreLabelKo} 플레이리스트입니다.`;
-      line2Ko = `트렌디한 톤과 살아있는 리듬감으로 매장, 작업실, 그리고 당신만의 플레이리스트 시간에 확실한 개성을 더해보세요. 🎧✨`;
+      line1Ko = `${temporal.seasonFullKo}의 공기 아래 '${conceptFocus}'의 고유한 분위기와 장면들을 감각적인 사운드로 풀어낸 ${cleanGenreLabelKo} 플레이리스트입니다.`;
+      line2Ko = `트렌디한 ${temporal.year} 톤과 살아있는 리듬감으로 매장, 작업실, 그리고 당신만의 플레이리스트 시간에 확실한 개성을 더해보세요. 🎧✨`;
       situationsKo = `감각적인 카페·쇼룸 BGM은 물론, 집중이 필요한 작업 시간과 기분 전환 드라이브에도 자연스럽게 어울립니다.`;
-      wishKo = `기획된 무드 그대로 감각적이고 영감 가득한 하루 보내세요!`;
+      wishKo = `기획된 무드 그대로 감각적이고 영감 가득한 ${temporal.seasonKo} 하루 보내세요!`;
       pinKo = `📌 이 영상은 테마 본연의 질감과 기획 콘셉트의 디테일을 균형 있게 살린 사운드를 지향합니다.`;
       ctaKo = `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 다양한 콘셉트 플레이리스트를 함께 나눠주세요!`;
-      tagsKo = `${themeTagKo} #콘셉트플레이리스트 #카페음악 #매장BGM #작업BGM #플레이리스트`;
+      tagsKo = `${themeTagKo} ${seasonHashKo} #콘셉트플레이리스트 #카페음악 #매장BGM #작업BGM #플레이리스트`;
 
       const enSubject = enConceptFocus ? `"${enConceptFocus}"` : 'this custom concept';
-      line1En = `Crafted around the distinct mood and storytelling of ${enSubject}, this ${cleanGenreLabelEn} playlist delivers fresh sonic character from start to finish.`;
-      line2En = `Balanced with expressive groove and tactile production to elevate cafés, studios, and everyday listening spaces. 🎧✨`;
+      line1En = `Set against crisp ${temporal.seasonEn} air and crafted around ${enSubject}, this ${temporal.year} ${cleanGenreLabelEn} playlist delivers fresh sonic character from start to finish.`;
+      line2En = `Balanced with expressive groove and tactile modern production to elevate cafés, studios, and everyday listening spaces. 🎧✨`;
       situationsEn = `Built for curated retail & café BGM, daily creative sessions, and scenic afternoon drives.`;
-      wishEn = `Have an inspired, smooth day immersed in the exact vibe you asked for!`;
+      wishEn = `Have an inspired, smooth ${temporal.seasonAdjectiveEn} day immersed in the exact vibe you asked for!`;
       pinEn = `📌 Curated to pair distinct concept storytelling with cohesive, high-craft sound design.`;
       ctaEn = `If you enjoyed this custom mix, subscribe, like, and turn on notifications for more themed playlists!`;
-      tagsEn = `${themeTagEn} #CustomPlaylist #CafeMusic #StoreBGM #CreativeFocus #CuratedMix`;
+      tagsEn = `${themeTagEn} ${seasonHashEn} #CustomPlaylist #CafeMusic #StoreBGM #CreativeFocus #CuratedMix`;
     }
   }
 
@@ -1684,8 +1795,9 @@ export function buildCuratedYoutubePackage(
     (aiYoutube?.descriptionEn || '').trim() || (!hasHangulInDesc && rawAiDesc ? rawAiDesc : '')
   );
 
-  const descriptionKo = !isWeakYoutubeDescription(candidateDescKo, true, scene.key) ? candidateDescKo : editorialDescs.ko;
-  const descriptionEn = !isWeakYoutubeDescription(candidateDescEn, false, scene.key) ? candidateDescEn : editorialDescs.en;
+  const eraMode = detectSopEraMode(theme);
+  const descriptionKo = !isWeakYoutubeDescription(candidateDescKo, true, scene.key, eraMode) ? candidateDescKo : editorialDescs.ko;
+  const descriptionEn = !isWeakYoutubeDescription(candidateDescEn, false, scene.key, eraMode) ? candidateDescEn : editorialDescs.en;
 
   const hashtags = normalizeFiveHashtags(aiYoutube?.hashtags, theme, cleanConcept, tracks, rawContextForScene);
   const thumbnailPrompt = ensurePhotorealisticPrompt(

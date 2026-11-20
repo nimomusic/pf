@@ -15,8 +15,11 @@ import { ensureFirebaseInitialized, handleFirestoreError, OperationType } from '
 import { Theme, PlaylistResult, VocalType, ProviderType } from '../types';
 import { buildCuratedYoutubePackage } from '../utils/youtubePackageBuilder';
 import {
+  detectSopEraMode,
+  enforceContemporaryEraInStylePrompt,
   enforceTrackVocalGender,
   generateTrackInnovationPlans,
+  getCurrentTemporalContext,
   refineTrackWithCraftAudit,
   resolvePerTrackVocalGenders,
 } from '../utils/musicalCraftEngine';
@@ -1546,9 +1549,9 @@ function generateClientSopPlaylist(
 
   let templates: Array<{ title: string; mood: string; style: string; lyrics: string; metaInfo?: any }> = [];
 
-  const isSoulFunk70s = /\b(1970|1970s|70s|70's|soul\s*funk|vintage\s*soul|motown|disco\s*funk)\b|소울\s*펑크|70년대/i.test(
-    `${theme.name || ''} ${theme.category || ''} ${theme.sop || ''}`
-  );
+  const clientEraMode = detectSopEraMode(theme);
+  const clientTemporal = getCurrentTemporalContext();
+  const isSoulFunk70s = clientEraMode === 'historical_1970s';
 
   if (specs.isShellacVintage) {
     templates = [
@@ -2168,9 +2171,14 @@ Our unforgettable late night drive`
   } else {
     const rawSop = theme.sop || '';
     const styleMatch = rawSop.match(/(?:Style(?:\s+of\s+Music)?(?:\s+Prompt)?(?:\s+지침)?\s*[:]\s*['"]?)([^'"\n\r]+)/i);
-    const customStyle = styleMatch && styleMatch[1].trim()
-      ? styleMatch[1].trim()
-      : `${theme.category || theme.name}, emotive instrumentation, ${vocalTag}, 92 bpm, faithful to SOP`;
+    const customStyle = enforceContemporaryEraInStylePrompt(
+      styleMatch && styleMatch[1].trim()
+        ? styleMatch[1].trim()
+        : `${theme.category || theme.name}, ${clientTemporal.year} contemporary sound design, crisp emotive instrumentation, ${vocalTag}, 104 bpm, faithful to SOP`,
+      clientEraMode,
+      clientTemporal.year,
+      945
+    );
 
     const bpmMatch = rawSop.match(/(\d{2,3})\s*(?:~|-|\/)?\s*(\d{2,3})?\s*bpm/i);
     const customBpm = bpmMatch ? `${bpmMatch[1]} BPM` : '92 BPM';
@@ -2220,7 +2228,7 @@ Our unforgettable late night drive`
       ? `${tmpl.mood} · 컨셉: ${cleanConcept}`
       : tmpl.mood;
 
-    let trackStyle = tmpl.style;
+    let trackStyle = enforceContemporaryEraInStylePrompt(tmpl.style, clientEraMode, clientTemporal.year, 945);
     if (vocal === 'random' && i > 0 && fallbackPlans[0]?.vocalGender !== plan.vocalGender) {
       const targetTag = vocalTagForGender(plan.vocalGender);
       trackStyle = trackStyle.replace(vocalTag, targetTag);

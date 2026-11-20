@@ -32,10 +32,147 @@ export interface SopArrangementConstraints {
 }
 
 export type ResolvedVocalGender = 'male' | 'female' | 'none';
+export type SeasonKey = 'spring' | 'summer' | 'autumn' | 'winter';
+export type SopEraMode =
+  | 'contemporary'
+  | 'historical_1940s_50s'
+  | 'historical_1970s'
+  | 'historical_retro';
+
+export interface TemporalContext {
+  year: number;
+  month: number;
+  day: number;
+  isoDate: string;
+  seasonKey: SeasonKey;
+  seasonKo: string;
+  seasonFullKo: string;
+  seasonEn: string;
+  seasonAdjectiveEn: string;
+}
+
+export function getCurrentTemporalContext(now: Date = new Date()): TemporalContext {
+  const safeDate = Number.isNaN(now.getTime()) ? new Date() : now;
+  const year = safeDate.getFullYear();
+  const month = safeDate.getMonth() + 1;
+  const day = safeDate.getDate();
+  const isoDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  if (month >= 3 && month <= 5) {
+    const isLateSpring = month === 5;
+    const isEarlySpring = month === 3;
+    return {
+      year,
+      month,
+      day,
+      isoDate,
+      seasonKey: 'spring',
+      seasonKo: isEarlySpring ? '이른 봄' : isLateSpring ? '늦봄' : '봄',
+      seasonFullKo: isEarlySpring ? '맑고 산뜻한 초봄' : isLateSpring ? '싱그러운 늦봄' : '따스하고 화사한 봄',
+      seasonEn: isEarlySpring ? 'crisp early spring' : isLateSpring ? 'bright late spring' : 'fresh sunlit spring',
+      seasonAdjectiveEn: isEarlySpring ? 'early-spring' : isLateSpring ? 'late-spring' : 'spring',
+    };
+  }
+
+  if (month >= 6 && month <= 8) {
+    const isLateSummer = month === 8 && day >= 15;
+    return {
+      year,
+      month,
+      day,
+      isoDate,
+      seasonKey: 'summer',
+      seasonKo: isLateSummer ? '늦여름' : '여름',
+      seasonFullKo: isLateSummer ? '선선함이 감도는 늦여름' : '청량하고 눈부신 여름',
+      seasonEn: isLateSummer ? 'breezy late summer' : 'bright sunlit summer',
+      seasonAdjectiveEn: isLateSummer ? 'late-summer' : 'summer',
+    };
+  }
+
+  if (month >= 9 && month <= 11) {
+    const isEarlyAutumn = month === 9;
+    const isLateAutumn = month === 11;
+    return {
+      year,
+      month,
+      day,
+      isoDate,
+      seasonKey: 'autumn',
+      seasonKo: isLateAutumn ? '늦가을' : isEarlyAutumn ? '초가을' : '가을',
+      seasonFullKo: isLateAutumn ? '선선하고 맑은 늦가을' : isEarlyAutumn ? '선선한 바람이 부는 초가을' : '맑고 선선한 가을',
+      seasonEn: isLateAutumn ? 'crisp late-autumn' : isEarlyAutumn ? 'breezy early-autumn' : 'crisp golden autumn',
+      seasonAdjectiveEn: isLateAutumn ? 'late-autumn' : isEarlyAutumn ? 'early-autumn' : 'autumn',
+    };
+  }
+
+  const isEarlyWinter = month === 12;
+  return {
+    year,
+    month,
+    day,
+    isoDate,
+    seasonKey: 'winter',
+    seasonKo: isEarlyWinter ? '초겨울' : '겨울',
+    seasonFullKo: isEarlyWinter ? '차갑고 맑은 초겨울' : '맑고 포근한 겨울',
+    seasonEn: isEarlyWinter ? 'crisp early winter' : 'crisp clear winter',
+    seasonAdjectiveEn: isEarlyWinter ? 'early-winter' : 'winter',
+  };
+}
+
+export function stripSopNegativeClauses(rawText: string): string {
+  return (rawText || '')
+    .replace(/exclude\s*:[^\n\r]*/gi, ' ')
+    .replace(/\b(?:while\s+)?(?:avoiding|avoid|never\s+use|never\s+include|do\s+not\s+use|don't\s+use|excluding|free\s+of|free\s+from)\b[^.;\n\r]*/gi, ' ')
+    .replace(/(?:금지|제외|배제)[^\n\r]*/g, ' ')
+    .replace(/(?:^|[\s,])-[a-z0-9][a-z0-9\s-]*/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function detectSopEraMode(theme: Partial<Theme>): SopEraMode {
+  const titleAndCat = `${theme.name || ''} ${theme.category || ''}`.toLowerCase();
+  const positiveText = stripSopNegativeClauses(
+    `${theme.name || ''} ${theme.category || ''} ${theme.sop || ''}`
+  ).toLowerCase();
+
+  // Positive 1940s-1950s Shellac / Mid-Century Era
+  if (
+    /\b(1940|1940s|40s|40's|1950|1950s|50s|50's|shellac|phonograph|78\s*rpm|gramophone|doo-wop)\b/i.test(positiveText) ||
+    /1940년대|1950년대|축음기/.test(positiveText)
+  ) {
+    return 'historical_1940s_50s';
+  }
+
+  // Positive 1960s-1970s Soul / Funk / Motown Era (never match if SOP explicitly states 2020s/2026)
+  const explicitlyContemporary =
+    /\b(2020s|2020's|2020년대|2024|2025|2026|contemporary\s+pop|modern\s+production|crisp\s+modern\s+production)\b/i.test(positiveText);
+
+  if (
+    !explicitlyContemporary &&
+    (/\b(1970|1970s|70s|70's|1960|1960s|60s|60's|motown|vintage\s+soul|70s\s+funk|disco\s+funk|70's\s+vintage)\b/i.test(positiveText) ||
+      /70년대|60년대|빈티지\s*소울/.test(positiveText))
+  ) {
+    return 'historical_1970s';
+  }
+
+  if (
+    !explicitlyContemporary &&
+    (/\b(1920s?|1930s?|1980s?|80s|80's|1990s?|90s|90's|vintage\s+pop|retro\s+pop|golden\s+oldies)\b/i.test(
+      `${titleAndCat} ${positiveText}`
+    ) ||
+      /80년대|90년대|빈티지\s*팝/.test(positiveText))
+  ) {
+    return 'historical_retro';
+  }
+
+  return 'contemporary';
+}
 
 export interface InnovationPlan {
   trackNumber: number;
   vocalGender: ResolvedVocalGender;
+  eraMode: SopEraMode;
+  temporal: TemporalContext;
   archetype: MusicArchetype;
   archetypeLabel: string;
   arrangementMode: ArrangementMode;
@@ -121,81 +258,81 @@ const HIHATLESS_SPACE_POOL: Array<{ ko: string; suno: string }> = [
 // "behind-the-beat", "breaking 4/4", "displaced off-grid", "irregular", "voice crack", or "diminished".
 const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
   groove_pop: {
-    label: 'Groove Pop / Retail Feel-Good Pop',
-    bpmPool: ['102 BPM', '106 BPM', '98 BPM', '110 BPM', '104 BPM', '108 BPM'],
+    label: 'Contemporary Offbeat Indie Groove Pop (2020s / 2026)',
+    bpmPool: ['104 BPM', '108 BPM', '112 BPM', '102 BPM', '106 BPM', '114 BPM'],
     keyColors: ['Dbmaj9', 'Fmaj9', 'Abmaj9', 'Gmaj9', 'Ebmaj9', 'Bbm9'],
     bassOptions: [
       {
-        ko: '단단한 포켓 위에 매끄러운 턴어라운드가 살아있는 멜로딕 팝 베이스',
-        suno: 'warm locked melodic P-bass groove with smooth octave bounce and clean bar-4 turnaround',
+        ko: '4마디마다 변주되며 곡의 중심을 이끄는 독립적이고 멜로딕한 모던 팝 베이스 리프',
+        suno: 'infectious self-moving melodic electric bass riff with smooth octave bounce and playful bar-4 turnaround variations',
       },
       {
-        ko: '보컬 여백을 부드럽게 감싸며 그루브를 이끄는 핑거스타일 베이스 라인',
-        suno: 'infectious locked fingerstyle bassline with melodic movement supporting the vocal hook',
+        ko: '보컬과 대화를 주고받듯 탄력 있게 움직이는 클린 핑거스타일 베이스 라인',
+        suno: 'tight punchy fingerstyle modern bassline weaving melodically around the vocal hook',
       },
       {
-        ko: '일렉 베이스와 따뜻한 아날로그 신스 베이스가 조화를 이루는 그루브 훅',
-        suno: 'punchy warm analog synth bass layered with tight muted electric bass groove',
+        ko: '펀치감 있는 일렉 베이스와 깔끔한 2026 모던 신스 베이스가 어우러진 그루브 훅',
+        suno: 'crisp modern synth bass layered cleanly with tight muted electric bass groove riff',
       },
     ],
     drumOptions: [
       {
-        ko: '안정적인 백비트를 중심으로 경쾌한 고스트 노트가 어우러진 락인(Locked-in) 드럼 포켓',
-        suno: 'tight locked-in pop drum pocket with crisp dry snare backbeat and subtle tasteful ghost notes',
+        ko: '반주와 일렬로 뭉치지 않는 탄력적 모던 백비트와 여유로운 드럼 포켓',
+        suno: 'simple elastic modern drum backbeat pocket anchoring the pulse with crisp dry snare and subtle ghost notes',
       },
       {
-        ko: '탄력 있는 바운스 킥과 깔끔한 림샷이 살아있는 모던 그루브 드럼',
-        suno: 'bouncy steady kick drum pattern anchored to tight rimshot backbeat groove',
+        ko: '포온더플로어를 피하고 바운스 킥 위치와 림샷이 살아있는 현대 인디 그루브 드럼',
+        suno: 'syncopated modern indie-pop kick placement and crisp tight rimshot backbeat groove',
       },
       {
-        ko: '프레이즈 전환이 매끄러운 경쾌한 4/4 스윙 팝 드럼 포켓',
-        suno: 'crisp 4/4 pocket groove with warm kick punch and smooth pre-chorus snare fill transitions',
+        ko: '경쾌하면서도 들뜨지 않는 세련된 모던 4/4 포켓 드럼과 매끄러운 필인',
+        suno: 'crisp contemporary 4/4 pocket drum kit with tight kick punch and clean pre-chorus snare fills',
       },
     ],
     hihatOptions: [
       {
-        ko: '경쾌한 16분음표 스윙 하이햇과 부드러운 셰이커 질감의 조화',
-        suno: 'crisp airy swung hi-hats and warm shaker pocket lifting effortlessly into the chorus',
+        ko: '깔끔한 쉼표 여백과 산뜻한 하이햇 악센트가 살아있는 현대적 리듬 공간',
+        suno: 'crisp airy closed hi-hat groove with tasteful open space and breezy chorus lift',
       },
       {
-        ko: '코러스에서 자연스럽게 열리는 오픈 하이햇 악센트와 깔끔한 톤 밸런스',
-        suno: 'tight closed hi-hat verse pocket opening into breezy open-hat chorus lift',
+        ko: '코러스에서 자연스럽게 열리는 모던 하이햇·셰이커 밸런스',
+        suno: 'tight modern hi-hat pocket and subtle crisp shaker lifting effortlessly into the chorus',
       },
     ],
     interactionOptions: [
       {
-        ko: '보컬 프레이즈 사이를 산뜻하게 채우는 뮤트 펑크 기타와 로즈 건반 필인',
-        suno: 'clean muted rhythm guitar chops and warm Rhodes fills weaving tastefully around vocal phrases',
+        ko: '오프비트와 빈 공간을 채워주는 클린 기타 리프와 로즈 일렉 피아노의 세련된 문답',
+        suno: 'clean rhythmic electric guitar chops and warm Rhodes electric piano fills living inside open off-beat spaces',
       },
       {
-        ko: '로즈 9화음 컴핑과 클린 기타 리프가 베이스 포켓 위에서 조화롭게 어우러지는 편곡',
-        suno: 'warm Rhodes electric piano chords and crisp clean electric guitar licks locked with the bassline',
+        ko: '로즈 9화음 컴핑과 산뜻한 클린 기타가 베이스 리프 사이에서 주고받는 입체 편곡',
+        suno: 'crisp clean electric guitar licks and warm Rhodes 9th chords answering between the bass riff and vocal',
       },
     ],
     harmonyOptions: [
       {
-        ko: '따뜻한 maj9·add9 텐션과 한번 들으면 기억나는 산뜻한 훅 멜로디',
-        suno: 'memorable singable vocal melody over warm maj9 and add9 pop chord progressions',
+        ko: '모던 maj9·add9 텐션과 한번 들으면 흥얼거리게 되는 선명한 2026 팝 훅 멜로디',
+        suno: 'catchy singable modern indie-pop vocal melody over crisp maj9 and add9 chord voicings',
       },
       {
-        ko: '매력적인 프리코러스 상행 코드 진행과 시원하게 꽂히는 코러스 훅',
-        suno: 'uplifting pre-chorus harmonic lift resolving into an earworm melodic chorus hook',
+        ko: '세련된 프리코러스 코드 리프트와 시원하게 꽂히는 컨템포러리 코러스 훅',
+        suno: 'uplifting contemporary pre-chorus chord progression resolving into an infectious melodic chorus hook',
       },
     ],
     vocalPhrasingOptions: [
       {
-        ko: '안정된 음정과 경쾌한 리듬감이 살아있는 내추럴 대화형 보컬 프레이징',
-        suno: 'pitch-true expressive lead vocal with crisp natural phrasing and smooth breathless chorus lift',
+        ko: '힘을 뺀 담백한 레이드백 보컬 프레이징과 정확한 음정의 세련된 후렴 리프트',
+        suno: 'relaxed laid-back modern vocal phrasing contrasting against the groove with crisp pitch control and smooth chorus lift',
       },
       {
-        ko: '담백한 1절 톤에서 맑고 시원하게 열리는 후렴 멜로디 대비',
-        suno: 'intimate relaxed verse vocal opening into a bright resonant memorable chorus melody',
+        ko: '여유롭고 장난기 어린 1절 톤에서 맑고 입체적으로 열리는 코러스 보컬 하모니',
+        suno: 'playful effortless verse vocal delivery opening into crisp stacked contemporary chorus harmonies',
       },
     ],
     dynamicOptions: [
       {
-        ko: '미니멀한 벌스에서 풍성한 화음의 코러스로 매끄럽게 고조되는 입체적 전개',
-        suno: 'smooth verse-to-chorus arrangement build with warm layered harmonies and clean bridge lift',
+        ko: '오가닉 악기 질감과 깔끔한 2026 모던 프로덕션이 조화된 경쾌하고 세련된 전개',
+        suno: 'organic indie instrumentation fused with crisp 2026 modern studio production and bright verse-to-chorus lift',
       },
     ],
   },
@@ -274,8 +411,8 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
         suno: 'warm melodic 808 sub-bass groove with smooth controlled octave pitch-glides locking the pocket',
       },
       {
-        ko: '로즈 피아노 화음을 따뜻하게 받쳐주는 묵직하고 깔끔한 아날로그 서브 베이스',
-        suno: 'clean deep analog sub-bass pulse moving smoothly beneath Rhodes chord voicings',
+        ko: '로즈 피아노 화음을 탄탄하게 받쳐주는 묵직하고 깔끔한 모던 서브 베이스',
+        suno: 'clean deep modern sub-bass pulse moving smoothly beneath Rhodes chord voicings',
       },
     ],
     drumOptions: [
@@ -331,7 +468,7 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
     bassOptions: [
       {
         ko: '유리 같은 신스 키를 탄탄하게 받쳐주는 멜로딕 딥 서브 베이스',
-        suno: 'warm melodic Moog sub-bass line supporting glassy synth keys with clean low-end definition',
+        suno: 'clean melodic modern sub-bass line supporting glassy synth keys with clear low-end definition',
       },
       {
         ko: '세련된 싱코페이션과 안정적인 그루브를 겸비한 일렉트로닉 R&B 베이스',
@@ -352,7 +489,7 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
     ],
     interactionOptions: [
       {
-        ko: '클린 기타 프래그먼트와 빈티지 일렉 피아노가 보컬 여백을 감싸는 입체적 편곡',
+        ko: '클린 기타 프래그먼트와 맑은 일렉 피아노가 보컬 여백을 감싸는 입체적 편곡',
         suno: 'delicate clean electric guitar fragments and warm electric piano answering vocal phrase endings',
       },
     ],
@@ -775,24 +912,25 @@ export function detectMusicArchetype(
     isEnglishOnly?: boolean;
   }
 ): MusicArchetype {
-  const combined = `${theme.name || ''} ${theme.category || ''} ${theme.sop || ''}`
-    .toLowerCase()
-    .replace(/exclude\s*:[^\n\r]*/gi, '')
-    .replace(/금지[^\n\r]*/g, '')
-    .replace(/제외[^\n\r]*/g, '');
-
+  const combined = stripSopNegativeClauses(`${theme.name || ''} ${theme.category || ''} ${theme.sop || ''}`).toLowerCase();
   const titleAndCat = `${theme.name || ''} ${theme.category || ''}`.toLowerCase();
+  const eraMode = detectSopEraMode(theme);
 
-  // Check 1970s Soul / Funk / Motown / Disco Funk cleanly before 1940s-50s or generic custom
+  // Check 1970s Soul / Funk / Motown / Disco Funk strictly when historical 70s/soul-funk is positively intended
+  // (NEVER hijack contemporary 2020s Groove Pop or neo-soul if eraMode is 'contemporary'!)
   if (
-    /\b(1970|1970s|70s|70's|soul\s*funk|vintage\s*soul|motown|disco\s*funk|neo-?soul|boogie)\b/i.test(titleAndCat) ||
-    /\b(1970s|70's\s*vintage\s*soul|soul\s*funk|clavinet|motown\s*groove)\b/i.test(combined) ||
-    /소울\s*펑크|70년대/.test(combined)
+    eraMode === 'historical_1970s' ||
+    /\b(soul\s*funk|vintage\s*soul|motown|disco\s*funk|70's\s*vintage|1970s)\b/i.test(titleAndCat) ||
+    /소울\s*펑크|70년대/.test(titleAndCat)
   ) {
     return 'vintage_soul_funk';
   }
 
-  if (sopSpecs.isShellacVintage || /\b(1940|1950|shellac|phonograph|vintage\s*pop|78\s*rpm)\b/i.test(combined)) {
+  if (
+    sopSpecs.isShellacVintage ||
+    eraMode === 'historical_1940s_50s' ||
+    /\b(1940|1950|shellac|phonograph|vintage\s*pop|78\s*rpm)\b/i.test(combined)
+  ) {
     return 'vintage_1940s_50s';
   }
   if (sopSpecs.isJapanese || /\b(j-pop|jpop|electronic\s*r&b\s*j-pop)\b/i.test(combined)) {
@@ -807,7 +945,10 @@ export function detectMusicArchetype(
   if (sopSpecs.isKoreanHipHopRnb || sopSpecs.isKorEngMixed) {
     return 'korean_rnb_hiphop';
   }
-  if (/\b(groove|retail\s*groove|chill\s*pop|feel-?good|sunday|cafe\s*pop|disco\s*pop|city\s*groove)\b/i.test(combined) || combined.includes('그루브')) {
+  if (
+    /\b(groove|groovy|offbeat\s*indie|indie\s*groovy\s*pop|retail\s*groove|chill\s*pop|feel-?good|sunday|cafe\s*pop|disco\s*pop|city\s*groove)\b/i.test(combined) ||
+    combined.includes('그루브')
+  ) {
     return 'groove_pop';
   }
   if (/\b(ballad|piano\s*ballad|acoustic\s*ballad|torch\s*song)\b/i.test(titleAndCat) || titleAndCat.includes('발라드') || /\b(piano\s*ballad|power\s*ballad|stripped\s*ballad|vocal-led\s*ballad)\b/i.test(combined)) {
@@ -845,6 +986,8 @@ export function generateTrackInnovationPlans(
   vocal: VocalType | string = 'random',
   seedOffset?: number
 ): InnovationPlan[] {
+  const eraMode = detectSopEraMode(theme);
+  const temporal = getCurrentTemporalContext();
   const archetype = detectMusicArchetype(theme, sopSpecs);
   const constraints = parseSopArrangementConstraints(theme, archetype);
   const pool = ARCHETYPE_POOLS[archetype];
@@ -1001,6 +1144,8 @@ export function generateTrackInnovationPlans(
     plans.push({
       trackNumber: i + 1,
       vocalGender,
+      eraMode,
+      temporal,
       archetype,
       archetypeLabel: pool.label,
       arrangementMode,
@@ -1076,11 +1221,18 @@ export function formatInnovationPromptSection(plans: InnovationPlan[]): string {
     exclusionReminders.push('STRICT SOP RESPECT: This theme omits drums — NEVER add drum kits, kick, snare, or hi-hats.');
   }
 
+  const leadPlan = plans[0];
+  const eraDirective =
+    leadPlan.eraMode === 'contemporary'
+      ? `- ERA & SEASON ANCHOR (${leadPlan.temporal.year} CONTEMPORARY, DATE ${leadPlan.temporal.isoDate}): Since this SOP specifies NO historical era (or targets 2020s), produce 100% crisp ${leadPlan.temporal.year} contemporary sound — STRICTLY FORBID "1970s", "vintage", "retro", "analog tape", "warm analog studio depth", "78 RPM", or dated sonic tropes! Reflect current ${leadPlan.temporal.seasonEn} (${leadPlan.temporal.seasonKo}) atmosphere unless another season/holiday is explicitly ordered.`
+      : `- ERA ANCHOR (${leadPlan.eraMode}): Faithfully preserve the SOP's explicitly specified historical era and sonic texture.`;
+
   return `
 ================================================================================
 THEME-FAITHFUL MELODIC & GROOVE VARIETY MATRIX (테마 맞춤 멜로디·보컬 안정화 사운드 설계)
 ================================================================================
 Give each track distinct musical color while strictly locking each track's assigned vocal gender and protecting rhythmic stability, pitch accuracy, and a memorable singable melody (NEVER use jarring timing terms like "ahead-of-beat", "behind-the-beat", "breaking 4/4", "off-grid", "irregular", or "voice crack" that cause Suno to sing out of tune or off time!):
+${eraDirective}
 ${exclusionReminders.length > 0 ? '\n' + exclusionReminders.map((r) => `- ${r}`).join('\n') + '\n' : ''}
 ${blocks.join('\n\n')}`;
 }
@@ -1299,7 +1451,9 @@ function fitStylePromptLength(
   excludeClause: string,
   minLen = 760,
   maxLen = 945,
-  isInstrumental = false
+  isInstrumental = false,
+  eraMode: SopEraMode = 'contemporary',
+  currentYear = new Date().getFullYear()
 ): string {
   const cleanSegs = (s: string) =>
     s
@@ -1333,20 +1487,23 @@ function fitStylePromptLength(
   let workingBody = combinedParts.join(', ');
   let result = joinWithExclude(workingBody);
 
+  const eraPolishCue =
+    eraMode === 'contemporary' ? `crisp ${currentYear} modern studio clarity` : 'warm analog studio depth';
+
   const enrichmentPool = isInstrumental
     ? [
         'catchy memorable instrumental melody',
-        'expressive acoustic instrument phrasing',
-        'warm analog studio depth',
-        'balanced mid-range clarity',
+        'expressive crisp instrument phrasing',
+        eraPolishCue,
+        'balanced clear mid-range',
         'natural stereo panorama',
         'polished streaming-ready master',
       ]
     : [
         'catchy memorable melody',
         'clear pitch-true lead vocal',
-        'warm analog studio depth',
-        'balanced mid-range clarity',
+        eraPolishCue,
+        'balanced clear mid-range',
         'natural stereo panorama',
         'polished streaming-ready master',
       ];
@@ -1558,6 +1715,80 @@ export function enforceVocalGenderInStylePrompt(
   return combined;
 }
 
+export function enforceContemporaryEraInStylePrompt(
+  stylePrompt: string,
+  eraMode: SopEraMode,
+  currentYear: number = new Date().getFullYear(),
+  maxLen: number = 975
+): string {
+  if (eraMode !== 'contemporary' || !stylePrompt) {
+    return stylePrompt;
+  }
+
+  const { body, excludePrefix, excludeItems } = splitStylePromptAndExclude(stylePrompt);
+  let cleanBody = body
+    .replace(/\bwarm\s+analog\s+studio\s+depth\b/gi, `crisp ${currentYear} modern studio clarity`)
+    .replace(/\bwarm\s+analog\s+saturation\b/gi, 'clean modern harmonic sheen')
+    .replace(/\banalog\s+tape\s+saturation\b/gi, 'crisp modern digital-hybrid clarity')
+    .replace(/\banalog\s+tape\s+recording\s+vibe\b/gi, `crisp ${currentYear} studio vibe`)
+    .replace(/\banalog\s+console\s+mix\b/gi, 'clean modern studio mix')
+    .replace(/\banalog\s+synth\s+bass\b/gi, 'modern synth bass')
+    .replace(/\banalog\s+sub-?bass\b/gi, 'modern sub-bass')
+    .replace(/\banalog\b/gi, 'clean modern')
+    .replace(/\b1970s?\s+soul\s+guitar\s+chops\b/gi, 'clean modern indie guitar chops')
+    .replace(/\bauthentic\s+(?:1940s?|1950s?|1960s?|1970s?|70's|70s)\b/gi, `fresh ${currentYear} contemporary`)
+    .replace(/\b(?:1940s?|1950s?|1960s?|1970s?|1980s?|1990s?|70's|70s|80's|80s|90's|90s|50's|40's)\b/gi, 'contemporary')
+    .replace(/\btight\s+dry\s+vintage\s+kit\b/gi, 'tight dry modern drum kit')
+    .replace(/\bvintage\s+(?:fender\s+)?rhodes\b/gi, 'warm Rhodes')
+    .replace(/\bvintage\s+electric\s+piano\b/gi, 'warm Rhodes electric piano')
+    .replace(/\bvintage\b/gi, 'modern')
+    .replace(/\bretro\b/gi, 'contemporary')
+    .replace(/\bold[-\s]school\b/gi, 'modern')
+    .replace(/\bdated\s+sonic\s+tropes\b/gi, 'fresh modern sonic palette')
+    .replace(/\b(?:cassette\s+hiss|shellac|78\s*rpm|gramophone|phonograph)\b/gi, 'crisp studio presence')
+    .replace(/\b(?:modern\s+){2,}/gi, 'modern ')
+    .replace(/\b(?:contemporary\s+){2,}/gi, 'contemporary ')
+    .replace(/\b(?:clean\s+modern\s+){2,}/gi, 'clean modern ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/,\s*,+/g, ', ')
+    .replace(/^[,\s]+|[,\s]+$/g, '');
+
+  if (!/\b(2020s|2020's|2026|modern|contemporary)\b/i.test(cleanBody)) {
+    cleanBody = cleanBody ? `${cleanBody}, crisp ${currentYear} contemporary production` : `crisp ${currentYear} contemporary production`;
+  }
+
+  const nextExclude = [...excludeItems];
+  const seen = new Set(nextExclude.map((e) => e.trim().toLowerCase()));
+  for (const ban of ['-1970s', '-vintage', '-retro']) {
+    if (!seen.has(ban)) {
+      seen.add(ban);
+      nextExclude.push(ban);
+    }
+  }
+
+  const excludeStr = nextExclude.length > 0 ? `${excludePrefix}${nextExclude.join(', ')}` : '';
+  const buildFull = (b: string) =>
+    excludeStr ? `${b.replace(/[,\s]+$/, '')}, ${excludeStr}` : b.replace(/[,\s]+$/, '');
+
+  let combined = buildFull(cleanBody);
+  if (combined.length > maxLen) {
+    const segs = cleanBody.split(',').map((s) => s.trim()).filter(Boolean);
+    while (buildFull(segs.join(', ')).length > maxLen && segs.length > 4) {
+      let dropIdx = -1;
+      for (let i = segs.length - 1; i >= 1; i--) {
+        if (!/\b(female|male|vocal|voice|no vocals|instrumental|bpm)\b/i.test(segs[i])) {
+          dropIdx = i;
+          break;
+        }
+      }
+      if (dropIdx === -1) break;
+      segs.splice(dropIdx, 1);
+    }
+    combined = buildFull(segs.join(', '));
+  }
+  return combined;
+}
+
 export function enforceVocalGenderInMetaVocal(
   metaVocal: string | undefined,
   vocalGender: ResolvedVocalGender
@@ -1713,7 +1944,17 @@ export function refineTrackWithCraftAudit(
   plan: InnovationPlan,
   siblingPrompts: string[] = []
 ): TrackItem {
-  const genderLockedTrack = enforceTrackVocalGender(track, plan.vocalGender);
+  const eraSanitizedStyle =
+    plan.eraMode === 'contemporary'
+      ? enforceContemporaryEraInStylePrompt(track.stylePrompt || '', plan.eraMode, plan.temporal?.year)
+      : track.stylePrompt || '';
+  const genderLockedTrack = enforceTrackVocalGender(
+    {
+      ...track,
+      stylePrompt: eraSanitizedStyle,
+    },
+    plan.vocalGender
+  );
   const initialAudit = evaluateTrackMusicalCraft(genderLockedTrack, plan, siblingPrompts);
   const needsRefinement = initialAudit.criteria.some((c) => c.result === '미흡');
 
@@ -1781,9 +2022,15 @@ export function refineTrackWithCraftAudit(
     excludeClause,
     760,
     945,
-    plan.vocalGender === 'none'
+    plan.vocalGender === 'none',
+    plan.eraMode,
+    plan.temporal?.year
   );
-  const finalStylePrompt = enforceVocalGenderInStylePrompt(fittedStylePrompt, plan.vocalGender);
+  const eraLockedStylePrompt =
+    plan.eraMode === 'contemporary'
+      ? enforceContemporaryEraInStylePrompt(fittedStylePrompt, plan.eraMode, plan.temporal?.year)
+      : fittedStylePrompt;
+  const finalStylePrompt = enforceVocalGenderInStylePrompt(eraLockedStylePrompt, plan.vocalGender);
 
   // Only add a gentle bracket guide if [Verse 1] or [Chorus] has NO guide at all;
   // NEVER overwrite or bloat existing SOP bracket guides with clunky rhythm formulas!
@@ -1858,9 +2105,10 @@ ${details}
 
 CRITICAL RULES:
 1. STRICTLY PRESERVE EACH TRACK'S LOCKED VOCAL GENDER ("solo male lead vocal" vs "solo female lead vocal" vs "instrumental only") in both stylePrompt and verseGuide/chorusGuide! NEVER omit gender or switch to the opposite gender!
-2. NEVER add off-beat/timing-breaking keywords ("ahead-of-beat", "behind-the-beat", "breaking 4/4", "off-grid", "irregular rests", "voice crack"). Keep vocals pitch-accurate, smooth, and groove-locked!
-3. NEVER add bass or drums to stripped/bassless/drumless tracks, and NEVER add instruments forbidden by the theme's SOP.
-4. For "verseGuide" and "chorusGuide": output ONLY the concise English description AFTER the colon (STRICTLY NEVER include "Verse 1:", "Chorus:", or square brackets "[" / "]" inside the value!).
+2. ERA & SEASON RULE: Unless a historical era was explicitly stated in the SOP, keep 100% contemporary ${weakItems[0]?.plan?.temporal?.year || new Date().getFullYear()} studio production (STRICTLY FORBID "1970s", "vintage", "retro", "warm analog studio depth", "analog tape").
+3. NEVER add off-beat/timing-breaking keywords ("ahead-of-beat", "behind-the-beat", "breaking 4/4", "off-grid", "irregular rests", "voice crack"). Keep vocals pitch-accurate, smooth, and groove-locked!
+4. NEVER add bass or drums to stripped/bassless/drumless tracks, and NEVER add instruments forbidden by the theme's SOP.
+5. For "verseGuide" and "chorusGuide": output ONLY the concise English description AFTER the colon (STRICTLY NEVER include "Verse 1:", "Chorus:", or square brackets "[" / "]" inside the value!).
 Respond ONLY with valid JSON:
 {
   "refinedTracks": [
