@@ -2,6 +2,7 @@ import type { CraftAuditCriterion, Theme, TrackCraftAudit, TrackItem, VocalType 
 
 export type MusicArchetype =
   | 'groove_pop'
+  | 'vintage_soul_funk'
   | 'korean_rnb_hiphop'
   | 'jpop_electronic_rnb'
   | 'vintage_1940s_50s'
@@ -77,142 +78,185 @@ interface ArchetypePool {
 // Stripped/Bassless/Drumless accompaniment pools used when a ballad, acoustic, or minimal SOP omits bass and/or drums
 const BASSLESS_LEFT_HAND_POOL: Array<{ ko: string; suno: string }> = [
   {
-    ko: '베이스 없이 4마디마다 보이싱·페달톤이 변하는 피아노 왼손 독립 대선율 모티프',
-    suno: '4-bar evolving piano left-hand independent counter-melody and shifting open-fifth low-register resonance with zero bass instrument',
+    ko: '베이스 없이 4마디마다 보이싱·진행이 따뜻하게 흐르는 피아노 왼손 아르페지오',
+    suno: 'warm piano left-hand melodic arpeggio and rich open-fifth resonance with zero bass instrument',
   },
   {
-    ko: '어쿠스틱 기타 저음현 엄지 아르페지오가 4마디마다 선율을 바꾸는 독립 리프 (베이스 제외)',
-    suno: 'independent 4-bar evolving fingerpicked acoustic lower-string thumb arpeggio counter-line shifting motifs naturally',
+    ko: '어쿠스틱 기타 저음현 엄지 아르페지오가 부드럽게 곡을 받쳐주는 독립 반주',
+    suno: 'warm fingerpicked acoustic lower-string thumb arpeggio carrying low-end warmth organically',
   },
   {
-    ko: '펠트 피아노 저역 옥타브 공명과 경과음이 4마디 단위로 움직이는 서정적 반주 리프',
-    suno: '4-bar evolving warm felt-piano lower-register octave resonance and chromatic passing-tone line carrying low-end warmth organically',
+    ko: '펠트 피아노 저역 공명과 부드러운 코드 전위로 서정미를 살린 피아노 반주',
+    suno: 'warm felt-piano lower-register resonance and smooth chord inversions supporting the vocal',
   },
 ];
 
 const DRUMLESS_PULSE_POOL: Array<{ ko: string; suno: string }> = [
   {
-    ko: '드럼 비트 없이 반주 스트럼·아르페지오 악센트 이동과 자연스러운 루바토 호흡',
-    suno: 'drumless organic phrasing with subtle rubato tempo elasticity and displaced chordal pulse accents inside the accompaniment',
+    ko: '드럼 없이 반주 아르페지오와 보컬 호흡이 자연스럽게 어우러지는 서정적 템포',
+    suno: 'drumless intimate accompaniment following natural vocal flow and expressive piano dynamics',
   },
   {
-    ko: '타악기 없이 4마디마다 반주 리듬 밀도를 비틀어 긴장을 조율하는 어쿠스틱 펄스',
-    suno: 'no percussion pulse relying on shifting 4-bar arpeggio syncopation and natural performer breathing rubato',
+    ko: '타악기 없이 피아노/기타 리듬 결로 안정감 있게 흐르는 어쿠스틱 펄스',
+    suno: 'no percussion pulse led by gentle steady accompaniment arpeggios and natural phrasing',
   },
 ];
 
 const HIHATLESS_SPACE_POOL: Array<{ ko: string; suno: string }> = [
   {
-    ko: '하이햇 대신 프레이즈 끝 1박의 의도적인 침묵과 여백의 호흡(에어 포켓) 설계',
-    suno: 'intentional 1-beat silent breath pauses and suspended decay air-pockets between phrases instead of hi-hat ticks',
+    ko: '하이햇 대신 프레이즈 끝 자연스러운 숨결 여백과 피아노 잔향 공간 설계',
+    suno: 'natural vocal breath space and lingering warm acoustic decay between phrases',
   },
   {
-    ko: '심벌/하이햇 없이 보컬 흡기와 피아노 잔향 사이의 비대칭 정적 리듬 설계',
-    suno: 'asymmetric vocal-intake silence gaps and lingering natural room decay creating rhythmic tension without hi-hats',
+    ko: '심벌/하이햇 없이 보컬 선율과 반주 여운의 조화로운 밸런스',
+    suno: 'clean uncrowded rhythmic space highlighting pure vocal clarity and natural room resonance',
   },
 ];
 
+// All Suno directives below are carefully crafted to stay LOCKED ON BEAT, IN TUNE, MELODICALLY CATCHY,
+// and VOCALLY NATURAL — strictly avoiding timing/pitch-sabotaging keywords like "ahead-of-beat",
+// "behind-the-beat", "breaking 4/4", "displaced off-grid", "irregular", "voice crack", or "diminished".
 const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
   groove_pop: {
     label: 'Groove Pop / Retail Feel-Good Pop',
-    bpmPool: ['102 BPM', '106 BPM', '98 BPM', '110 BPM', '104 BPM', '112 BPM'],
-    keyColors: ['Dbmaj9', 'Fmaj9', 'Eb Dorian groove', 'Abmaj9', 'G Mixolydian pop', 'Bbm9'],
+    bpmPool: ['102 BPM', '106 BPM', '98 BPM', '110 BPM', '104 BPM', '108 BPM'],
+    keyColors: ['Dbmaj9', 'Fmaj9', 'Abmaj9', 'Gmaj9', 'Ebmaj9', 'Bbm9'],
     bassOptions: [
       {
-        ko: '4마디 단위로 변화하는 독립적인 옥타브 팝 멜로디 베이스 리프',
-        suno: '4-bar evolving independent melodic bass riff with tight octave pops and chromatic bar-4 turnaround',
+        ko: '단단한 포켓 위에 매끄러운 턴어라운드가 살아있는 멜로딕 팝 베이스',
+        suno: 'warm locked melodic P-bass groove with smooth octave bounce and clean bar-4 turnaround',
       },
       {
-        ko: '보컬 여백을 파고드는 4마디 변주 핑거스타일 P-베이스 카운터 리프',
-        suno: 'independent syncopated fingerstyle P-bass counter-melody shifting motif every 4 bars around vocal gaps',
+        ko: '보컬 여백을 부드럽게 감싸며 그루브를 이끄는 핑거스타일 베이스 라인',
+        suno: 'infectious locked fingerstyle bassline with melodic movement supporting the vocal hook',
       },
       {
-        ko: '일렉 베이스와 아날로그 신스 베이스가 4마디마다 응답하는 훅 리프',
-        suno: 'memorable 4-bar melodic muted bass hook layered with rubbery analog synth bass turnaround',
-      },
-      {
-        ko: '루트음을 벗어나 상행·하행 프레이즈를 그리는 4마디 독립 멜로디 베이스',
-        suno: 'non-repetitive 4-bar ascending and descending melodic bass riff with crisp ghost plucks',
+        ko: '일렉 베이스와 따뜻한 아날로그 신스 베이스가 조화를 이루는 그루브 훅',
+        suno: 'punchy warm analog synth bass layered with tight muted electric bass groove',
       },
     ],
     drumOptions: [
       {
-        ko: '정형적 백비트를 비튼 선행 킥 배치와 스네어 고스트 노트',
-        suno: 'displaced kick pattern anticipating beat 2 and 4-and instead of rigid backbeat, crisp dry snare with ghost taps',
+        ko: '안정적인 백비트를 중심으로 경쾌한 고스트 노트가 어우러진 락인(Locked-in) 드럼 포켓',
+        suno: 'tight locked-in pop drum pocket with crisp dry snare backbeat and subtle tasteful ghost notes',
       },
       {
-        ko: '드롭아웃과 브로큰 포켓이 살아있는 탄력적 킥-스네어 싱코페이션',
-        suno: 'broken-pocket syncopated kick drum shifting off-beat every 2 bars, tight rimshot and bar-end beat dropout',
+        ko: '탄력 있는 바운스 킥과 깔끔한 림샷이 살아있는 모던 그루브 드럼',
+        suno: 'bouncy steady kick drum pattern anchored to tight rimshot backbeat groove',
       },
       {
-        ko: '점8분음표 당김음 킥과 뒤로 살짝 당긴 레이드백 스네어 포켓',
-        suno: 'dotted-eighth kick syncopation pushing forward over laid-back pocket snare placement',
-      },
-      {
-        ko: '전조 직전 1박 브레이크와 바운스 변칙 킥을 결합한 입체적 리듬',
-        suno: 'asymmetric bounce kick placement with crisp snare accents and sudden 1-beat pocket pause before hook',
+        ko: '프레이즈 전환이 매끄러운 경쾌한 4/4 스윙 팝 드럼 포켓',
+        suno: 'crisp 4/4 pocket groove with warm kick punch and smooth pre-chorus snare fill transitions',
       },
     ],
     hihatOptions: [
       {
-        ko: '불규칙한 16분음표 하이햇 강약과 의도적인 쉼표(에어 포켓)',
-        suno: 'irregular crisp hi-hat accents with intentional 16th-note air-pocket rests and brief off-beat open hat',
+        ko: '경쾌한 16분음표 스윙 하이햇과 부드러운 셰이커 질감의 조화',
+        suno: 'crisp airy swung hi-hats and warm shaker pocket lifting effortlessly into the chorus',
       },
       {
-        ko: '3박을 비우는 변칙 스윙 하이햇과 미세한 셰이커 응답',
-        suno: 'non-linear swung closed hi-hat leaving deliberate rests on beat 3 answered by dry shaker flicks',
-      },
-      {
-        ko: '스타카토 오픈/클로즈드 하이햇 교차와 짧은 박자 공백 설계',
-        suno: 'staccato alternating open-closed hi-hat articulation punctuated by crisp rhythmic silence gaps',
+        ko: '코러스에서 자연스럽게 열리는 오픈 하이햇 악센트와 깔끔한 톤 밸런스',
+        suno: 'tight closed hi-hat verse pocket opening into breezy open-hat chorus lift',
       },
     ],
     interactionOptions: [
       {
-        ko: '베이스가 쉴 때 치고 들어오는 뮤트 펑크 기타의 주고받기 대화',
-        suno: 'clean muted funk rhythm guitar stabs answering strictly inside rhythmic spaces left by the bass riff',
+        ko: '보컬 프레이즈 사이를 산뜻하게 채우는 뮤트 펑크 기타와 로즈 건반 필인',
+        suno: 'clean muted rhythm guitar chops and warm Rhodes fills weaving tastefully around vocal phrases',
       },
       {
-        ko: '로즈 9화음 코드와 기타 커팅이 베이스 리프와 대위적으로 교차',
-        suno: 'call-and-response dialogue between clean chicken-scratch guitar chops, warm Rhodes 9th chords, and bass',
-      },
-      {
-        ko: '클린 일렉 기타 아르페지오와 베이스 훅의 2마디 교대 인터플레이',
-        suno: 'interlocking 2-bar call-and-response between staccato clean electric guitar licks and melodic bassline',
+        ko: '로즈 9화음 컴핑과 클린 기타 리프가 베이스 포켓 위에서 조화롭게 어우러지는 편곡',
+        suno: 'warm Rhodes electric piano chords and crisp clean electric guitar licks locked with the bassline',
       },
     ],
     harmonyOptions: [
       {
-        ko: '모달 인터체인지와 add9/11 텐션 보이싱 기반의 신선한 훅 화성',
-        suno: 'fresh maj9 and add11 chord voicings with unexpected pre-chorus modal interchange turnaround',
+        ko: '따뜻한 maj9·add9 텐션과 한번 들으면 기억나는 산뜻한 훅 멜로디',
+        suno: 'memorable singable vocal melody over warm maj9 and add9 pop chord progressions',
       },
       {
-        ko: '정형화된 4코드 반복을 깬 경과화음 및 비대칭 멜로디 리프트',
-        suno: 'non-cliche passing chord progressions avoiding standard 4-chord loops, bright stepped melodic hook',
+        ko: '매력적인 프리코러스 상행 코드 진행과 시원하게 꽂히는 코러스 훅',
+        suno: 'uplifting pre-chorus harmonic lift resolving into an earworm melodic chorus hook',
       },
     ],
     vocalPhrasingOptions: [
       {
-        ko: '박자를 살짝 앞서 던지는 경쾌한 대화형 싱코페이션 보컬 프레이징',
-        suno: 'conversational slightly ahead-of-beat vocal phrasing with crisp rhythmic breath rests and playful ad-lib tails',
+        ko: '안정된 음정과 경쾌한 리듬감이 살아있는 내추럴 대화형 보컬 프레이징',
+        suno: 'pitch-true expressive lead vocal with crisp natural phrasing and smooth breathless chorus lift',
       },
       {
-        ko: '절은 담백한 리듬 말투, 후렴은 시원하게 뻗는 다이내믹 보컬 프레이징',
-        suno: 'tight syncopated verse vocal cadence opening into airy, lifted wide-interval chorus phrasing',
-      },
-      {
-        ko: '그루브 빈틈에 여운을 남기는 레이드백 팔세토 전환 프레이징',
-        suno: 'relaxed behind-the-beat pocket vocal delivery alternating crisp chest voice with silky falsetto pickups',
+        ko: '담백한 1절 톤에서 맑고 시원하게 열리는 후렴 멜로디 대비',
+        suno: 'intimate relaxed verse vocal opening into a bright resonant memorable chorus melody',
       },
     ],
     dynamicOptions: [
       {
-        ko: '미니멀한 벌스 포켓에서 1박 정적 후 터지는 입체적 코러스 다이내믹',
-        suno: 'intimate bass-and-rimshot verse pocket dropping to 1-beat silence before wide layered chorus bloom',
+        ko: '미니멀한 벌스에서 풍성한 화음의 코러스로 매끄럽게 고조되는 입체적 전개',
+        suno: 'smooth verse-to-chorus arrangement build with warm layered harmonies and clean bridge lift',
+      },
+    ],
+  },
+
+  vintage_soul_funk: {
+    label: "1970s Vintage Soul & Funk / Retro Groove",
+    bpmPool: ['96 BPM', '102 BPM', '108 BPM', '94 BPM', '104 BPM', '112 BPM'],
+    keyColors: ['Em9', 'Am7', 'Dm9', 'Gm7', 'Cm9', 'Fmaj7'],
+    bassOptions: [
+      {
+        ko: '70년대 빈티지 P-베이스의 쫀득한 핑거스타일 멜로딕 펑크 베이스 포켓',
+        suno: 'authentic 1970s warm Fender Precision bass groove with melodic syncopated fills locked to the kick',
       },
       {
-        ko: '브릿지 스트립다운과 마지막 코러스 악기 대화가 고조되는 다층 다이내믹',
-        suno: 'stepped arrangement arc with stripped Rhodes bridge and polyrhythmic guitar-bass climax finale',
+        ko: '따뜻한 로우엔드 서스테인과 4마디 슬라이드 턴어라운드가 돋보이는 소울 베이스',
+        suno: 'fat round vintage soul bassline with smooth octave slides and classic bar-4 Motown turnaround',
+      },
+    ],
+    drumOptions: [
+      {
+        ko: '아날로그 테이프 질감의 묵직하고 쫀득한 70년대 소울 펑크 드럼 포켓',
+        suno: 'authentic 1970s tight dry vintage drum kit pocket, snappy wood snare backbeat and warm analog kick',
+      },
+      {
+        ko: '자연스러운 휴먼 스윙과 탬버린 백비트가 어우러진 레트로 소울 리듬',
+        suno: 'locked retro soul-funk pocket drums with crisp tambourine backbeat lift in the chorus',
+      },
+    ],
+    hihatOptions: [
+      {
+        ko: '바삭하고 따뜻한 빈티지 16분음표 하이햇과 미세한 바운스 그루브',
+        suno: 'crisp warm vintage closed hi-hat 16th-note pocket with tasteful bar-end open-hat shimmer',
+      },
+    ],
+    interactionOptions: [
+      {
+        ko: '클라비넷·펜더 로즈 컴핑과 펑키 와우 기타·혼 섹션이 주고받는 클래식 소울 편곡',
+        suno: 'interlocking warm Rhodes electric piano, percussive Clavinet stabs, clean wah funk guitar, and warm vintage horn swells',
+      },
+      {
+        ko: '보컬 코러스 뒤를 따뜻하게 받쳐주는 70년대 브라스·스트링 패드와 클린 기타 리프',
+        suno: 'classic 1970s soul guitar rhythm chops paired with warm brass horn accents answering vocal lines',
+      },
+    ],
+    harmonyOptions: [
+      {
+        ko: '도리안·도미넌트 9화음 기반의 진한 소울풀 코드 진행과 중독성 있는 훅 멜로디',
+        suno: 'rich soulful 7th and 9th chord changes with an unforgettable singable 1970s soul chorus melody',
+      },
+    ],
+    vocalPhrasingOptions: [
+      {
+        ko: '풍부한 소울 그루브와 안정된 벨팅·팔세토 전환이 돋보이는 정통 소울 보컬',
+        suno: 'rich warm soulful lead vocal with authentic 1970s phrasing, clear pitch control, and lush chorus harmonies',
+      },
+      {
+        ko: '따뜻한 흉성과 부드러운 애드리브가 리듬에 정확히 얹히는 클래식 소울 창법',
+        suno: 'expressive pocket-locked vintage soul vocal blending warm chest voice with smooth silky falsetto lifts',
+      },
+    ],
+    dynamicOptions: [
+      {
+        ko: '절제된 그루브 벌스에서 브라스·백킹 하모니가 터지는 정통 소울 클라이맥스',
+        suno: 'tight groovy verse pocket opening into rich full-band horn and backing-vocal chorus lift',
       },
     ],
   },
@@ -220,75 +264,59 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
   korean_rnb_hiphop: {
     label: 'Korean Aesthetic R&B / Chill Trap Hip-Hop',
     bpmPool: ['78 BPM', '82 BPM', '85 BPM', '88 BPM', '76 BPM', '90 BPM'],
-    keyColors: ['F#m9', 'Cm11', 'Amaj9', 'Dm9', 'Ebmaj7#11', 'Bbm9'],
+    keyColors: ['F#m9', 'Cm11', 'Amaj9', 'Dm9', 'Ebmaj7', 'Bbm9'],
     bassOptions: [
       {
-        ko: '4마디마다 음정 글라이드 궤적이 달라지는 독립적 808 멜로디 베이스',
-        suno: '4-bar evolving melodic 808 sub-bass hook with distinct octave pitch-glides and counter-melodic phrasing',
+        ko: '안정적인 루트 위에서 부드러운 글라이드로 멜로디를 돕는 딥 808 서브 베이스',
+        suno: 'warm melodic 808 sub-bass groove with smooth controlled octave pitch-glides locking the pocket',
       },
       {
-        ko: '드럼과 따로 숨 쉬며 후렴 훅을 견인하는 4마디 서정적 808 리프',
-        suno: 'independent 4-bar lyrical sub-808 bassline moving melodically against chord roots with muted ghost drops',
-      },
-      {
-        ko: '아날로그 신스 베이스와 글라이드 808이 교차하는 입체적 저음 리프',
-        suno: 'alternating warm Moog sub pulse and 4-bar pitch-bent 808 bass turnaround with clean low-end punch',
+        ko: '로즈 피아노 화음을 따뜻하게 받쳐주는 묵직하고 깔끔한 아날로그 서브 베이스',
+        suno: 'clean deep analog sub-bass pulse moving smoothly beneath Rhodes chord voicings',
       },
     ],
     drumOptions: [
       {
-        ko: '정박 1·3박을 비켜가는 트랩 킥 변주와 지연된 레이지 림샷',
-        suno: 'displaced off-grid trap kick hits skipping downbeats paired with lazy behind-the-beat rimshot snare',
+        ko: '모던 R&B 림샷 백비트와 깔끔한 808 킥 바운스가 어우러진 레이드백 포켓',
+        suno: 'smooth nocturnal R&B drum pocket with crisp rimshot backbeat and clean bouncy kick groove',
       },
       {
-        ko: '하프타임과 더블타임 킥 포켓이 4마디마다 교차하는 탈정형 그루브',
-        suno: 'elastic half-time drum pocket with unexpected double-kick anticipations and bar-4 snare dropout',
+        ko: '하프타임 그루브가 매끄럽게 유지되는 세련된 칠 트랩 드럼 패턴',
+        suno: 'chill half-time trap drum groove with tight punchy snare and warm low-end pocket clarity',
       },
     ],
     hihatOptions: [
       {
-        ko: '미세 스윙이 걸린 불규칙 32분음표 하이햇 롤과 의도적 무음 공백',
-        suno: 'irregular swung 32nd hi-hat bursts balanced by wide intentional rhythmic rests and soft foley clicks',
-      },
-      {
-        ko: '강약을 극단적으로 나눈 변칙 하이햇 악센트와 빈 박자 여백',
-        suno: 'dynamic high-low hi-hat accent shifts leaving clean silence pockets around vocal intakes',
+        ko: '부드러운 스윙감의 32분음표 하이햇 롤과 정갈한 공간 여백',
+        suno: 'tasteful soft swung hi-hat rolls and clean airy percussion texture leaving room for vocals',
       },
     ],
     interactionOptions: [
       {
-        ko: '트레몰로 로즈 피아노·보컬 찹이 808 베이스 여백과 주고받는 콜앤리스폰스',
-        suno: 'call-and-response interplay between tremolo Rhodes chords, pitch-shifted vocal chops, and 808 glides',
-      },
-      {
-        ko: '클린 나일론 기타 아르페지오와 신스 패드가 저음 리프 사이를 메우는 대화',
-        suno: 'warm clean guitar plucks and ambient analog synth swells answering in the spaces of the sub-bass motif',
+        ko: '트레몰로 로즈 피아노와 보컬 찹·클린 기타가 808 위에서 부드럽게 어우러지는 편곡',
+        suno: 'warm tremolo Rhodes chords, subtle filtered vocal chops, and clean guitar fills around vocal spaces',
       },
     ],
     harmonyOptions: [
       {
-        ko: '마이너 11th와 디미니쉬드 경과화음으로 뻔하지 않은 새벽 도시 화성감',
-        suno: 'lush minor 11th voicings and smoky diminished passing chords creating unpredictable nocturnal tension',
-      },
-      {
-        ko: '부유하는 서스펜디드 코드와 반음계적 탑노트 진행',
-        suno: 'floating suspended chord extensions with subtle chromatic top-note harmonic motion',
+        ko: '몽환적인 마이너 9th/11th 보이싱과 귀에 감기는 서정적 R&B 탑라인',
+        suno: 'lush minor 9th and maj7 chord voicings carrying a smooth, catchy nocturnal R&B vocal melody',
       },
     ],
     vocalPhrasingOptions: [
       {
-        ko: '속삭이는 듯한 숨결 싱잉랩에서 갑작스레 뻗는 팔세토 도약 프레이징',
-        suno: 'intimate breathy close-mic singing-rap phrasing suddenly blooming into soaring airy falsetto hooks',
+        ko: '근접 마이크의 섬세한 숨결에서 부드러운 팔세토 코러스로 자연스럽게 이어지는 보컬',
+        suno: 'intimate close-mic singing-rap phrasing flowing smoothly into a silky pitch-true falsetto chorus melody',
       },
       {
-        ko: '문장 끝을 흘리며 박자 뒤로 눕는 레이드백 멜로딕 플로우',
-        suno: 'behind-the-beat laid-back conversational melodic rap flow with delicate trail-off ad-libs',
+        ko: '리듬을 여유롭게 타면서도 멜로디 윤곽이 선명한 한국형 R&B 보컬 프레이징',
+        suno: 'effortless smooth Korean R&B vocal delivery with clear melodic line and tender expressive ad-libs',
       },
     ],
     dynamicOptions: [
       {
-        ko: '무반주 브레스 인트로에서 딥 808 드롭으로 낙차를 키운 극적 다이내믹',
-        suno: 'sparse atmospheric verse stripped to Rhodes and breath dropping sharply into heavy lush chorus pocket',
+        ko: '잔잔한 로즈 인트로에서 딥 808 코러스로 부드럽게 확장되는 세련된 다이내믹',
+        suno: 'intimate Rhodes verse texture opening warmly into rich bass-supported chorus harmonies',
       },
     ],
   },
@@ -296,55 +324,51 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
   jpop_electronic_rnb: {
     label: 'Electronic R&B J-POP / Cinematic Alt-Pop',
     bpmPool: ['90 BPM', '93 BPM', '95 BPM', '92 BPM', '96 BPM', '89 BPM'],
-    keyColors: ['Em9', 'Bm11', 'Gmaj9#11', 'C#m9', 'Am9', 'Fmaj9'],
+    keyColors: ['Em9', 'Bm11', 'Gmaj9', 'C#m9', 'Am9', 'Fmaj9'],
     bassOptions: [
       {
-        ko: '유리 같은 신스 키 사이를 4마디마다 다르게 수놓는 독립 서브 베이스 리프',
-        suno: '4-bar evolving melodic Moog sub-bass counterpoint weaving asymmetrically beneath glassy synth keys',
+        ko: '유리 같은 신스 키를 탄탄하게 받쳐주는 멜로딕 딥 서브 베이스',
+        suno: 'warm melodic Moog sub-bass line supporting glassy synth keys with clean low-end definition',
       },
       {
-        ko: '정박을 피한 싱코페이션 일렉 베이스와 딥 서브가 겹치는 4마디 변주 리프',
-        suno: 'independent syncopated synth-bass riff shifting harmonic counterpoint every 4 bars with warm low punch',
+        ko: '세련된 싱코페이션과 안정적인 그루브를 겸비한 일렉트로닉 R&B 베이스',
+        suno: 'smooth locked synth-bass groove weaving gracefully beneath ambient electric piano chords',
       },
     ],
     drumOptions: [
       {
-        ko: '미니멀 전자 킥의 변칙 위치 이동과 드라이 림샷 고스트 타격',
-        suno: 'minimal electronic kick displaced off predictable downbeats, crisp dry snare with subtle foley clicks',
-      },
-      {
-        ko: '정형적 4/4를 비트는 스윙 일렉트로닉 포켓과 프레이즈 끝 1박 정적',
-        suno: 'laid-back swinging electronic drum pocket breaking rigid 4/4 feel with deliberate bar-end pause',
+        ko: '정교하고 깔끔한 미니멀 전자 킥과 드라이 림샷의 도회적 4/4 포켓',
+        suno: 'clean minimal electronic 4/4 drum pocket with soft tight kick and crisp dry rimshot snare',
       },
     ],
     hihatOptions: [
       {
-        ko: '마이크로 타이밍이 흔들리는 불규칙 하이햇과 여백의 foley SFX',
-        suno: 'micro-timed irregular electronic hi-hat ticks interspersed with intentional air rests and subtle room foley',
+        ko: '섬세한 일렉트로닉 하이햇과 맑은 공간 여운이 어우러진 세련된 퍼커션',
+        suno: 'crisp restrained electronic hi-hats with clean ambient air and subtle texture',
       },
     ],
     interactionOptions: [
       {
-        ko: '클린 기타 프래그먼트와 빈티지 일렉 피아노가 서브 베이스와 대위적으로 응답',
-        suno: 'conversational clean electric guitar fragments answering vintage electric piano and bass motif gaps',
+        ko: '클린 기타 프래그먼트와 빈티지 일렉 피아노가 보컬 여백을 감싸는 입체적 편곡',
+        suno: 'delicate clean electric guitar fragments and warm electric piano answering vocal phrase endings',
       },
     ],
     harmonyOptions: [
       {
-        ko: '철학적 여운을 남기는 J-POP 특유의 상행 서브도미넌트 마이너·분수 코드',
-        suno: 'sophisticated Japanese alt-pop slash chords, suspended 9th voicings, and bittersweet chromatic modulations',
+        ko: 'J-POP 특유의 서정적 분수 코드·서스펜디드 9화음 기반의 아름다운 멜로디 진행',
+        suno: 'sophisticated Japanese alt-pop slash chords and warm 9th voicings supporting a clear unforgettable vocal melody',
       },
     ],
     vocalPhrasingOptions: [
       {
-        ko: '저음역의 차분한 낭독조 프레이징에서 후렴구 와이드 톤으로 확장되는 대비',
-        suno: 'intimate restrained low-register conversational phrasing expanding cleanly into wide serene chorus sustain',
+        ko: '차분한 저음역 낭독조에서 맑고 넓은 코러스 톤으로 확장되는 정교한 보컬',
+        suno: 'clear low-register intimate Japanese vocal opening gracefully into wide resonant pitch-true chorus sustain',
       },
     ],
     dynamicOptions: [
       {
-        ko: '고독한 실내 공간 여백에서 후렴의 넓은 스테레오 입체감으로 열리는 다이내믹',
-        suno: 'quiet close-room verse airiness contrasting with wide stereo bass-and-synth chorus expansion',
+        ko: '고독한 실내 공간 여백에서 넓은 스테레오 입체감으로 열리는 세련된 다이내믹',
+        suno: 'quiet close-room verse airiness expanding smoothly into lush wide-stereo chorus emotion',
       },
     ],
   },
@@ -352,51 +376,47 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
   vintage_1940s_50s: {
     label: '1940s–1950s Shellac Vintage Pop / Lounge',
     bpmPool: ['74 BPM', '78 BPM', '82 BPM', '72 BPM', '80 BPM', '86 BPM'],
-    keyColors: ['Ebmaj7', 'Ab6', 'Dm7b5–G7alt', 'Bbmaj7', 'C6/9', 'Fmaj7'],
+    keyColors: ['Ebmaj7', 'Ab6', 'Bbmaj7', 'C6/9', 'Fmaj7', 'Dm7'],
     bassOptions: [
       {
-        ko: '4마디마다 경과음 워킹 라인을 달리하는 독립 콘트라베이스 멜로디 리프',
-        suno: '4-bar evolving melodic upright double bass walking line with warm chromatic turnarounds every 4th bar',
-      },
-      {
-        ko: '서정적 2박 페달에서 4마디 스윙 카운터 멜로디로 전환되는 업라이트 베이스',
-        suno: 'independent woody acoustic upright bass shifting from soft two-feel pulse into singing 4-bar counter-melody',
+        ko: '부드럽고 따뜻한 4비트 워킹 라인을 그리는 어쿠스틱 업라이트 콘트라베이스',
+        suno: 'warm woody acoustic double bass playing a smooth melodic walking line in steady pocket',
       },
     ],
     drumOptions: [
       {
-        ko: '브러쉬 스네어의 미세한 악센트 이동과 킥 위치 변화를 준 올드 스윙 포켓',
-        suno: 'gentle brushed snare swing alternating soft feather-kick accents off beat 1 and 3 with natural human rubato',
+        ko: '포근한 브러쉬 스네어 스윙과 절제된 킥으로 만든 1940~50년대 올드 스윙 포켓',
+        suno: 'gentle warm brushed snare swing groove with soft feather kick keeping steady mid-century flow',
       },
     ],
     hihatOptions: [
       {
-        ko: '의도적 쉼표를 둔 부드러운 브러쉬 심벌 스윕과 아날로그 공간 호흡',
-        suno: 'delicate brushed ride cymbal sweeps with subtle dynamic accents and unhurried breathing rests',
+        ko: '부드럽게 스치는 브러쉬 심벌 스윕과 아날로그 라운지 공간감',
+        suno: 'soft vintage brushed ride cymbal swing with natural warm room breath',
       },
     ],
     interactionOptions: [
       {
-        ko: '벨벳 뮤트 트럼펫·클라리넷이 펠트 피아노와 더블 베이스 사이에서 응답하는 대화',
-        suno: 'intimate call-and-response between velvet Harmon-muted trumpet, warm clarinet counter-lines, felt piano, and upright bass',
+        ko: '벨벳 뮤트 트럼펫·클라리넷이 펠트 피아노와 보컬 사이를 따뜻하게 채우는 편곡',
+        suno: 'intimate call-and-response between velvet Harmon-muted trumpet, warm clarinet counter-lines, and felt upright piano',
       },
     ],
     harmonyOptions: [
       {
-        ko: '1940~50년대 클래식 재즈 발라드 특유의 6/9·디미니쉬드 반음계 진행',
-        suno: 'authentic mid-century 6/9 chords, lush altered dominant turnarounds, and bittersweet chromatic voice leading',
+        ko: '1940~50년대 클래식 팝 스탠다드 특유의 6/9·메이저7th 로맨틱 선율 진행',
+        suno: 'classic mid-century 6/9 and maj7 standard chord progression with a sweet nostalgic singable melody',
       },
     ],
     vocalPhrasingOptions: [
       {
-        ko: '앞박과 뒷박을 자유롭게 넘나드는 아날로그 루바토 크루너 프레이징',
-        suno: 'sincere vintage behind-the-beat rubato vocal phrasing with delicate natural vibrato and breathy intimacy',
+        ko: '자연스러운 비브라토와 진정성 있는 클래식 크루너 보컬 프레이징',
+        suno: 'sincere vintage crooner vocal delivery with warm natural vibrato, clear pitch, and intimate warmth',
       },
     ],
     dynamicOptions: [
       {
-        ko: '셀락 음반 특유의 좁은 미드레인지 속에서 피어나는 절제된 감정 클라이맥스',
-        suno: 'intimate parlor opening swelling warmly into rich brass-and-piano mid-century climax before quiet run-out',
+        ko: '잔잔한 축음기 도입부에서 따뜻한 금관 하모니가 피어오르는 클래식 다이내믹',
+        suno: 'intimate parlor opening swelling warmly into a heartfelt mid-century vocal and horn chorus',
       },
     ],
   },
@@ -407,162 +427,156 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
     keyColors: ['Cm7', 'Gm7', 'Fm7', 'Bbm7', 'Dm7', 'Ebm7'],
     bassOptions: [
       {
-        ko: '4마디마다 벤딩과 옥타브 바운스가 변하는 독립적 G-Funk 웜 베이스 리프',
-        suno: '4-bar evolving rubbery Minimoog G-Funk bass hook with expressive pitch glides and syncopated octave snaps',
+        ko: '묵직하고 탄력 있는 미니무그 스타일 G-Funk 웜 펑크 베이스 훅',
+        suno: 'heavy rubbery Minimoog G-Funk synth bass hook with clean octave bounce locked to the kick',
       },
       {
-        ko: '보컬 플로우와 맞물려 독자적 리듬을 끌고 가는 묵직한 아날로그 펑크 베이스',
-        suno: 'independent punchy West Coast analog synth bassline weaving 4-bar rhythmic variations beneath vocal flow',
+        ko: '90년대/현대 웨스트코스트 특유의 그루브가 살아있는 펀치감 있는 펑크 베이스',
+        suno: 'punchy West Coast funk bassline anchoring the groove with smooth pitch-bend fills',
       },
     ],
     drumOptions: [
       {
-        ko: '정형화된 스네어-킥을 깬 엇박 킥 더블탭과 묵직한 웨스트코스트 레이드백 포켓',
-        suno: 'hard-hitting West Coast boom-bap/G-funk kick displacement with off-beat double taps and crisp dry clap-snare',
+        ko: '웨스트코스트 특유의 묵직한 킥과 딱 떨어지는 클랩-스네어 백비트 포켓',
+        suno: 'hard-hitting West Coast hip-hop drum pocket with punchy low kick and crisp dry clap-snare backbeat',
       },
     ],
     hihatOptions: [
       {
-        ko: '의도적 쉼과 오프비트 악센트를 섞어 스윙감을 살린 웨스트코스트 하이햇',
-        suno: 'swung crisp hi-hats with irregular off-beat accents, intentional micro-rests, and tight shaker pockets',
+        ko: '바운스감이 살아있는 스윙 하이햇과 타이트한 셰이커 리듬',
+        suno: 'crisp swung West Coast hi-hats and tight shaker groove keeping effortless bounce',
       },
     ],
     interactionOptions: [
       {
-        ko: '하이피치 G-Funk 신스 리드·로즈 코드가 묵직한 베이스 리프 빈틈에서 주고받는 대화',
-        suno: 'signature high West Coast sine-synth whistle lead and wah-guitar stabs answering 2-bar synth bass gaps',
+        ko: '시그니처 G-Funk 하이 신스 리드와 로즈·와우 기타가 비트 위에서 주고받는 대화',
+        suno: 'iconic West Coast high sine-synth whistle melody and clean wah-guitar chords weaving around vocal flow',
       },
     ],
     harmonyOptions: [
       {
-        ko: '도리안 마이너 펑크 코드와 블루스적 펜타토닉 턴어라운드',
-        suno: 'sleek Dorian minor funk chord stabs and soulful West Coast Rhodes turnaround voicings',
+        ko: '세련된 도리안 마이너 펑크 코드와 귀에 꽂히는 훅 멜로디 라인',
+        suno: 'sleek Dorian minor funk chord stabs and soulful Rhodes turnarounds with catchy hook phrasing',
       },
     ],
     vocalPhrasingOptions: [
       {
-        ko: '레이백 쉼표를 활용해 비트를 타는 여유롭고 날카로운 프리스타일 케이던스',
-        suno: 'effortless behind-the-beat rhythmic rap cadence using sharp multi-syllable pauses and confident breath control',
+        ko: '여유롭고 또렷한 딕션으로 비트를 타는 자신감 넘치는 웨스트코스트 랩 플로우',
+        suno: 'confident rhythmic West Coast rap delivery locked tightly in the groove with crisp diction and relaxed poise',
       },
     ],
     dynamicOptions: [
       {
-        ko: '드럼 드롭아웃 아카펠라 펀치라인 후 전 악기가 꽂히는 강렬한 다이내믹 대비',
-        suno: 'tight beat-drop acapella bar turns slamming back into full low-end G-funk groove impact',
+        ko: '펀치라인 구간의 깔끔한 비트 브레이크 후 묵직한 풀 그루브로 돌아오는 대비',
+        suno: 'clean rhythmic bar breaks spotlighting vocals before slamming back into full G-funk groove impact',
       },
     ],
   },
 
-  // NOTE: SOP-safe Cinematic OST Ballad (no strings/timpani/brass if forbidden; supports both bass-equipped lanes and stripped bassless/drumless lanes!)
   cinematic_ost: {
     label: 'Cinematic Movie OST Ballad',
     bpmPool: ['68 BPM', '72 BPM', '74 BPM', '66 BPM', '76 BPM', '70 BPM'],
     keyColors: ['Dm9', 'Cm9', 'Am(add9)', 'Gm9', 'Bbmaj7', 'Em9'],
     bassOptions: [
       {
-        ko: '절제된 딥 서브 베이스/업라이트 베이스가 4마디마다 전위와 선율을 바꾸는 독립 저음 리프',
-        suno: '4-bar evolving warm upright bass or deep sub-bass counter-melody shifting inversions organically beneath sparse chords',
+        ko: '절제된 딥 서브/업라이트 베이스가 펠트 피아노와 함께 서정적 저역을 받치는 편성',
+        suno: 'warm restrained upright bass or clean sub-bass supporting emotional felt piano chords smoothly',
       },
       {
-        ko: '베이스 악기 없이 펠트 피아노 왼손·어쿠스틱 저음현 공명으로 저역을 채우는 독립 반주',
-        suno: 'bassless warm felt-piano left-hand open-fifth resonance and 4-bar evolving lower-register counter-voice',
+        ko: '베이스 악기 없이 펠트 피아노 왼손 공명으로 따뜻하게 저역을 채우는 독립 반주',
+        suno: 'warm felt-piano left-hand open-fifth resonance and melodic lower-register arpeggios without bass instrument',
       },
     ],
     drumOptions: [
       {
-        ko: '후렴에서만 부드럽게 합류하는 브러쉬/미니멀 펄스의 변칙 위치와 프레이즈 호흡',
-        suno: 'restrained brushed kit or soft programmed pulse entering late in chorus with behind-the-beat rhythmic phrasing',
+        ko: '후렴에서 부드럽게 합류해 감정을 받쳐주는 절제된 브러쉬/시네마틱 펄스',
+        suno: 'restrained warm brushed pulse entering gently in chorus to lift emotional momentum smoothly',
       },
       {
-        ko: '드럼 비트를 비운 루바토 호흡과 반주 아르페지오의 강약 악센트 이동',
-        suno: 'drumless intimate rubato phrasing led by expressive acoustic guitar or felt-piano rhythmic weight shifts',
+        ko: '드럼 없이 보컬과 피아노 선율이 자연스럽게 숨 쉬며 흐르는 서정적 루바토 펄스',
+        suno: 'drumless expressive ballad accompaniment flowing seamlessly with the lead vocal melody',
       },
     ],
     hihatOptions: [
       {
-        ko: '최종 후렴 직전 1박 정적(Silence Drop)과 여백의 호흡 설계',
-        suno: 'intentional 1-beat near-silence contrast pause before final chorus and spacious vocal-breath rests',
+        ko: '과도한 퍼커션을 비우고 보컬 숨결과 선율 여운을 극대화한 공간 설계',
+        suno: 'spacious vocal breath intervals and warm natural hall decay replacing busy hi-hat ticks',
       },
     ],
     interactionOptions: [
       {
-        ko: '피아노/클린 기타와 보컬 적층 화음이 2마디 여백에서 주고받는 영화적 문답',
-        suno: 'intimate call-and-response dialogue between felt piano or fingerpicked guitar fills and stacked vocal harmonies inside breath gaps',
+        ko: '피아노/어쿠스틱 기타 아르페지오가 보컬 프레이즈 끝을 감싸는 영화적 문답',
+        suno: 'delicate felt piano or fingerpicked acoustic guitar fills answering tenderly between vocal lines',
       },
     ],
     harmonyOptions: [
       {
-        ko: '영화음악 특유의 서스펜디드 add9·반음계 위장종지(Deceptive Cadence) 및 클라이맥스 키 리프트',
-        suno: 'evocative film-ballad harmonic twists using add9 suspensions, deceptive cadences, and poignant final-chorus key lift',
+        ko: '서정적인 add9·메이저7th 진행과 가슴에 와닿는 서사적 코러스 멜로디',
+        suno: 'poignant film-ballad add9 and maj7 chord progressions carrying a deeply memorable vocal melody',
       },
     ],
     vocalPhrasingOptions: [
       {
-        ko: '속삭이는 근접 독백에서 균열(Crack)·헤드보이스·폭발적 서스테인으로 열리는 서사 프레이징',
-        suno: 'close-mic breathy hush in verses building through vulnerable voice crack to soaring open-vowel sustained climax notes',
+        ko: '친밀하게 속삭이는 1절에서 힘차고 맑게 뻗어 오르는 후렴의 서사적 보컬',
+        suno: 'intimate clear close-mic storytelling verse building smoothly into a soaring pitch-true emotional chorus belt',
       },
     ],
     dynamicOptions: [
       {
-        ko: '단독 피아노/기타 정적(1절) → 1박 무음 대비(브릿지 끝) → 풀 보컬 레이어 절정 다이내믹',
-        suno: 'dramatic dynamic arc from exposed bare-instrument verse through 1-beat contrast drop into stacked vocal finale',
+        ko: '담백한 단독 피아노 도입에서 점진적 크레센도로 감동이 터지는 시네마틱 전개',
+        suno: 'gradual heartfelt dynamic swell from bare intimate verse to full emotional final chorus climax',
       },
     ],
   },
 
-  // Dedicated Ballad Archetype (Piano / Acoustic / Classic Korean/English Ballads — naturally supports NO BASS & NO DRUMS!)
   ballad_intimate: {
     label: 'Intimate Ballad / Piano & Acoustic Vocal-Led',
     bpmPool: ['66 BPM', '70 BPM', '72 BPM', '64 BPM', '74 BPM', '68 BPM'],
     keyColors: ['Abmaj7', 'Fmaj9', 'Ebmaj7', 'C#m9', 'Bbmaj9', 'Dmaj9'],
     bassOptions: [
       {
-        ko: '베이스 악기 없이 피아노 왼손 옥타브·대선율 모티프가 4마디마다 변주되는 저역 설계',
-        suno: '4-bar evolving piano left-hand counter-melody and rich low-register open-fifth voicing without dedicated bass guitar',
+        ko: '베이스 악기 없이 피아노 왼손 옥타브·대선율 아르페지오로 채운 따뜻한 저역',
+        suno: 'warm piano left-hand arpeggio and rich lower-register voicings carrying low-end warmth without bass guitar',
       },
       {
-        ko: '어쿠스틱/나일론 기타 엄지 저음현이 4마디마다 선율을 바꾸며 보컬과 대위적으로 호흡',
-        suno: 'independent 4-bar fingerpicked nylon/steel thumb-bass arpeggio moving counter-melodically beneath vocal line',
+        ko: '어쿠스틱 기타 엄지 저음현 아르페지오가 보컬 선율을 받쳐주는 섬세한 반주',
+        suno: 'gentle fingerpicked acoustic thumb-bass arpeggio moving musically beneath the lead vocal',
       },
     ],
     drumOptions: [
       {
-        ko: '드럼 없는 자연 루바토 템포 밀당과 반주 코드 타건의 강약 변주',
-        suno: 'drumless expressive rubato timing gently pulling ahead and behind vocal phrases with nuanced accompaniment weight',
-      },
-      {
-        ko: '타악 없이 아르페지오 밀도와 서스테인 페달 울림으로 만드는 감성 리듬 포켓',
-        suno: 'organic percussion-free ballad flow shaped by asymmetric 4-bar arpeggio density and warm pedal bloom',
+        ko: '드럼 없이 보컬의 자연스러운 호흡과 피아노 강약을 따라가는 서정적 템포',
+        suno: 'drumless intimate ballad tempo following natural vocal phrasing and tender piano dynamics',
       },
     ],
     hihatOptions: [
       {
-        ko: '절과 후렴 경계·감정 절정 직전에 놓인 의도적 1박 침묵과 숨결 여백',
-        suno: 'deliberate 1-beat vocal breath rests and hushed pre-chorus silence pauses replacing steady percussive ticks',
+        ko: '퍼커션 없이 보컬 프레이즈 끝의 정갈한 숨결 여백으로 여운을 남기는 설계',
+        suno: 'natural unhurried vocal breath spaces and soft sustained room resonance without hi-hats',
       },
     ],
     interactionOptions: [
       {
-        ko: '보컬 프레이즈가 쉬는 마디 끝을 채우는 피아노/기타의 섬세한 콜앤리스폰스 필인',
-        suno: 'delicate call-and-response where solo piano motifs or acoustic guitar chimes answer strictly inside vocal pauses',
+        ko: '보컬 프레이즈 사이 여백을 피아노/기타 선율 필인이 섬세하게 잇는 문답',
+        suno: 'tender piano motifs and acoustic guitar fills answering gracefully inside vocal pauses',
       },
     ],
     harmonyOptions: [
       {
-        ko: '전통적 4코드 루프를 피한 add9·분수 코드 전위와 예상치 못한 서브도미넌트 마이너 전환',
-        suno: 'expressive slash-chord lower-register voice leading, add9 voicings, and bittersweet minor-iv harmonic turns',
+        ko: '부드러운 add9·분수 코드 전위와 선명하고 애절한 코러스 멜로디 라인',
+        suno: 'warm slash-chord voice leading and add9 voicings supporting an unforgettable, singable ballad chorus melody',
       },
     ],
     vocalPhrasingOptions: [
       {
-        ko: '가까이 속삭이는 인티메이트 오프닝에서 후렴의 짙은 흉성·가성 전환까지 입체적 프레이징',
-        suno: 'intimate close-mic behind-the-beat conversational verses rising into emotionally trembling chest-to-falsetto chorus phrasing',
+        ko: '가까이 말하는 듯한 1절과 맑고 호소력 짙게 뻗는 후렴의 자연스러운 음색 전환',
+        suno: 'warm intimate close-mic verse delivery rising smoothly into emotionally resonant pitch-true chorus singing',
       },
     ],
     dynamicOptions: [
       {
-        ko: '숨소리만 들리는 극미니멀 1절에서 클라이맥스 1박 정적 후 터지는 감정 폭발 아크',
-        suno: 'wide emotional dynamic arc from whisper-quiet exposed verse to 1-beat stripped pause before full vocal release',
+        ko: '속삭이듯 잔잔한 도입에서 진심이 폭발하는 마지막 후렴까지의 자연스러운 감정 아크',
+        suno: 'organic emotional dynamic swell from whisper-quiet verse to heartfelt resonant chorus peak',
       },
     ],
   },
@@ -573,48 +587,48 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
     keyColors: ['Gmaj7', 'Dmaj9', 'Amaj7', 'Cmaj9', 'Fmaj7', 'Em9'],
     bassOptions: [
       {
-        ko: '어쿠스틱 기타 저음현과 별개로 4마디마다 멜로디를 그리는 따뜻한 우드 베이스 리프',
-        suno: '4-bar evolving warm melodic acoustic upright/P-bass line moving independently of guitar root strums',
+        ko: '어쿠스틱 기타와 조화롭게 어우러지는 따뜻하고 멜로딕한 우드 베이스 라인',
+        suno: 'warm round acoustic upright or P-bass line moving melodically alongside bright acoustic guitar strums',
       },
       {
-        ko: '베이스 없이 핑거스타일 어쿠스틱 기타의 얼터네이팅 저음현 모티프로 리듬과 저역 동시 견인',
-        suno: 'bassless warm fingerpicked acoustic guitar alternating thumb-bass counter-motif shifting every 4 bars',
+        ko: '베이스 없이 핑거스타일 어쿠스틱 기타의 따뜻한 저음현 패턴으로 채운 편성',
+        suno: 'warm bassless fingerpicked acoustic guitar alternating thumb-bass pattern carrying both groove and harmony',
       },
     ],
     drumOptions: [
       {
-        ko: '정박 스네어 대신 우드 림클릭·브러쉬 킥 위치 변주로 살린 아기자기한 포켓',
-        suno: 'organic brushed kit with displaced soft kick syncopations and warm wood rim-clicks off standard backbeat',
+        ko: '부드러운 우드 림클릭과 포근한 브러쉬 스네어가 중심을 잡는 산뜻한 포켓',
+        suno: 'organic brushed drum kit and soft wood rim-click pocket keeping a sunny relaxed indie bounce',
       },
     ],
     hihatOptions: [
       {
-        ko: '불규칙 셰이커 강약과 의도적인 8분음표 쉼표로 숨 쉬는 어쿠스틱 그루브',
-        suno: 'playful irregular shaker and soft hi-hat accents with breezy eighth-note breathing rests',
+        ko: '산뜻한 셰이커 질감과 자연스러운 어쿠스틱 리듬 호흡',
+        suno: 'warm natural shaker groove and light brushed hats blending cleanly with acoustic strings',
       },
     ],
     interactionOptions: [
       {
-        ko: '핑거피킹 어쿠스틱 기타와 웜 우를리처/벨 키보드가 여백을 주고받으며 채우는 대화',
-        suno: 'conversational interplay between fingerpicked nylon/steel acoustic guitar, warm Wurlitzer fills, and harmonic spaces',
+        ko: '핑거피킹 어쿠스틱 기타와 따뜻한 건반 필인이 보컬과 어우러지는 포근한 편곡',
+        suno: 'interplay between warm fingerpicked acoustic guitar, soft Wurlitzer chords, and bright vocal harmonies',
       },
     ],
     harmonyOptions: [
       {
-        ko: '개방현 텐션과 재즈풍 7th/9th 보이싱이 섞인 산뜻한 인디 화성',
-        suno: 'open-string resonant add9 and warm maj7 indie chord inversions with sunlit harmonic turns',
+        ko: '개방현의 맑은 울림과 메이저7th/add9 화음이 만든 기분 좋은 멜로디',
+        suno: 'sunlit maj7 and open-string add9 acoustic chord progressions with a catchy hum-worthy melody',
       },
     ],
     vocalPhrasingOptions: [
       {
-        ko: '미소 짓듯 가볍고 자연스럽게 엇박을 타는 내추럴 보컬 프레이징',
-        suno: 'warm intimate storytelling vocal phrasing with natural off-beat conversational inflection',
+        ko: '미소 짓듯 편안하고 자연스러운 스토리텔링 보컬 프레이징',
+        suno: 'warm conversational acoustic vocal phrasing with clear natural pitch and charming lightness',
       },
     ],
     dynamicOptions: [
       {
-        ko: '친밀한 어쿠스틱 도입에서 하모니가 겹쳐지는 다채로운 후렴 다이내믹',
-        suno: 'cozy close-mic verse opening gracefully into warm multi-layered harmony chorus lift',
+        ko: '친밀한 어쿠스틱 도입에서 다정한 코러스 하모니가 겹쳐지는 포근한 전개',
+        suno: 'cozy intimate acoustic verse blossoming smoothly into warm layered chorus harmonies',
       },
     ],
   },
@@ -625,48 +639,48 @@ const ARCHETYPE_POOLS: Record<MusicArchetype, ArchetypePool> = {
     keyColors: ['Fmaj9', 'Dm9', 'Amaj9', 'Cm9', 'Ebmaj9', 'Gm9'],
     bassOptions: [
       {
-        ko: '4마디 단위로 선율과 리듬이 변주되는 기억에 남는 독립 베이스 리프',
-        suno: '4-bar evolving independent melodic bass hook with distinct bar-4 turnaround rather than static root notes',
+        ko: '장르 리듬에 정확히 맞물려 멜로디와 그루브를 받쳐주는 따뜻한 독립 베이스 라인',
+        suno: 'warm locked melodic bassline anchoring the groove with clean bar-4 harmonic turnarounds',
       },
       {
-        ko: '보컬과 메인 악기 사이를 유영하는 대위적 4마디 베이스 모티프',
-        suno: 'independent contrapuntal melodic bassline shifting rhythmic motif every 4 bars',
+        ko: '보컬과 메인 악기를 안정적으로 받쳐주는 탄탄한 포켓 베이스 그루브',
+        suno: 'clean punchy bass groove supporting the vocal hook and chord changes naturally',
       },
     ],
     drumOptions: [
       {
-        ko: '정형화된 1·3박 백비트를 비튼 싱코페이션 킥 위치 변주와 고스트 스네어',
-        suno: 'displaced syncopated kick placements breaking straight backbeat feel, crisp snare ghost notes',
+        ko: '장르 본연의 백비트가 흔들리지 않고 탄력 있게 살아있는 락인(Locked-in) 드럼 포켓',
+        suno: 'locked-in steady drum pocket with crisp backbeat snare and tasteful organic fills',
       },
     ],
     hihatOptions: [
       {
-        ko: '불규칙한 하이햇 악센트와 의도적인 박자 쉼표를 결합한 입체적 퍼커션',
-        suno: 'irregular hi-hat accents and intentional rhythmic rests creating breathable pocket tension',
+        ko: '과하지 않고 선명한 하이햇 밸런스와 자연스러운 프레이즈 호흡',
+        suno: 'balanced crisp hi-hats and natural groove breathing space supporting vocal clarity',
       },
     ],
     interactionOptions: [
       {
-        ko: '주 악기/건반/기타가 저역과 다른 박자 위치에서 주고받는 콜앤리스폰스 상호작용',
-        suno: 'distinct call-and-response interaction where keys/guitar answer inside rhythmic gaps left by the vocal and low register',
+        ko: '메인 건반·기타 리프가 보컬 여백 사이에서 조화롭게 주고받는 세련된 편곡',
+        suno: 'clean guitar and keyboard fills answering tastefully in spaces around the lead vocal',
       },
     ],
     harmonyOptions: [
       {
-        ko: '세련된 9화음 텐션과 비정형 코드 턴어라운드로 뻔한 진행 탈피',
-        suno: 'non-repetitive rich 9th chord extensions and unexpected pre-chorus harmonic lift',
+        ko: '세련된 9화음 색채와 귀에 쏙 들어오는 선명한 코러스 멜로디 훅',
+        suno: 'warm 9th chord extensions supporting a clear, memorable, singable chorus melody hook',
       },
     ],
     vocalPhrasingOptions: [
       {
-        ko: '프레이즈마다 호흡과 박자 감각을 달리하는 생동감 있는 보컬 프레이징',
-        suno: 'dynamic conversational vocal phrasing balancing tight syncopation with expressive sustained notes',
+        ko: '음정이 안정적이고 감정 전달이 선명한 자연스러운 보컬 프레이징',
+        suno: 'natural pitch-accurate expressive vocal phrasing with clear diction and memorable hook delivery',
       },
     ],
     dynamicOptions: [
       {
-        ko: '섹션별 악기 밀도 대비와 브레이크가 살아있는 안정적이고 극적인 다이내믹',
-        suno: 'clear dynamic contrast between sparse rhythmic verse pockets and full-spectrum textured chorus climax',
+        ko: '섹션별 악기 밀도와 감정이 매끄럽게 고조되는 완성도 높은 다이내믹 아크',
+        suno: 'balanced dynamic build from clean verse pocket to rich expansive chorus climax',
       },
     ],
   },
@@ -741,7 +755,7 @@ function isTagCompatibleWithConstraints(text: string, c: SopArrangementConstrain
   if (c.forbidsStrings && /\b(cello|contrabass|violin|viola|string\s*section|soaring\s*strings)\b/.test(l)) return false;
   if (c.forbidsBrass && /\b(brass|trumpet|clarinet|horn)\b/.test(l)) return false;
   if (c.forbidsTimpani && /\b(timpani|floor-?tom)\b/.test(l)) return false;
-  if (c.forbidsBass && /\b(sub-?bass|808|bassline|bass\s*riff|bass\s*hook|upright\s*bass|p-bass|synth\s*bass|moog\s*sub)\b/.test(l)) return false;
+  if (c.forbidsBass && /\b(sub-?bass|808|bassline|bass\s*riff|bass\s*hook|upright\s*bass|p-bass|precision\s*bass|synth\s*bass|moog\s*sub)\b/.test(l)) return false;
   if (c.forbidsDrums && /\b(kick|snare|drum|rimshot|brushed\s*kit|percussion|boom-?bap|trap\s*kick)\b/.test(l)) return false;
   if (c.forbidsHihat && /\b(hi-?hat|shaker|ride\s*cymbal)\b/.test(l)) return false;
   return true;
@@ -765,6 +779,15 @@ export function detectMusicArchetype(
     .replace(/제외[^\n\r]*/g, '');
 
   const titleAndCat = `${theme.name || ''} ${theme.category || ''}`.toLowerCase();
+
+  // Check 1970s Soul / Funk / Motown / Disco Funk cleanly before 1940s-50s or generic custom
+  if (
+    /\b(1970|1970s|70s|70's|soul\s*funk|vintage\s*soul|motown|disco\s*funk|neo-?soul|boogie)\b/i.test(titleAndCat) ||
+    /\b(1970s|70's\s*vintage\s*soul|soul\s*funk|clavinet|motown\s*groove)\b/i.test(combined) ||
+    /소울\s*펑크|70년대/.test(combined)
+  ) {
+    return 'vintage_soul_funk';
+  }
 
   if (sopSpecs.isShellacVintage || /\b(1940|1950|shellac|phonograph|vintage\s*pop|78\s*rpm)\b/i.test(combined)) {
     return 'vintage_1940s_50s';
@@ -837,11 +860,10 @@ export function generateTrackInnovationPlans(
     let hasHihat = !constraints.forbidsHihat && hasDrums;
 
     if (constraints.isStrippedSoloSetting) {
-      hasBass = !constraints.forbidsBass && false;
+      hasBass = false;
       hasDrums = false;
       hasHihat = false;
     } else if (archetype === 'ballad_intimate') {
-      // Ballad playlist: rotate naturally between pure stripped piano/guitar (no bass/drums), drumless upright/felt warmth, and late-bloom rhythm ballads
       const pattern = (baseSeed + i) % 3;
       if (pattern === 0) {
         hasBass = false;
@@ -853,7 +875,6 @@ export function generateTrackInnovationPlans(
         hasHihat = false;
       }
     } else if (archetype === 'cinematic_ost') {
-      // Respect THEME_014023 8-lane diversity: some lanes (Lane 3 Raw Folk-Acoustic / Lane 8 Storybook Piano) omit bass/drums, others include restrained sub-bass/brushed pulse!
       const pattern = (baseSeed + i) % 3;
       if (pattern === 0) {
         hasBass = false;
@@ -862,10 +883,9 @@ export function generateTrackInnovationPlans(
       } else if (pattern === 1) {
         hasBass = !constraints.forbidsBass;
         hasDrums = !constraints.forbidsDrums;
-        hasHihat = false; // ballads don't force hi-hat ticks unless needed
+        hasHihat = false;
       }
     } else if (archetype === 'acoustic_indie' && i % 2 === 1 && !/upright bass|drum/i.test(`${theme.name || ''}`)) {
-      // Mix unplugged bassless fingerstyle tracks into acoustic indie sets
       hasBass = false;
       hasDrums = false;
       hasHihat = false;
@@ -889,7 +909,7 @@ export function generateTrackInnovationPlans(
         ? '베이스리스 리듬 편성 (타악·코드 중심)'
         : '풀 리듬 섹션 편성';
 
-    // Filter pools by SOP constraints to NEVER emit forbidden instruments (e.g. cello/strings/timpani in OST Ballad)
+    // Filter pools by SOP constraints to NEVER emit forbidden instruments
     const validBassPool = hasBass
       ? pool.bassOptions.filter((o) => isTagCompatibleWithConstraints(o.suno, constraints))
       : BASSLESS_LEFT_HAND_POOL;
@@ -911,8 +931,8 @@ export function generateTrackInnovationPlans(
         ? validInteractionPool
         : [
             {
-              ko: '피아노/어쿠스틱 기타 선율 필인이 보컬 여백 사이에서 주고받는 섬세한 문답',
-              suno: 'delicate piano or clean acoustic guitar melodic fills answering strictly inside vocal breath spaces',
+              ko: '피아노/어쿠스틱 기타 선율 필인이 보컬 여백 사이에서 조화롭게 응답하는 문답',
+              suno: 'delicate piano or clean acoustic guitar fills answering tastefully between vocal lines',
             },
           ];
 
@@ -924,8 +944,8 @@ export function generateTrackInnovationPlans(
     const vocalPhrasing =
       vocal === 'none'
         ? {
-            ko: '보컬 없는 인스트루멘털 리드 멜로디의 프레이징 호흡 및 선율 변주',
-            suno: 'expressive instrumental lead phrasing with conversational call-and-response motifs (no vocals)',
+            ko: '보컬 없는 인스트루멘털 리드 멜로디의 자연스러운 호흡 및 선율 변주',
+            suno: 'expressive instrumental lead melody with clear lyrical phrasing (no vocals)',
           }
         : pool.vocalPhrasingOptions[(baseSeed + i * 3 + 1) % pool.vocalPhrasingOptions.length];
     const dynamic = pool.dynamicOptions[(baseSeed + i) % pool.dynamicOptions.length];
@@ -957,8 +977,8 @@ export function generateTrackInnovationPlans(
       vocalPhrasingSuno: vocalPhrasing.suno,
       dynamicKo: dynamic.ko,
       dynamicSuno: dynamic.suno,
-      verseGuideHint: `${bass.suno.split(',')[0]}, ${drum.suno.split(',')[0]}`,
-      chorusGuideHint: `${interaction.suno.split(',')[0]}, ${dynamic.suno.split(',')[0]}`,
+      verseGuideHint: `${vocalPhrasing.suno.split(',')[0]}, ${bass.suno.split(',')[0]}`,
+      chorusGuideHint: `catchy memorable hook, ${interaction.suno.split(',')[0]}`,
       bridgeGuideHint: `stripped arrangement, ${harmony.suno.split(',')[0]}`,
     });
   }
@@ -970,23 +990,23 @@ export function formatInnovationPromptSection(plans: InnovationPlan[]): string {
   if (plans.length === 0) return '';
   const blocks = plans.map((p) => {
     const bassTitle = p.hasBass
-      ? 'Independent Bass Riff'
-      : 'Low-Register Left-Hand / Accompaniment Counter-Motif (NO dedicated bass instrument)';
+      ? 'Melodic Bass Pocket'
+      : 'Low-Register Left-Hand Accompaniment (NO dedicated bass instrument)';
     const drumTitle = p.hasDrums
-      ? 'Displaced Drum Groove'
-      : 'Organic Rubato / Chordal Pulse (NO drums)';
+      ? 'Locked Rhythm Pocket'
+      : 'Natural Flow Accompaniment (NO drums)';
     const hihatTitle = p.hasHihat
-      ? 'Hi-Hat / Percussion Rests'
-      : 'Intentional Silence & Breath Air-Pockets (NO hi-hat)';
+      ? 'Hi-Hat & Percussion Texture'
+      : 'Clean Breathing Space (NO hi-hat)';
 
-    return `Track ${p.trackNumber} Unique Musical DNA [${p.arrangementLabel}] (${p.bpmSuggestion}, Harmonic Color: ${p.keyColor}):
+    return `Track ${p.trackNumber} Musical Character [${p.arrangementLabel}] (${p.bpmSuggestion}, Key Color: ${p.keyColor}):
   - ${bassTitle}: ${p.bassSuno}
   - ${drumTitle}: ${p.drumSuno}
   - ${hihatTitle}: ${p.hihatSuno}
-  - Accompaniment Call-and-Response: ${p.interactionSuno}
-  - Harmonic / Melodic Freshness: ${p.harmonySuno}
-  - Vocal / Lead Phrasing: ${p.vocalPhrasingSuno}
-  - Dynamic Arc Contrast: ${p.dynamicSuno}`;
+  - Instrument Interplay: ${p.interactionSuno}
+  - Catchy Harmony & Melody: ${p.harmonySuno}
+  - Vocal Clarity & Phrasing: ${p.vocalPhrasingSuno}
+  - Dynamic Lift: ${p.dynamicSuno}`;
   });
 
   const c = plans[0].constraints;
@@ -998,26 +1018,16 @@ export function formatInnovationPromptSection(plans: InnovationPlan[]): string {
     exclusionReminders.push('STRICT SOP RESPECT: This theme omits bass instruments — NEVER add bass guitar, 808, or sub-bass; achieve low-end warmth via piano left-hand voicings or acoustic guitar lower strings.');
   }
   if (c.forbidsDrums) {
-    exclusionReminders.push('STRICT SOP RESPECT: This theme omits drums — NEVER add drum kits, kick, snare, or hi-hats; achieve rhythmic freshness through rubato phrasing, accompaniment motif evolution, and intentional silence rests.');
+    exclusionReminders.push('STRICT SOP RESPECT: This theme omits drums — NEVER add drum kits, kick, snare, or hi-hats.');
   }
 
   return `
 ================================================================================
-ANTI-HOMOGENIZATION MUSICAL INNOVATION MATRIX (테마 맞춤 탈정형 사운드 설계)
+THEME-FAITHFUL MELODIC & GROOVE VARIETY MATRIX (테마 맞춤 멜로디·보컬 안정화 사운드 설계)
 ================================================================================
-To prevent Suno AI from generating repetitive, generic melodies, predictable harmonies, or flat rhythms across dozens of songs, EVERY track MUST embed its assigned Unique Musical DNA below into BOTH its 750–950 char "stylePrompt" AND its [Section: Guide] cues inside "fullLyrics" (strictly respecting "${plans[0].archetypeLabel}" instrumentation and NEVER forcing instruments omitted by the genre/ballad lane or SOP):
+Give each track distinct musical color while strictly protecting rhythmic stability, pitch accuracy, and a memorable singable melody (NEVER use jarring timing terms like "ahead-of-beat", "behind-the-beat", "breaking 4/4", "off-grid", "irregular", or "voice crack" that cause Suno to sing out of tune or off time!):
 ${exclusionReminders.length > 0 ? '\n' + exclusionReminders.map((r) => `- ${r}`).join('\n') + '\n' : ''}
-${blocks.join('\n\n')}
-
-PRE-OUTPUT 7-AXIS THEME-AWARE SELF-CRITIQUE REQUIREMENT:
-Before finalizing JSON, audit EVERY track against its genre-appropriate 7 criteria (adapting naturally when a ballad/minimal track intentionally has NO bass or NO drums):
-1. Overall Groove / Flow: Cohesive, non-mechanical pocket or organic rubato breathing flow
-2. Low-End / Register Presence: Clear low-end bass presence OR rich piano left-hand / acoustic thumb-bass low-register resonance (never muddy)
-3. Independent Motif: 4-bar evolving melodic bass riff (if bass exists) OR 4-bar evolving left-hand/arpeggio counter-motif (if bassless ballad — NEVER static block chords)
-4. Syncopation & Intentional Silence: Displaced kicks & irregular hi-hat rests (if drums exist) OR rubato timing pulls, syncopated phrasing & 1-beat silence drops (if drumless ballad)
-5. Call & Response Interplay: Keys/guitar/vocals answering inside the spaces of the primary pulse/bass/vocal phrase
-6. Vocal Phrasing: Distinct conversational/emotional timing, register shifts, and breath nuance
-7. Dynamic Arc: Clear contrast between sparse stripped sections, silence drop, and expanded climax`;
+${blocks.join('\n\n')}`;
 }
 
 function stripExcludeTail(styleLower: string): string {
@@ -1043,7 +1053,7 @@ function resolveEffectiveTrackInstrumentation(track: Partial<TrackItem>, plan: I
     plan.constraints.forbidsDrums ||
     /\b(no\s*drums?|without\s*drums?|drumless|no\s*percussion|solo\s*piano|rubato|unaccompanied)\b/i.test(bodyWithoutExclude);
 
-  const mentionsBass = /\b(bass|sub-?bass|808|contrabass|moog\s*sub|p-bass|upright\s*bass|bassline|fretless)\b/i.test(bodyWithoutExclude);
+  const mentionsBass = /\b(bass|sub-?bass|808|contrabass|moog\s*sub|p-bass|precision\s*bass|upright\s*bass|bassline|fretless|double\s*bass)\b/i.test(bodyWithoutExclude);
   const mentionsDrums = /\b(drum|drums|kick|snare|rimshot|brushed\s*kit|beat|percussion|boom-?bap|trap)\b/i.test(bodyWithoutExclude);
   const mentionsHihat = /\b(hi-?hat|cymbal|shaker|ride)\b/i.test(bodyWithoutExclude);
 
@@ -1099,24 +1109,24 @@ export function evaluateTrackMusicalCraft(
   const { usesBass, usesDrums, usesHihat, modeLabel } = resolveEffectiveTrackInstrumentation(track, plan);
 
   const hasGrooveOrFlow = usesDrums
-    ? /(groove|pocket|swing|bounce|rhythm|laid-?back|tight|organic|driving|pulse)/i.test(combined)
-    : /(rubato|flow|breathing|organic|lyricism|phrase|sway|unhurried|pulse|swell|intimate)/i.test(combined);
+    ? /(groove|pocket|swing|bounce|rhythm|laid-?back|tight|locked|organic|driving|pulse|snare|kick)/i.test(combined)
+    : /(flow|breathing|organic|lyricism|phrase|sway|unhurried|pulse|swell|intimate|rubato|accompaniment)/i.test(combined);
 
   const hasBassPresence = usesBass
-    ? /(bass|sub-?bass|808|low-?end|moog|p-bass|upright bass|fretless)/i.test(styleBody)
+    ? /(bass|sub-?bass|808|low-?end|moog|p-bass|precision bass|upright bass|double bass|fretless)/i.test(styleBody)
     : /(left-?hand|low-?register|lower-?register|lower-?string|open-?fifth|octave|felt piano|felt-piano|acoustic piano|nylon|fingerpick|thumb|warm low|pedal|resonance|voicing)/i.test(styleBody);
 
   const hasIndependentMotif = usesBass
-    ? /(4-bar|evolving|independent|melodic bass|counter-?melod|octave pop|turnaround|walking line|pitch-?glide|contrapuntal|bass riff|bass hook)/i.test(styleBody)
-    : /(4-bar|evolving|independent|counter-?melod|counter-?line|arpeggio|voicing|passing-?tone|fingerpick|turnaround|slash-?chord|motif)/i.test(styleBody);
+    ? /(melodic|groove|pocket|turnaround|walking|pitch-?glide|octave|counter|syncopat|hook|bassline|riff|4-bar|bounce)/i.test(styleBody)
+    : /(arpeggio|voicing|counter|fingerpick|turnaround|inversion|resonance|motif|chord)/i.test(styleBody);
 
   const hasSyncopationOrSpace = usesDrums
-    ? /(displaced|syncopat|off-?beat|anticipating|broken-?pocket|irregular|intentional.*rest|air-?pocket|ghost|backbeat|double-?tap|rubato|asymmetric)/i.test(styleBody)
-    : /(rubato|behind-the-beat|ahead-of-beat|silence|pause|breath|rest|syncopat|asymmetric|fermata|air-?pocket|1-beat|stripped|drop)/i.test(combined);
+    ? /(syncopat|pocket|swing|ghost|backbeat|bounce|groove|fill|open-?hat|shaker|rimshot|tight)/i.test(styleBody)
+    : /(breath|space|pause|flow|phrasing|arpeggio|swell|intimate|decay|dynamics)/i.test(combined);
 
-  const hasInteraction = /(call-and-response|interlock|answer|dialogue|interplay|counter-?line|trading|rhythmic gaps|spaces left by|fill|vocal pauses|breath gaps)/i.test(combined);
-  const hasVocalPhrasing = /(phrasing|cadence|behind-the-beat|ahead-of-beat|syncopated.*vocal|conversational|falsetto|chest voice|breath|whisper|ad-lib|lead phrasing|crack|vibrato|sustain|belt|hush)/i.test(combined);
-  const hasDynamic = /(dynamic|crescendo|climax|stripped|dropout|pause|silence|contrast|bloom|swell|wide.*chorus|intimate.*verse|bridge|escalation|release)/i.test(combined);
+  const hasInteraction = /(guitar|rhodes|clavinet|keys|piano|horn|brass|chops|fills|comping|answer|interplay|dialogue|chords|pad|vocal)/i.test(styleBody);
+  const hasVocalPhrasing = /(vocal|phrasing|delivery|tone|falsetto|chest|breath|vibrato|belt|singing|hook|melody|pitch)/i.test(combined);
+  const hasDynamic = /(dynamic|crescendo|climax|stripped|contrast|lift|swell|chorus|verse|bridge|warm|build|opening)/i.test(combined);
 
   // Check similarity against sibling tracks in the same playlist
   const myTokens = new Set(styleBody.split(/[^a-z0-9-]+/).filter((w) => w.length > 3));
@@ -1137,72 +1147,60 @@ export function evaluateTrackMusicalCraft(
   const criteria: CraftAuditCriterion[] = [
     {
       item: usesDrums ? '전체 그루브' : '전체 호흡 및 흐름',
-      result: hasGrooveOrFlow && maxOverlap < 0.78 ? '우수' : hasGrooveOrFlow ? '양호' : '보통',
+      result: hasGrooveOrFlow && maxOverlap < 0.85 ? '우수' : hasGrooveOrFlow ? '양호' : '보통',
       judgment: hasGrooveOrFlow
         ? usesDrums
-          ? '장르 정체성에 맞춘 자연스럽고 탄력 있는 포켓 형성'
-          : '드럼 없이도 곡의 호흡과 서정적 템포 흐름이 매끄럽게 유지됨'
-        : usesDrums
-        ? '리듬 포켓 및 그루브 결속 키워드 보강 필요'
-        : '루바토 호흡 및 자연스러운 프레이즈 흐름 디렉션 보강 필요',
+          ? '테마 정체성에 맞춘 안정적이고 탄력 있는 리듬 포켓 형성'
+          : '드럼 없이도 곡의 호흡과 서정적 흐름이 매끄럽게 유지됨'
+        : '리듬 포켓 및 흐름 키워드 보강 권장',
     },
     {
       item: usesBass ? '베이스 존재감' : '저음역 공명 (베이스리스)',
       result: hasBassPresence ? '우수' : '미흡',
       judgment: hasBassPresence
         ? usesBass
-          ? '저음역 질감과 베이스 악기 정체성이 선명하게 정의됨'
-          : '별도 베이스 악기 없이 피아노 왼손/기타 저음현 공명으로 저역 균형 확보'
-        : usesBass
-        ? '저음 악기 및 베이스 톤 디렉션 부족'
-        : '베이스 없는 편성에서 피아노 왼손/기타 저역 보이싱 명세 보강 필요',
+          ? '저음역 질감과 베이스 정체성이 선명하게 정의됨'
+          : '피아노 왼손/기타 저음현 공명으로 저역 균형 확보'
+        : '저음역 악기 및 톤 디렉션 보강 필요',
     },
     {
-      item: usesBass ? '독립적인 베이스 리프' : '왼손·반주 독립 모티프',
-      result: hasIndependentMotif ? '우수' : '미흡',
+      item: usesBass ? '베이스·리듬 결속' : '반주 선율·보이싱',
+      result: hasIndependentMotif ? '우수' : '양호',
       judgment: hasIndependentMotif
         ? usesBass
-          ? '4마디 단위 변주와 대위적 멜로디 베이스 훅 반영 완료'
-          : '단순 코드 연타가 아닌 4마디 변주 왼손/아르페지오 독립 선율 설계 완료'
-        : usesBass
-        ? '단순 루트음 위주 우려 — 기억에 남는 4마디 독립 리프 강화 필요'
-        : '뻔한 정박 코드 반주 우려 — 4마디마다 변주되는 왼손 대선율/아르페지오 필요',
+          ? '턴어라운드와 멜로디 감각이 살아있는 안정적 베이스 라인 설계'
+          : '아르페지오·보이싱 전위가 조화롭게 이어지는 반주 설계'
+        : '베이스·반주 선율 디렉션 보강 가능',
     },
     {
-      item: usesDrums ? '싱코페이션' : '프레이징 여백·밀당',
-      result: hasSyncopationOrSpace ? '우수' : '보통',
+      item: usesDrums ? '포켓·바운스 감각' : '프레이징 여백',
+      result: hasSyncopationOrSpace ? '우수' : '양호',
       judgment: hasSyncopationOrSpace
         ? usesDrums
-          ? '킥 위치 이동 및 불규칙 하이햇·의도적 쉼표로 정형 백비트 탈피'
-          : '루바토 박자 밀당과 의도적 1박 침묵·숨결 여백으로 기계적 정박 탈피'
-        : usesDrums
-        ? '리듬적 변화는 있으나 강한 엇박 대비·쉼표 설계 부족'
-        : '드럼 없는 곡의 생명인 프레이즈 밀당과 1박 무음 여백 설계 보강 필요',
+          ? '백비트 중심이 흔들리지 않으면서 자연스러운 바운스와 고스트 노트 확보'
+          : '자연스러운 호흡과 여백으로 서정적 울림 극대화'
+        : '리듬 바운스 및 공간 여백 디테일 보강 가능',
     },
     {
-      item: usesBass ? '악기 간 상호작용' : '반주-보컬 문답',
-      result: hasInteraction ? '우수' : '보통',
+      item: usesBass ? '악기 간 조화' : '반주-보컬 조화',
+      result: hasInteraction ? '우수' : '양호',
       judgment: hasInteraction
-        ? usesBass
-          ? '기타·건반이 베이스 여백에서 콜앤리스폰스로 대화함'
-          : '피아노/기타 필인이 보컬 호흡 여백 사이에서 섬세하게 응답함'
-        : usesBass
-        ? '베이스와 화성 악기 간 박자 분리 및 응답 설계 뚜렷하지 않음'
-        : '보컬 휴지기에 파고드는 반주 필인/콜앤리스폰스 설계 보강 필요',
+        ? '건반·기타·브라스와 보컬이 서로 부딪히지 않고 조화롭게 어우러짐'
+        : '악기 간 밸런스 키워드 보강 가능',
     },
     {
-      item: '보컬 프레이징',
+      item: '보컬·멜로디 안정성',
       result: hasVocalPhrasing ? '우수' : '양호',
       judgment: hasVocalPhrasing
-        ? '박자 밀당과 호흡·음색 전환이 살아있는 입체적 프레이징'
-        : '보컬 리듬감 및 표현력 디테일 보강 가능',
+        ? '음정 안정성과 귀에 남는 선율미가 살아있는 보컬 프레이징 설계'
+        : '보컬 음색 및 멜로디 표현력 보강 가능',
     },
     {
       item: '전체 다이내믹',
       result: hasDynamic ? '우수' : '양호',
       judgment: hasDynamic
-        ? '절-브릿지 정적 대비-후렴 확장의 명암이 안정적으로 설계됨'
-        : '섹션 간 밀도 대비 및 브레이크 포인트 추가 권장',
+        ? '벌스-코러스-브릿지 감정선과 다이내믹 리프트가 안정적으로 설계됨'
+        : '섹션 간 다이내믹 대비 보강 가능',
     },
   ];
 
@@ -1222,10 +1220,10 @@ export function evaluateTrackMusicalCraft(
     refined: false,
     signatureLabels: {
       bass: usesBass ? '베이스' : '저음 공명/반주',
-      drum: usesDrums ? '드럼' : '리듬 호흡/밀당',
-      hihat: usesHihat ? '하이햇' : '여백·쉼표 설계',
-      interaction: usesBass ? '악기 대화' : '반주-보컬 문답',
-      vocalPhrasing: '보컬 프레이징',
+      drum: usesDrums ? '드럼' : '리듬 호흡',
+      hihat: usesHihat ? '하이햇' : '여백 설계',
+      interaction: usesBass ? '악기 조화' : '반주-보컬 조화',
+      vocalPhrasing: '보컬·멜로디',
       harmony: '화성 색채',
     },
     signatureTags: {
@@ -1240,52 +1238,70 @@ export function evaluateTrackMusicalCraft(
   };
 }
 
-function fitStylePromptLength(baseBody: string, excludeClause: string, minLen = 760, maxLen = 945): string {
-  const cleanBody = baseBody
-    .replace(/\s+/g, ' ')
-    .replace(/,\s*,+/g, ',')
-    .replace(/\s+,/g, ',')
-    .replace(/^,\s*|,\s*$/g, '')
-    .trim();
+function fitStylePromptLength(
+  originalBody: string,
+  addedParts: string[],
+  excludeClause: string,
+  minLen = 760,
+  maxLen = 945
+): string {
+  const cleanSegs = (s: string) =>
+    s
+      .replace(/\s+/g, ' ')
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+  // Protect the original SOP style tags at the front so they are NEVER trimmed away!
+  const baseParts = cleanSegs(originalBody);
+  const extraParts = addedParts.flatMap((p) => cleanSegs(p));
+  const combinedParts = [...baseParts];
+
+  for (const ep of extraParts) {
+    const joinedSoFar = combinedParts.join(', ');
+    if (excludeClause ? `${joinedSoFar}, ${excludeClause}`.length : joinedSoFar.length >= maxLen) {
+      break;
+    }
+    const candidate = `${joinedSoFar}, ${ep}`;
+    const candidateWithExclude = excludeClause ? `${candidate}, ${excludeClause}` : candidate;
+    if (candidateWithExclude.length <= maxLen) {
+      combinedParts.push(ep);
+    }
+  }
 
   const cleanExclude = excludeClause.trim();
   const joinWithExclude = (b: string) =>
     cleanExclude ? `${b.replace(/[,\s]+$/, '')}, ${cleanExclude}` : b.replace(/[,\s]+$/, '');
 
-  let result = joinWithExclude(cleanBody);
+  let workingBody = combinedParts.join(', ');
+  let result = joinWithExclude(workingBody);
 
   const enrichmentPool = [
-    'analog console headroom',
-    'clear melodic separation',
-    'tactile transient clarity',
-    'balanced mid-range warmth',
-    'natural studio room depth',
-    'polished playlist mastering',
+    'catchy memorable melody',
+    'clear pitch-true lead vocal',
+    'warm analog studio depth',
+    'balanced mid-range clarity',
+    'natural stereo panorama',
+    'polished streaming-ready master',
   ];
   let idx = 0;
-  let workingBody = cleanBody;
   while (result.length < minLen && idx < enrichmentPool.length) {
     if (!workingBody.toLowerCase().includes(enrichmentPool[idx])) {
-      workingBody = `${workingBody}, ${enrichmentPool[idx]}`;
-      result = joinWithExclude(workingBody);
+      const nextBody = `${workingBody}, ${enrichmentPool[idx]}`;
+      const nextFull = joinWithExclude(nextBody);
+      if (nextFull.length <= maxLen) {
+        workingBody = nextBody;
+        result = nextFull;
+      }
     }
     idx++;
   }
 
+  // Only trim from the END (extra additions), keeping core SOP parts intact!
   if (result.length > maxLen) {
-    const parts = workingBody.split(',').map((s) => s.trim()).filter(Boolean);
-    const keepCritical = (segment: string) =>
-      /(4-bar|evolving|independent|displaced|syncopat|irregular|rest|silence|rubato|call-and-response|interlock|vocal|bpm|phrasing|maj9|add11|add9|dorian|dynamic|contrast|shellac|phonograph|g-funk|808|rhodes|guitar|piano|bassless|drumless)/i.test(
-        segment
-      );
-
-    while (joinWithExclude(parts.join(', ')).length > maxLen && parts.length > 6) {
-      const expendableIdx = parts.findIndex((seg, pIdx) => pIdx > 1 && !keepCritical(seg));
-      if (expendableIdx !== -1) {
-        parts.splice(expendableIdx, 1);
-      } else {
-        parts.splice(2, 1);
-      }
+    const parts = cleanSegs(workingBody);
+    while (joinWithExclude(parts.join(', ')).length > maxLen && parts.length > 5) {
+      parts.pop();
     }
     result = joinWithExclude(parts.join(', '));
     if (result.length > maxLen && !cleanExclude) {
@@ -1296,22 +1312,39 @@ function fitStylePromptLength(baseBody: string, excludeClause: string, minLen = 
   return result;
 }
 
+function stripSectionPrefix(sectionName: string, rawGuide: string): string {
+  let clean = (rawGuide || '').replace(/[\[\]{}]/g, '').trim();
+  const baseName = sectionName.replace(/\s*\d+$/, '').replace(/^final\s+/i, '').trim();
+  const exactRe = new RegExp(`^${sectionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:\\-]\\s*`, 'i');
+  const baseRe = baseName
+    ? new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s*\\d+)?\\s*[:\\-]\\s*`, 'i')
+    : null;
+
+  for (let i = 0; i < 3; i++) {
+    const prev = clean;
+    clean = clean.replace(exactRe, '').trim();
+    if (baseRe) clean = clean.replace(baseRe, '').trim();
+    if (clean === prev) break;
+  }
+  return clean;
+}
+
 export function refineTrackWithCraftAudit(
   track: TrackItem,
   plan: InnovationPlan,
   siblingPrompts: string[] = []
 ): TrackItem {
   const initialAudit = evaluateTrackMusicalCraft(track, plan, siblingPrompts);
-  const needsRefinement = initialAudit.criteria.some((c) => c.result === '미흡' || c.result === '보통');
+  const needsRefinement = initialAudit.criteria.some((c) => c.result === '미흡');
 
-  if (!needsRefinement) {
+  if (!needsRefinement && (track.stylePrompt || '').length >= 700) {
     return {
       ...track,
       craftAudit: initialAudit,
     };
   }
 
-  const { usesBass, usesDrums, usesHihat } = resolveEffectiveTrackInstrumentation(track, plan);
+  const { usesBass, usesDrums } = resolveEffectiveTrackInstrumentation(track, plan);
 
   let rawStyle = (track.stylePrompt || '').trim();
   let excludeClause = '';
@@ -1324,21 +1357,18 @@ export function refineTrackWithCraftAudit(
   const additions: string[] = [];
   const lower = rawStyle.toLowerCase();
 
-  // Strictly match instrumentation reality: NEVER inject bass/drums/hihat into a bassless/drumless ballad or SOP-forbidden track!
   const effectiveBassDirective = usesBass
     ? plan.bassSuno
     : BASSLESS_LEFT_HAND_POOL[plan.trackNumber % BASSLESS_LEFT_HAND_POOL.length].suno;
   const effectiveDrumDirective = usesDrums
     ? plan.drumSuno
     : DRUMLESS_PULSE_POOL[plan.trackNumber % DRUMLESS_PULSE_POOL.length].suno;
-  const effectiveHihatDirective = usesHihat
-    ? plan.hihatSuno
-    : HIHATLESS_SPACE_POOL[plan.trackNumber % HIHATLESS_SPACE_POOL.length].suno;
 
+  // Add at most 3 gentle, melody/groove-protecting enrichments only if missing
   if (
     usesBass
-      ? !/(4-bar|evolving|independent|melodic bass|counter-?melod|octave pop|turnaround|walking line|pitch-?glide|contrapuntal)/i.test(lower)
-      : !/(4-bar|evolving|independent|counter-?melod|arpeggio|left-?hand|thumb-?bass|open-?fifth)/i.test(lower)
+      ? !/(bass|sub-?bass|808|upright|double bass)/i.test(lower)
+      : !/(left-?hand|arpeggio|lower-?register|thumb)/i.test(lower)
   ) {
     if (isTagCompatibleWithConstraints(effectiveBassDirective, plan.constraints)) {
       additions.push(effectiveBassDirective);
@@ -1347,59 +1377,35 @@ export function refineTrackWithCraftAudit(
 
   if (
     usesDrums
-      ? !/(displaced|syncopat|off-?beat|broken-?pocket|irregular|intentional.*rest|ghost)/i.test(lower)
-      : !/(rubato|behind-the-beat|silence|pause|1-beat|arpeggio syncopation|breath)/i.test(lower)
+      ? !/(drum|kick|snare|rimshot|pocket|groove)/i.test(lower)
+      : !/(drumless|natural vocal|accompaniment)/i.test(lower)
   ) {
     if (isTagCompatibleWithConstraints(effectiveDrumDirective, plan.constraints)) {
       additions.push(effectiveDrumDirective);
     }
-    if (isTagCompatibleWithConstraints(effectiveHihatDirective, plan.constraints)) {
-      additions.push(effectiveHihatDirective);
-    }
-  } else if (usesHihat && !/(hi-?hat|shaker|ride)/i.test(lower)) {
-    if (isTagCompatibleWithConstraints(effectiveHihatDirective, plan.constraints)) {
-      additions.push(effectiveHihatDirective);
-    }
   }
 
-  if (!/(call-and-response|interlock|answer|dialogue|interplay|spaces left by|vocal pauses|breath gaps)/i.test(lower)) {
-    if (isTagCompatibleWithConstraints(plan.interactionSuno, plan.constraints)) {
-      additions.push(plan.interactionSuno);
-    }
-  }
-  if (!/(maj9|add11|add9|dorian|modal|passing chord|chromatic|6\/9|minor 11|deceptive|slash-?chord)/i.test(lower)) {
+  if (!/(melody|hook|catchy|singable|maj9|add9|7th)/i.test(lower)) {
     additions.push(plan.harmonySuno);
   }
-  if (!/(phrasing|cadence|behind-the-beat|ahead-of-beat|conversational|breath)/i.test(lower)) {
+  if (!/(vocal|phrasing|pitch|delivery)/i.test(lower) && additions.length < 3) {
     additions.push(plan.vocalPhrasingSuno);
-  }
-  if (!/(dynamic|contrast|bloom|dropout|stripped|climax|1-beat)/i.test(lower)) {
-    additions.push(plan.dynamicSuno);
   }
   if (!/\bbpm\b/i.test(lower)) {
     additions.push(plan.bpmSuggestion);
   }
 
-  const enhancedBody = additions.length > 0
-    ? `${rawStyle ? rawStyle + ', ' : ''}${additions.join(', ')}`
-    : rawStyle;
+  const finalStylePrompt = fitStylePromptLength(rawStyle, additions, excludeClause, 760, 945);
 
-  const finalStylePrompt = fitStylePromptLength(enhancedBody, excludeClause, 760, 945);
-
+  // Only add a gentle bracket guide if [Verse 1] or [Chorus] has NO guide at all;
+  // NEVER overwrite or bloat existing SOP bracket guides with clunky rhythm formulas!
   let enhancedLyrics = track.fullLyrics || '';
-  if (enhancedLyrics && !/(call-and-response|4-bar|displaced|syncopat|counter|rubato|pause)/i.test(enhancedLyrics)) {
-    const safeVerseHint = `${effectiveBassDirective.split(',')[0]}, ${effectiveDrumDirective.split(',')[0]}`;
+  if (enhancedLyrics) {
+    const cleanVerseHint = stripSectionPrefix('Verse 1', plan.verseGuideHint);
+    const cleanChorusHint = stripSectionPrefix('Chorus', plan.chorusGuideHint);
     enhancedLyrics = enhancedLyrics
-      .replace(/^\[Verse 1(?::\s*([^\]]+))?\]$/m, (_, existing) =>
-        existing
-          ? `[Verse 1: ${existing.trim()}, ${safeVerseHint}]`
-          : `[Verse 1: ${safeVerseHint}]`
-      )
-      .replace(/^\[Chorus(?::\s*([^\]]+))?\]$/m, (_, existing) =>
-        existing
-          ? `[Chorus: ${existing.trim()}, ${plan.chorusGuideHint}]`
-          : `[Chorus: ${plan.chorusGuideHint}]`
-      );
+      .replace(/^\[Verse 1\]$/m, `[Verse 1: ${cleanVerseHint}]`)
+      .replace(/^\[Chorus\]$/m, `[Chorus: ${cleanChorusHint}]`);
   }
 
   const updatedTrack: TrackItem = {
@@ -1413,7 +1419,7 @@ export function refineTrackWithCraftAudit(
     ...updatedTrack,
     craftAudit: {
       ...finalAudit,
-      refined: true,
+      refined: additions.length > 0,
     },
   };
 }
@@ -1434,38 +1440,38 @@ export function buildRefinementPromptForAI(
         ? plan.bassSuno
         : BASSLESS_LEFT_HAND_POOL[plan.trackNumber % BASSLESS_LEFT_HAND_POOL.length].suno;
       const drumTarget = usesDrums
-        ? `${plan.drumSuno}; ${plan.hihatSuno}`
-        : `${DRUMLESS_PULSE_POOL[plan.trackNumber % DRUMLESS_PULSE_POOL.length].suno}; ${HIHATLESS_SPACE_POOL[plan.trackNumber % HIHATLESS_SPACE_POOL.length].suno}`;
+        ? plan.drumSuno
+        : DRUMLESS_PULSE_POOL[plan.trackNumber % DRUMLESS_PULSE_POOL.length].suno;
 
       return `Track ${track.trackNumber} ("${track.title}") [${audit.arrangementLabel || plan.arrangementLabel}]:
 Current stylePrompt: "${track.stylePrompt}"
-7-Axis Audit Gaps:
+Audit Gaps:
 ${weakCriteria}
-Theme-Safe Innovation Targets to weave naturally into stylePrompt (strictly 760–940 chars total, honoring ALL Exclude/forbidden rules in "${themeName}" SOP):
-  - Low-Register / Counter-Motif: ${bassTarget}
-  - Rhythm / Breathing Space: ${drumTarget}
-  - Call & Response: ${plan.interactionSuno}
-  - Harmony: ${plan.harmonySuno}
-  - Vocal Phrasing: ${plan.vocalPhrasingSuno}
-  - Dynamic Arc: ${plan.dynamicSuno}`;
+Musical Enrichment Targets (strictly keep vocal pitch-true, rhythm pocket locked, and 760–940 chars total):
+  - Low-Register / Bass: ${bassTarget}
+  - Groove / Accompaniment Flow: ${drumTarget}
+  - Catchy Melody & Harmony: ${plan.harmonySuno}
+  - Vocal Phrasing: ${plan.vocalPhrasingSuno}`;
     })
     .join('\n\n');
 
-  return `PRE-OUTPUT MUSICAL QUALITY REFINEMENT PASS (테마·편성 맞춤 7항목 자가 검증 및 보완)
-The following track(s) risked sounding repetitive or generic on motif independence, rhythmic phrasing/syncopation, or call-and-response interaction:
+  return `PRE-OUTPUT MUSICAL QUALITY REFINEMENT PASS (테마 맞춤 멜로디·보컬 안정화 검증 및 보완)
+The following track(s) need clearer instrumentation or melodic focus for "${themeName}":
 
 ${details}
 
-CRITICAL: NEVER add bass instruments or drums to stripped/bassless/drumless ballad tracks, and NEVER add instruments forbidden by the theme's SOP (such as orchestral strings/cello/timpani).
-Rewrite ONLY the "stylePrompt" (strictly 760–940 English chars, dense comma-separated Suno tags) and optional improved "[Verse 1: ...]" / "[Chorus: ...]" tag headers so ALL 7 theme-specific criteria reach "우수/양호". Keep track titles and sung lyric text unchanged.
+CRITICAL RULES:
+1. NEVER add off-beat/timing-breaking keywords ("ahead-of-beat", "behind-the-beat", "breaking 4/4", "off-grid", "irregular rests", "voice crack"). Keep vocals pitch-accurate, smooth, and groove-locked!
+2. NEVER add bass or drums to stripped/bassless/drumless tracks, and NEVER add instruments forbidden by the theme's SOP.
+3. For "verseGuide" and "chorusGuide": output ONLY the concise English description AFTER the colon (STRICTLY NEVER include "Verse 1:", "Chorus:", or square brackets "[" / "]" inside the value!).
 Respond ONLY with valid JSON:
 {
   "refinedTracks": [
     {
       "trackNumber": 1,
       "stylePrompt": "760-940 char refined Suno stylePrompt",
-      "verseGuide": "concise English verse tag guide",
-      "chorusGuide": "concise English chorus tag guide"
+      "verseGuide": "concise English verse performance cue without section name prefix",
+      "chorusGuide": "concise English chorus performance cue without section name prefix"
     }
   ]
 }`;

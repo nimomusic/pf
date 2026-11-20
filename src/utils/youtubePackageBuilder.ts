@@ -12,6 +12,7 @@ export interface SceneProfile {
     | 'night_drive'
     | 'tokyo_rain'
     | 'vintage_1940s_50s'
+    | 'vintage_70s_soul_funk'
     | 'west_coast_rap'
     | 'cinematic_ost';
   culture: LyricCulture;
@@ -132,6 +133,7 @@ export function extractLyricMoodDetails(
 
   const has1940 = /\b(1940|1940s|40s|40's|shellac|78\s*rpm|phonograph)\b/i.test(fullText) || fullText.includes('1940');
   const has1950 = /\b(1950|1950s|50s|50's|doo-wop|diner|jukebox)\b/i.test(fullText) || fullText.includes('1950');
+  const has1970 = /\b(1970|1970s|70s|70's|soul\s*funk|motown|disco\s*funk)\b/i.test(fullText) || fullText.includes('70년대');
   const eraLabel =
     has1940 && has1950
       ? '1940s–1950s'
@@ -139,6 +141,8 @@ export function extractLyricMoodDetails(
       ? '1950s'
       : has1940
       ? '1940s'
+      : has1970
+      ? '1970s'
       : 'contemporary';
 
   const rainy = /\b(rain|rainy|raindrops|umbrella|wet pavement|drizzle)\b/i.test(fullText) ||
@@ -237,7 +241,30 @@ export function detectSceneProfile(
     .replace(/제외[^\n\r]*/g, '');
   const combined = `${activeContext} ${sopContext}`;
 
-  // 1. Era-Specific: 1940s–1950s Vintage Pop / Shellac / Doo-Wop / Swing
+  // 1a. Era-Specific: 1970s Vintage Soul & Funk / Motown / Retro Groove
+  if (
+    /\b(1970|1970s|70s|70's|soul\s*funk|vintage\s*soul|motown|disco\s*funk)\b/i.test(`${theme.name || ''} ${theme.category || ''} ${sopContext}`) ||
+    /70년대|소울\s*펑크/.test(combined)
+  ) {
+    return {
+      key: 'vintage_70s_soul_funk',
+      culture,
+      eraLabel: '1970s',
+      seasonEn: 'warm golden-amber 1970s twilight',
+      seasonKo: '따뜻한 1970년대 빈티지 소울 감성',
+      locationEn:
+        culture === 'korean'
+          ? 'retro 1970s Seoul Chungmuro / Jongno analog vinyl listening bar glowing with warm wood walls, brass lamps, and crate records'
+          : 'authentic 1970s New York / Detroit analog soul recording lounge & vinyl listening room bathed in warm wood and amber lamp glow',
+      locationKo: '따뜻한 우드 톤과 바이닐 감성이 흐르는 1970년대 소울 펑크 라운지',
+      genreLabelEn: "1970s Vintage Soul & Funk",
+      genreLabelKo: "70's 빈티지 소울 펑크",
+      moodLabelEn: 'Warm 1970s Analog Soul Groove',
+      moodLabelKo: '70년대 아날로그 소울 펑크 그루브',
+    };
+  }
+
+  // 1b. Era-Specific: 1940s–1950s Vintage Pop / Shellac / Doo-Wop / Swing
   if (
     /\b(1940|1940s|40s|40's|1950|1950s|50s|50's|shellac|phonograph|78\s*rpm|gramophone|doo-wop|vintage\s*pop)\b/i.test(combined) ||
     combined.includes('1940') ||
@@ -563,6 +590,7 @@ export function normalizeFiveHashtags(
     night_drive: ['#playlist', '#chillrnb', '#koreanrnb', '#nightdrive', '#lounge'],
     tokyo_rain: ['#playlist', '#jpop', '#citypop', '#electronicrnb', '#midnight'],
     vintage_1940s_50s: ['#playlist', '#vintagepop', '#1950spop', '#1940sjazz', '#retrolounge'],
+    vintage_70s_soul_funk: ['#playlist', '#vintagesoul', '#70sfunk', '#soulfunk', '#retrovinyl'],
     west_coast_rap: ['#playlist', '#westcoastrap', '#freestylerap', '#gfunk', '#hiphop'],
     cinematic_ost: ['#playlist', '#cinematicost', '#emotionalballad', '#filmmusic', '#healing'],
   };
@@ -674,6 +702,13 @@ function buildPhotorealisticSceneBase(
       lighting: `Warm tungsten parlor lamp glow blends gently with soft twilight window rays, casting rich mid-century amber-sepia highlights and deep velvet shadows true to ${scene.eraLabel} editorial photography.`,
       optics: `Photographed on a classic 1940s–1950s Rolleiflex 2.8 medium-format camera with archival Kodachrome / warm silver-gelatin film grain, soft vintage lens halation, authentic mid-century color rendition, and zero modern digital gloss.`,
     },
+    vintage_70s_soul_funk: {
+      setting: `Set inside ${scene.locationEn} during a ${scene.seasonEn}, warm wood shelving packed with 1970s LP vinyl records, glowing vintage amber amplifier VU meters, velvet armchair cushions, and warm walnut paneling create one uninterrupted retro analog scene—strictly zero modern smartphones or laptops.`,
+      subject: `Centered gracefully beside a classic brushed-aluminum turntable and Fender Rhodes electric piano or warm brass saxophone stand, a stylish 1970s-dressed ${woman} in a tailored rust corduroy blazer, soft cream ribbed turtleneck, and gold hoop earrings rests one hand lightly on a spinning vinyl record sleeve, ${moodDetails.expressionEn}.`,
+      props: `Authentic 1970s analog props anchor the frame center: warm chrome turntable tonearm, vintage cloth-covered guitar cable, amber glassware, analog cassette or LP sleeves, and soft haze catching golden tungsten studio lamps.`,
+      lighting: `Rich 1970s tungsten amber spotlighting harmonizes with warm sunset light filtering through venetian blinds, wrapping natural skin tones and walnut wood in nostalgic Kodak Ektachrome warmth.`,
+      optics: `Shot on an authentic 1970s 35mm SLR prime lens (35mm f/1.8) with genuine Kodak Portra / Ektachrome 1970s film grain, subtle golden lens bloom, and rich analog color depth.`,
+    },
     rainy_autumn: {
       setting: `Shot as one uninterrupted elevated diagonal frame overlooking ${scene.locationEn} during a ${scene.seasonEn}, fiery crimson and golden autumn canopies arch cleanly toward glistening wet pavement and crisp street crossings.`,
       subject: `Anchored near the heart of the sunlit wet intersection, a stylish ${woman} holding a clear dome umbrella pauses gracefully in a tailored beige trench coat and soft wool scarf amidst drifting autumn leaves, ${moodDetails.expressionEn}.`,
@@ -772,8 +807,8 @@ function isPromptCoherentWithSceneAndCulture(cleanRaw: string, scene: SceneProfi
   }
 
   // Era / subculture checks
-  if (scene.key === 'vintage_1940s_50s') {
-    const hasEra = /\b(1940|1950|40s|50s|vintage|gramophone|phonograph|shellac|78\s*rpm|retro|mid-century)\b/i.test(lower);
+  if (scene.key === 'vintage_1940s_50s' || scene.key === 'vintage_70s_soul_funk') {
+    const hasEra = /\b(1940|1950|1970|40s|50s|70s|vintage|gramophone|phonograph|shellac|78\s*rpm|vinyl|turntable|retro|mid-century|analog)\b/i.test(lower);
     const hasModernAnachronism = /\b(smartphone|iphone|laptop|macbook|ipad|led strip|earbuds|airpods)\b/i.test(lower);
     if (!hasEra || hasModernAnachronism) return false;
   }
@@ -826,8 +861,8 @@ export function ensurePhotorealisticPrompt(
 
   // Coherent 140–1999 char AI prompt: enrich with era-appropriate optical realism, center focus, and zero typography.
   const opticalSpec =
-    scene.key === 'vintage_1940s_50s'
-      ? `Optical Realism & Archival ${scene.eraLabel} Micro-Detail: Captured on classic ${scene.eraLabel} medium-format film camera with natural Kodachrome grain, authentic period fabric weave, warm brass/wood patina, and zero modern digital smoothness.`
+    scene.key === 'vintage_1940s_50s' || scene.key === 'vintage_70s_soul_funk'
+      ? `Optical Realism & Archival ${scene.eraLabel} Micro-Detail: Captured on classic ${scene.eraLabel} film camera with natural Kodachrome/Ektachrome grain, authentic period fabric weave, warm brass/wood patina, and zero modern digital smoothness.`
       : `Optical Realism & Tactile Micro-Detail: Photographed on a full-frame Leica SL2-S with a 35mm f/1.8 APO prime lens at ISO 400 and f/2.0 aperture, preserving natural skin pores, authentic fabric textures, and genuine Kodak Portra 400 film grain without CGI gloss.`;
 
   const cohesiveCraftExpansion = [
@@ -1145,6 +1180,11 @@ function buildEditorialTitlePair(
       en: `${scene.eraLabel} Vintage Pop • Classic Shellac Lounge`,
       emoji: '📻🕯️',
     },
+    vintage_70s_soul_funk: {
+      ko: "70's Vintage Soul Funk • 아날로그 바이닐 • 카페음악",
+      en: '1970s Vintage Soul & Funk • Warm Analog Groove',
+      emoji: '🎷🪩',
+    },
     west_coast_rap: {
       ko: 'West Coast Freestyle Rap • G-Funk • 드라이브 힙합',
       en: 'West Coast Freestyle Rap • California G-Funk Mix',
@@ -1198,6 +1238,10 @@ function buildEditorialTitlePair(
     vintage_1940s_50s: {
       ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 오래된 축음기 바늘 소리처럼 따뜻한 ${scene.eraLabel} 빈티지 팝 감성 📻🕯️ | ${suffix.ko}`,
       en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | Warm ${scene.eraLabel} Shellac Crackle & Timeless Parlor Ballads 📻🕯️ | ${suffix.en}`,
+    },
+    vintage_70s_soul_funk: {
+      ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 바이닐 턴테이블 위에서 깨어나는 황금빛 70년대 소울 펑크 그루브 🎷🪩 | ${suffix.ko}`,
+      en: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | Warm Vinyl Grooves & Golden 1970s Vintage Soul Funk 🎷🪩 | ${suffix.en}`,
     },
     west_coast_rap: {
       ko: `𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | 캘리포니아 선셋 아래 흐르는 묵직한 웨스트 코스트 프리스타일 랩 🌴🔥 | ${suffix.ko}`,
@@ -1366,6 +1410,22 @@ function buildEditorialDescriptionPair(
       ctaEn: `If you love classic analog charm, please subscribe, like, and turn on notifications to share the nostalgia!`,
       tagsEn: `#VintagePop #1940sMusic #1950sPop #RetroLounge #ShellacVinyl #CafeMusic #AnalogVibes #ClassicBallads #OldiesMix`,
     },
+    vintage_70s_soul_funk: {
+      line1Ko: `따뜻한 아날로그 바이닐 사운드와 쫀득한 리듬감이 살아 숨 쉬는, 70년대 빈티지 소울 펑크 플레이리스트입니다.`,
+      line2Ko: `깊이 있는 베이스 그루브와 소울풀한 보컬 하모니로 카페, 바, 그리고 당신의 공간에 황금빛 레트로 무드를 채워보세요. 🎷🪩`,
+      situationsKo: `감각적인 LP바·카페 BGM은 물론, 여유로운 주말 드라이브, 작업실과 홈파티 분위기까지 한층 멋스럽게 끌어올려 줍니다.`,
+      wishKo: `시대를 초월한 70년대 소울의 온기와 함께 기분 좋고 스타일리시한 하루 보내세요!`,
+      pinKo: `📌 이 영상은 1970년대 아날로그 소울과 펑크 본연의 따뜻한 그루브를 지향합니다.`,
+      ctaKo: `영상과 음악이 마음에 드셨다면 구독과 좋아요, 알림 설정으로 깊고 세련된 소울 감성을 함께 나눠주세요!`,
+      tagsKo: `#소울펑크 #70년대음악 #빈티지소울 #레트로플레이리스트 #LP바음악 #카페음악 #SoulFunk #RetroGroove #VintageSoul`,
+      line1En: `Rich analog tape warmth and irresistible pocket grooves come alive in this authentic 1970s vintage soul and funk playlist.`,
+      line2En: `Anchored by silky basslines, Rhodes warmth, and soulful horn lifts to color cafés, lounges, and golden evenings. 🎷🪩`,
+      situationsEn: `Tailored for vinyl listening bars, stylish cafés, sunset drives, creative studio work, and laid-back evening gatherings.`,
+      wishEn: `Step into the golden-era warmth and enjoy a soulful, effortless day!`,
+      pinEn: `📌 Curated to celebrate authentic 1970s analog soul craft, tight pocket drums, and heartfelt vocals.`,
+      ctaEn: `If these 70s soul grooves hit the spot, please subscribe, like, and turn on notifications for more retro sessions!`,
+      tagsEn: `#VintageSoul #70sSoulFunk #RetroGroove #SoulPlaylist #VinylVibes #CafeMusic #LoungeBGM #ClassicFunk #MotownMood`,
+    },
     west_coast_rap: {
       line1Ko: `황금빛 노을이 내려앉은 미국 서부 LA 거리, 묵직한 베이스와 여유로운 스웨거가 살아있는 웨스트 코스트 힙합 플레이리스트입니다.`,
       line2Ko: `타이트한 붐뱁·G-Funk 그루브와 거침없는 플로우로 드라이브, 운동, 그리고 당신의 하루에 폭발적인 에너지를 채워보세요. 🌴🔥`,
@@ -1419,6 +1479,8 @@ function buildEditorialDescriptionPair(
       ? '#제이팝 #일본알앤비 #도쿄감성 #AltPop'
       : scene.key === 'vintage_1940s_50s'
       ? '#빈티지팝 #레트로라운지 #아날로그감성 #올드팝'
+      : scene.key === 'vintage_70s_soul_funk'
+      ? '#빈티지소울 #소울펑크 #70년대음악 #레트로바이닐'
       : scene.key === 'west_coast_rap'
       ? '#웨스트코스트랩 #프리스타일랩 #GFunk #힙합플리'
       : scene.key === 'cinematic_ost'
@@ -1434,6 +1496,8 @@ function buildEditorialDescriptionPair(
       ? '#JPOP #ElectronicRnB #AltPop #CityVibes'
       : scene.key === 'vintage_1940s_50s'
       ? '#VintagePop #RetroLounge #AnalogVibes #ClassicSound'
+      : scene.key === 'vintage_70s_soul_funk'
+      ? '#VintageSoul #70sSoulFunk #RetroGroove #VinylMood'
       : scene.key === 'west_coast_rap'
       ? '#WestCoastRap #FreestyleRap #GFunk #HipHopPlaylist'
       : scene.key === 'cinematic_ost'
@@ -1468,7 +1532,11 @@ function buildEditorialDescriptionPair(
       moodDetails.emotionKey === 'confident_groove';
     const isStressReliefOrJoy = /(스트레스\s*해소|순간의\s*즐거움|밤새|파티|드라이브|신나|자유)/.test(cLower);
     const hasExplicitSeason =
-      scene.key === 'christmas_holiday' || scene.key === 'rainy_autumn' || scene.key === 'vintage_1940s_50s' || scene.key === 'west_coast_rap';
+      scene.key === 'christmas_holiday' ||
+      scene.key === 'rainy_autumn' ||
+      scene.key === 'vintage_1940s_50s' ||
+      scene.key === 'vintage_70s_soul_funk' ||
+      scene.key === 'west_coast_rap';
 
     if (isQuirkyPlayful) {
       line1Ko = `어디로 튈지 모르는 유쾌한 매력과 기분 좋은 상상력, '${conceptFocus}'의 재치 있는 장면을 감각적인 사운드로 엮어낸 ${cleanGenreLabelKo} 플레이리스트입니다.`;

@@ -1097,6 +1097,270 @@ function cleanTitleSingleLanguage(
   return clean || fallbackTitle;
 }
 
+const CLIENT_AI_TITLE_CLICHES = [
+  'empty spaces',
+  'sweet confession',
+  'silent echoes',
+  'whispers in the dark',
+  'whispers in the silence',
+  'whispers from the velvet gramophone',
+  'midnight reverie',
+  'fading memories',
+  'fragments on the 35mm reel',
+  'shadows on the silver screen',
+  'echoes across the horizon',
+  'echoes on the cutting room floor',
+  'sunlight through the open window',
+  'morning latte at our usual table',
+  'broken wings',
+  'chasing dreams',
+  'neon dreams',
+  'endless night',
+  'digital love',
+  'first sight',
+  'love at first sight',
+  '첫눈에 반한 감정',
+  '달콤한 고백',
+  '헤어짐의 상처',
+  '과거에 대한 후회',
+  '이별 후의 성장',
+  '자신감 표현',
+  '현실의 스트레스 해소',
+  '순간의 즐거움',
+  '역경 극복',
+  '더 나은 미래',
+  '달콤한 속삭임',
+  '침묵의 메아리',
+  '어둠 속의 속삭임',
+  '공허',
+  '새로운 트랙',
+  '新曲',
+];
+
+function isClientGenericAiTitleCliche(title: string): boolean {
+  const norm = (title || '')
+    .toLowerCase()
+    .replace(/['"`.,!?()[\]]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!norm || /^track\s*\d+$/i.test(norm)) return true;
+  if (CLIENT_AI_TITLE_CLICHES.includes(norm)) return true;
+  if (/^(?:whispers?|echoes|shadows|fragments)\s+(?:in|on|of|from|across)\s+the\s+/i.test(norm)) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeClientSectionBracketTag(rawTag: string): string {
+  if (!rawTag) return '';
+  let tag = rawTag
+    .replace(/\[\s*([^:\]]+)\s*:\s*[\({]([^\)}]+)[\)}]\s*\]/g, '[$1: $2]')
+    .replace(/[\{\}]/g, '')
+    .trim();
+
+  const match = tag.match(/^\[([^:\]]+)\s*:\s*([\s\S]+)\]$/);
+  if (!match) return tag;
+
+  const header = match[1].replace(/\s+/g, ' ').trim();
+  let desc = match[2].replace(/\s+/g, ' ').trim();
+  const headerBase = header
+    .replace(/^(?:final|last|pre|post|full)\s+/i, '')
+    .replace(/\s*\d+$/i, '')
+    .trim();
+  const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  const prefixPatterns: RegExp[] = [
+    new RegExp(`^${escapeRe(header)}\\s*[:\\-]\\s*`, 'i'),
+    headerBase
+      ? new RegExp(`^(?:final\\s+|last\\s+|pre-?\\s*)?${escapeRe(headerBase)}(?:\\s*\\d+)?\\s*[:\\-]\\s*`, 'i')
+      : null,
+    /^(?:verse|pre-?chorus|final\s+chorus|chorus|bridge|intro|outro|instrumental(?:\s+(?:interlude|break|solo))?|hook)(?:\s*\d+)?\s*:\s*/i,
+  ].filter(Boolean) as RegExp[];
+
+  for (let pass = 0; pass < 4; pass++) {
+    const before = desc;
+    for (const re of prefixPatterns) {
+      desc = desc.replace(re, '').trim();
+    }
+    if (desc === before) break;
+  }
+
+  desc = desc.replace(/^[:\-\s]+/, '').trim();
+  return desc ? `[${header}: ${desc}]` : `[${header}]`;
+}
+
+function extractClientChorusSungLines(fullLyrics: string): string[] {
+  if (!fullLyrics) return [];
+  const lines = fullLyrics.replace(/\r\n/g, '\n').split('\n').map((l) => l.trim());
+  const chorusLines: string[] = [];
+  let inChorus = false;
+
+  for (const line of lines) {
+    if (!line) continue;
+    if (/^\[[^\]]+\]$/.test(line)) {
+      inChorus = /^\[\s*(?:final\s+|last\s+)?chorus\b/i.test(line);
+      continue;
+    }
+    if (!inChorus) continue;
+    if (/^\(.*\)$/.test(line)) continue;
+    const cleaned = line
+      .replace(/\((?:supporting voice|ad-?lib|backing)[^)]*\)/gi, '')
+      .replace(/\[[^\]]*\]/g, '')
+      .trim();
+    if (cleaned) chorusLines.push(cleaned);
+  }
+  return chorusLines;
+}
+
+function toClientEnglishTitleCase(phrase: string): string {
+  const minorWords = new Set(['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from', 'in', 'into', 'nor', 'of', 'on', 'or', 'out', 'so', 'the', 'to', 'up', 'with', 'yet']);
+  const words = phrase.split(/\s+/).filter(Boolean);
+  return words
+    .map((w, idx) => {
+      const lower = w.toLowerCase();
+      if (idx > 0 && idx < words.length - 1 && minorWords.has(lower)) {
+        return lower;
+      }
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(' ');
+}
+
+function isClientTitleAnchoredInChorus(
+  title: string,
+  chorusLines: string[],
+  targetLang: 'japanese' | 'english' | 'korean' | 'auto'
+): boolean {
+  if (!title || chorusLines.length === 0) return true;
+  const chorusJoined = chorusLines.join(' ').toLowerCase();
+  const normTitle = title
+    .toLowerCase()
+    .replace(/['"`.,!?~:;()[\]]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normTitle) return false;
+
+  const normChorus = chorusJoined
+    .replace(/['"`.,!?~:;()[\]]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (normChorus.includes(normTitle)) return true;
+
+  if (targetLang === 'korean' || /[\uAC00-\uD7AF]/.test(normTitle)) {
+    const titleNoSpace = normTitle.replace(/\s+/g, '');
+    const chorusNoSpace = normChorus.replace(/\s+/g, '');
+    if (titleNoSpace.length >= 2 && chorusNoSpace.includes(titleNoSpace)) return true;
+    const koWords = normTitle.split(/\s+/).filter((w) => /[\uAC00-\uD7AF]{2,}/.test(w));
+    return koWords.length > 0 && koWords.every((w) => chorusNoSpace.includes(w));
+  }
+
+  if (targetLang === 'japanese' || /[\u3040-\u309F\u30A0-\u30FF]/.test(normTitle)) {
+    const jpCompact = normTitle.replace(/\s+/g, '');
+    return jpCompact.length >= 2 && normChorus.replace(/\s+/g, '').includes(jpCompact);
+  }
+
+  const stopWords = new Set(['the', 'a', 'an', 'in', 'on', 'at', 'of', 'to', 'for', 'and', 'with', 'my', 'your', 'you', 'i', 'we', 'our', 'is', 'are']);
+  const contentWords = normTitle
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !stopWords.has(w));
+  if (contentWords.length === 0) return false;
+  return chorusLines.some((line) => {
+    const nl = line.toLowerCase().replace(/[^a-z0-9\s']/g, ' ');
+    return contentWords.every((cw) => nl.includes(cw));
+  });
+}
+
+function extractClientChorusHookPhrase(
+  chorusLines: string[],
+  targetLang: 'japanese' | 'english' | 'korean' | 'auto'
+): string {
+  if (chorusLines.length === 0) return '';
+
+  const trailingAdlibs = /[,!\s]*(?:yeah|oh|uh-huh|hm-hm|right|alright|hey|ooh|woo)+[?!.\s]*$/gi;
+  const cleanedLines = chorusLines
+    .map((l) => l.replace(trailingAdlibs, '').replace(/^[,.\s]+|[,.!?;:~\s]+$/g, '').trim())
+    .filter((l) => l.length >= 2);
+
+  if (targetLang === 'japanese') {
+    for (const line of cleanedLines) {
+      const segments = line.split(/[、，,・\s]+/).map((s) => s.trim()).filter((s) => /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(s) && !/[\uAC00-\uD7AF]/.test(s));
+      for (const seg of segments) {
+        const cleanSeg = seg.replace(/[a-zA-Z0-9?!。]+/g, '').trim();
+        if (cleanSeg.length >= 2 && cleanSeg.length <= 10 && !isClientGenericAiTitleCliche(cleanSeg)) {
+          return cleanSeg;
+        }
+        if (cleanSeg.length > 10) return cleanSeg.slice(0, 7);
+      }
+    }
+    return '';
+  }
+
+  if (targetLang === 'korean') {
+    for (const line of cleanedLines) {
+      const koChunks = line.match(/[\uAC00-\uD7AF]+(?:\s+[\uAC00-\uD7AF]+){0,2}/g) || [];
+      for (const chunk of koChunks) {
+        const words = chunk.trim().split(/\s+/).filter(Boolean);
+        for (const count of [2, 1]) {
+          if (words.length >= count) {
+            const candidate = words.slice(-count).join(' ').replace(/[은는이가을를의도만야]+$/, (m, _offset, str) => {
+              return str.length >= 4 && count === 1 ? '' : m;
+            }).trim();
+            if (candidate.length >= 2 && candidate.length <= 10 && !isClientGenericAiTitleCliche(candidate)) {
+              return candidate;
+            }
+          }
+        }
+      }
+    }
+    return '';
+  }
+
+  const weakEdges = new Set(['the', 'a', 'an', 'to', 'of', 'in', 'on', 'at', 'for', 'and', 'or', 'but', 'with', 'from', 'as', 'when', 'where', 'while', 'that', 'this', 'if', 'so', 'til', 'till', 'until']);
+  const fillersStart = /^(?:i'?m\s+|we'?re\s+|you'?re\s+|there'?s\s+|just\s+|caught\s+inside\s+(?:a|the)\s+|every\s+little\s+|all\s+the\s+|and\s+|oh\s+)/i;
+
+  for (const line of cleanedLines) {
+    const clauses = line.split(/[,;!?—–]+/).map((s) => s.trim()).filter(Boolean);
+    for (const rawClause of clauses) {
+      let clause = rawClause.replace(/[^a-zA-Z0-9'\s-]/g, ' ').replace(/\s+/g, ' ').trim();
+      clause = clause.replace(fillersStart, '').trim();
+      let words = clause.split(/\s+/).filter(Boolean);
+      while (words.length > 1 && weakEdges.has(words[words.length - 1].toLowerCase())) words.pop();
+      while (words.length > 3 && weakEdges.has(words[0].toLowerCase())) words.shift();
+      if (words.length > 4) {
+        words = words.slice(0, 3);
+        while (words.length > 1 && weakEdges.has(words[words.length - 1].toLowerCase())) words.pop();
+      }
+      if (words.length >= 2 && words.length <= 4) {
+        const candidate = toClientEnglishTitleCase(words.join(' '));
+        if (!isClientGenericAiTitleCliche(candidate)) return candidate;
+      }
+    }
+  }
+  return '';
+}
+
+function refineClientTitleFromChorus(
+  rawTitle: string,
+  fullLyrics: string,
+  targetLang: 'japanese' | 'english' | 'korean' | 'auto',
+  fallbackTitle = 'Track Title'
+): string {
+  const cleaned = cleanTitleSingleLanguage(rawTitle, targetLang, fallbackTitle);
+  const chorusLines = extractClientChorusSungLines(fullLyrics);
+  if (chorusLines.length === 0) return cleaned;
+
+  if (!isClientGenericAiTitleCliche(cleaned) && isClientTitleAnchoredInChorus(cleaned, chorusLines, targetLang)) {
+    return cleaned;
+  }
+
+  const extracted = extractClientChorusHookPhrase(chorusLines, targetLang);
+  if (extracted) {
+    return cleanTitleSingleLanguage(extracted, targetLang, cleaned);
+  }
+  return cleaned;
+}
+
 // Helper: Ensure structure tags [Section: Guide] are on their own lines, sections have proper line breaks, and instrumental sections contain NO sung lyrics
 function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean, includeEndTag: boolean = true): string {
   if (!rawLyrics) return '';
@@ -1108,12 +1372,9 @@ function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean, includeEnd
   // Strip all duplicate/stray [End] tags before parsing
   text = text.replace(/\[\s*end\s*\]/gi, '');
 
-  // Step 0: Normalize bracket tags [ ... ]
-  // Transform curly braces or mixed braces into square brackets:
-  // e.g. {Verse 1: ...} -> [Verse 1: ...]
-  // e.g. [Tag: (Description)] -> [Tag: Description]
+  // Step 0: Normalize bracket tags [ ... ] and deduplicate any repeated section prefixes
   text = text.replace(/\{([^{}\n\r]+)\}/g, '[$1]');
-  text = text.replace(/\[\s*([^:\]]+)\s*:\s*[\({]([^\)}]+)[\)}]\s*\]/g, '[$1: $2]');
+  text = text.replace(/\[[^\]\n\r]+\]/g, (m) => normalizeClientSectionBracketTag(m));
   text = text.replace(/[\{\}]/g, '');
 
   // Step 1: If a bracketed section tag is followed on the same line by text (e.g., "[Intro: ...] lyrics..."), split them!
@@ -1151,12 +1412,8 @@ function formatAndCleanLyrics(rawLyrics: string, isJapanese: boolean, includeEnd
   const formattedBlocks: string[] = [];
   for (let sIdx = 0; sIdx < sections.length; sIdx++) {
     const sec = sections[sIdx];
-    let tag = sec.tag;
+    let tag = normalizeClientSectionBracketTag(sec.tag);
     const content = sec.contentLines;
-
-    // Normalize tag: ensure clean [Section: Guide] without nested brackets
-    tag = tag.replace(/\[\s*([^:\]]+)\s*:\s*[\({]([^\)}]+)[\)}]\s*\]/g, '[$1: $2]');
-    tag = tag.replace(/[\{\}]/g, '');
 
     const tagHeader = tag.replace(/^\[|\].*$/g, '').trim().split(':')[0].trim().toLowerCase();
     const isInstrumental = /^(intro|outro|instrumental|interlude|break|piano solo|guitar solo|solo)$/i.test(tagHeader) ||
@@ -1264,10 +1521,14 @@ function generateClientSopPlaylist(
 
   let templates: Array<{ title: string; mood: string; style: string; lyrics: string; metaInfo?: any }> = [];
 
+  const isSoulFunk70s = /\b(1970|1970s|70s|70's|soul\s*funk|vintage\s*soul|motown|disco\s*funk)\b|소울\s*펑크|70년대/i.test(
+    `${theme.name || ''} ${theme.category || ''} ${theme.sop || ''}`
+  );
+
   if (specs.isShellacVintage) {
     templates = [
       {
-        title: 'Dancing in the Amber Haze',
+        title: 'Amber Haze',
         mood: 'Type B worn shellac phonograph intimacy, nostalgic 1940s romance with warm analog crackle',
         metaInfo: {
           vocal: 'Warm expressive female lead vocal, emotive 1940s delivery',
@@ -1277,10 +1538,10 @@ function generateClientSopPlaylist(
           targetLength: '3:05'
         },
         style: `1940s shellac 78 RPM record aesthetic, played on an antique wooden cabinet phonograph, authentic mechanical needle rotation hiss, prominent yet musical surface crackle and patina, narrow frequency bandwidth, warm thick saturated midrange, softly rolled-off high frequencies, restrained low bass, vintage mono-centric analog tube compression. Muted trumpet solos with velvet Harmon mute, gentle felt upright piano arpeggios, warm double bass walking softly, brushed snare rhythm, expressive sincere female lead vocal with breathy vintage vibrato, nostalgic bittersweet romance, 78 bpm`,
-        lyrics: `[Intro]\n[Solo felt upright piano chords with authentic 78 RPM shellac surface crackle and warm needle hiss, slow intimate tempo]\n\n[Verse 1]\n[Intimate breathy female vocal, sparse piano accompaniment, audible mechanical needle noise]\nStreetlights flickering through the smoky glass\nWatching all the gentle silhouettes pass\nI hold the letter you folded in spring\nListening to what the old records sing\n\n[Pre-Chorus]\n[Gentle swell of muted trumpet with velvet Harmon mute, rising nostalgic tension]\nThe needle turns around the fading groove\nThere is no sorrow that this song can't move\nThe dust begins to rise, the ballroom sighs\nI see tomorrow looking through your eyes\n\n[Chorus]\n[Rich emotional female lead vocal with warm vintage vibrato, sweet memorable melodic hook]\nDancing in the amber haze of yesterday's light\nHolding on to every shadow in the quiet night\nWhen the shellac turns slow and the melodies part\nI will keep your devotion right here in my heart!\nLet the crackle play on till the morning comes through\nEvery song in the dark was a whisper to you!\n\n[Verse 2]\n[Subtle double bass walking softly, brushed snare rhythm enters with gentle swing]\nA pocket watch ticking on the wooden stand\nRemembering the warmth of your trembling hand\nTwo coffee cups fading on an empty tray\nCounting the hours till the break of day\n\n[Bridge]\n[Warm analog distortion swells, emotive trumpet and upright piano crescendo]\nTime cannot steal what the melody knows!\nBlooming like a secret where the ivy grows!\nNo winter can silence the notes that we swore\nWe will dance like we never danced before!\n\n[Final Chorus]\n[Cathartic dynamic climax with full vintage swing arrangement, soaring heartfelt vocal resolution]\nDancing in the amber haze of yesterday's light\nHolding on to every shadow in the quiet night\nWhen the shellac turns slow and the melodies part\nI will keep your devotion right here in my heart!\n\n[Outro]\n[Upright piano chords slowly dying down, solitary trumpet sigh, soft needle run-out groove hiss to silence]\nJust the record turning.\n[End]`
+        lyrics: `[Intro: Solo felt upright piano chords with authentic 78 RPM shellac surface crackle and warm needle hiss, slow intimate tempo]\n\n[Verse 1: Intimate breathy female vocal, sparse piano accompaniment, audible mechanical needle noise]\nStreetlights flickering through the smoky glass\nWatching all the gentle silhouettes pass\nI hold the letter you folded in spring\nListening to what the old records sing\n\n[Pre-Chorus: Gentle swell of muted trumpet with velvet Harmon mute, rising nostalgic tension]\nThe needle turns around the fading groove\nThere is no sorrow that this song can't move\nThe dust begins to rise, the ballroom sighs\nI see tomorrow looking through your eyes\n\n[Chorus: Rich emotional female lead vocal with warm vintage vibrato, sweet memorable melodic hook]\nDancing in the amber haze of yesterday's light\nHolding on to every shadow in the quiet night\nWhen the shellac turns slow and the melodies part\nI will keep your devotion right here in my heart!\nLet the crackle play on till the morning comes through\nEvery song in the dark was a whisper to you!\n\n[Verse 2: Subtle double bass walking softly, brushed snare rhythm enters with gentle swing]\nA pocket watch ticking on the wooden stand\nRemembering the warmth of your trembling hand\nTwo coffee cups fading on an empty tray\nCounting the hours till the break of day\n\n[Bridge: Warm analog distortion swells, emotive trumpet and upright piano crescendo]\nTime cannot steal what the melody knows!\nBlooming like a secret where the ivy grows!\nNo winter can silence the notes that we swore\nWe will dance like we never danced before!\n\n[Final Chorus: Cathartic dynamic climax with full vintage swing arrangement, soaring heartfelt vocal resolution]\nDancing in the amber haze of yesterday's light\nHolding on to every shadow in the quiet night\nWhen the shellac turns slow and the melodies part\nI will keep your devotion right here in my heart!\n\n[Outro: Upright piano chords slowly dying down, solitary trumpet sigh, soft needle run-out groove hiss to silence]\n[End]`
       },
       {
-        title: 'Whispers from the Velvet Gramophone',
+        title: 'Velvet Gramophone',
         mood: 'Antique wooden phonograph charm, smoky jazz lounge nostalgia',
         metaInfo: {
           vocal: 'Smoky emotive female vocal, delicate breath control',
@@ -1290,84 +1551,84 @@ function generateClientSopPlaylist(
           targetLength: '3:10'
         },
         style: `Authentic 1940s shellac 78 RPM mono sound identity, antique oak phonograph cabinet resonance, audible needle friction and surface crackle, narrow bandpass warmth, rolled-off digital highs, thick tube midrange saturation, vintage optical limiter character. Smoky female vocal delivery, delicate acoustic upright piano, soft clarinet counter-melodies, brushed snare shuffle, acoustic archtop guitar comping, romantic midnight nostalgia, 76 bpm`,
-        lyrics: `[Intro]\n[Acoustic clarinet solo floating over antique phonograph crackle and mellow piano chords]\n\n[Verse 1]\n[Tender breathy vocal delivery, acoustic archtop guitar and soft piano accompaniment]\nMidnight falling softly on the avenue\nPainting every shadow in a shade of blue\nI wind the spring and let the platter spin\nWaiting for the quiet magic to begin\n\n[Pre-Chorus]\n[Soft clarinet harmony weaves in, subtle rise in emotional dynamic]\nThe needle finds the line we used to know\nCarrying the beauty from so long ago\n\n[Chorus]\n[Warm emotive vocal hook, rich midrange resonance with vintage analog compression]\nWhispers from the velvet gramophone playing slow\nTelling all the secrets that nobody else could know\nEven when the city sleeps and lights burn low\nYou will be the only melody I know!\n\n[Bridge]\n[Clarinet counter-melody ascends, expressive piano arpeggio]\nSpin the black shellac, let the memories stay\nNothing that was beautiful can ever fade away!\n\n[Chorus]\n[Full expressive vocal reprise, warm brass warmth, memorable chorus hook]\nWhispers from the velvet gramophone playing slow\nTelling all the secrets that nobody else could know\nEven when the city sleeps and lights burn low\nYou will be the only melody I know!\n\n[Outro]\n[Soft clarinet note trailing into slow mechanical needle hiss and runout groove]\nGoodnight, my love.\n[End]`
+        lyrics: `[Intro: Acoustic clarinet solo floating over antique phonograph crackle and mellow piano chords]\n\n[Verse 1: Tender breathy vocal delivery, acoustic archtop guitar and soft piano accompaniment]\nMidnight falling softly on the avenue\nPainting every shadow in a shade of blue\nI wind the spring and let the platter spin\nWaiting for the quiet magic to begin\n\n[Pre-Chorus: Soft clarinet harmony weaves in, subtle rise in emotional dynamic]\nThe needle finds the line we used to know\nCarrying the beauty from so long ago\n\n[Chorus: Warm emotive vocal hook, rich midrange resonance with vintage analog compression]\nThis velvet gramophone keeps playing low\nTelling all the secrets that nobody else could know\nEven when the city sleeps and lights burn low\nYou will be the only melody I know!\n\n[Bridge: Clarinet counter-melody ascends, expressive piano arpeggio]\nSpin the black shellac, let the memories stay\nNothing that was beautiful can ever fade away!\n\n[Chorus: Full expressive vocal reprise, warm brass warmth, memorable chorus hook]\nThis velvet gramophone keeps playing low\nTelling all the secrets that nobody else could know\nEven when the city sleeps and lights burn low\nYou will be the only melody I know!\n\n[Outro: Soft clarinet note trailing into slow mechanical needle hiss and runout groove]\n[End]`
       }
     ];
   } else if (specs.isEnglishOnly && specs.isCinematic) {
     // 8 Diverse English Cinematic Ballad Track Templates strictly mirroring the user's SOP
     templates = [
       {
-        title: 'Fragments on the 35mm Reel',
+        title: 'Spotlights Fall',
         mood: 'Cinematic opening monologue, subtle felt piano build into an explosive emotional chorus',
         style: `cinematic emotional OST ballad, felt upright piano intro, soaring lush orchestra strings, ${vocalTag}, building crescendo, rising tension line, heartfelt emotional bridge, 74 bpm, film soundtrack aesthetic, dynamic vocal range`,
-        lyrics: `[Intro]\n(Solitary felt piano arpeggios, atmospheric ambient room tone)\n(Delicate cello breath fades in from the shadows)\n\n[Verse 1]\nFlickering dust in the projector's light\nAn empty seat waiting in the quiet night\nI trace the silhouette you left in the frame\nA ghost in the shadows answering my name\n(Supporting voice: answering in the rain)\n\n[Pre-Chorus]\nAnd the spool spins faster as the tension begins to rise\nEvery frame holding secrets that were hidden in your eyes\nThe music swells, the silence breaks apart\nI hear the countdown beating in my heart\n\n[Chorus]\nYou were the movie I could never let end\nThe broken line of dialogue I couldn't mend\nWhen the violins soar and the floodgates break wide\nI'll pour out every tear that I tried to hide\nThrough the final scene where the spotlights fall\nI'd play our story back, I'd surrender it all!\n(Supporting voice: Surrender it all)\n\n[Verse 2]\nRain on the windowpane, scripted and cold\nThe bitter truth that nobody ever told\nI watch your hand slip from mine on the screen\nTrapped in the borders of what could have been\n(Supporting voice: Could have been)\n\n[Pre-Chorus]\nNow the cellos are crying on a rising chord\nTelling the story that we couldn't afford\nThe lights go dim, the curtain starts to part\nI feel the final thunder tearing through my heart\n\n[Chorus]\nYou were the movie I could never let end\nThe broken line of dialogue I couldn't mend\nWhen the violins soar and the floodgates break wide\nI'll pour out every tear that I tried to hide\nThrough the final scene where the spotlights fall\nI'd play our story back, I'd surrender it all!\n(Supporting voice: Surrender it all)\n\n[Bridge]\n(Full dramatic orchestral strings soar with raw vulnerability)\n(Lead female vocal belt rising into high register)\nCut the reel, turn the dark into light\nYou can't burn the memory from the night!\nNo director can rewrite the way that we bled\nEvery word that was spoken, every word left unsaid!\n\n[Chorus]\nYou were the movie I could never let end\nThe broken line of dialogue I couldn't mend\nWhen the violins soar and the floodgates break wide\nI'll pour out every tear that I tried to hide\nThrough the final scene where the spotlights fall\nI'd play our story back, I'd surrender it all!\n(Supporting voice: Even as the credits fall)\n\n[Outro]\n(Gentle piano chords slowly dissolving into silence)\nFade to black, my love.\n(Solo cello note fading to silence)\n[End]`
+        lyrics: `[Intro]\n(Solitary felt piano arpeggios, atmospheric ambient room tone)\n(Delicate cello breath fades in from the shadows)\n\n[Verse 1]\nFlickering dust in the projector's light\nAn empty seat waiting in the quiet night\nI trace the silhouette you left in the frame\nA ghost in the shadows answering my name\n(Supporting voice: answering in the rain)\n\n[Pre-Chorus]\nAnd the spool spins faster as the tension begins to rise\nEvery frame holding secrets that were hidden in your eyes\nThe music swells, the silence breaks apart\nI hear the countdown beating in my heart\n\n[Chorus]\nYou were the movie I could never let end\nThe broken line of dialogue I couldn't mend\nWhen the violins soar and the floodgates break wide\nI'll pour out every tear that I tried to hide\nThrough the final scene where the spotlights fall\nI'd play our story back, I'd surrender it all!\n(Supporting voice: Surrender it all)\n\n[Verse 2]\nRain on the windowpane, scripted and cold\nThe bitter truth that nobody ever told\nI watch your hand slip from mine on the screen\nTrapped in the borders of what could have been\n(Supporting voice: Could have been)\n\n[Pre-Chorus]\nNow the cellos are crying on a rising chord\nTelling the story that we couldn't afford\nThe lights go dim, the curtain starts to part\nI feel the final thunder tearing through my heart\n\n[Chorus]\nYou were the movie I could never let end\nThe broken line of dialogue I couldn't mend\nWhen the violins soar and the floodgates break wide\nI'll pour out every tear that I tried to hide\nThrough the final scene where the spotlights fall\nI'd play our story back, I'd surrender it all!\n(Supporting voice: Surrender it all)\n\n[Bridge]\n(Full dramatic orchestral strings soar with raw vulnerability)\n(Lead female vocal belt rising into high register)\nCut the reel, turn the dark into light\nYou can't burn the memory from the night!\nNo director can rewrite the way that we bled\nEvery word that was spoken, every word left unsaid!\n\n[Chorus]\nYou were the movie I could never let end\nThe broken line of dialogue I couldn't mend\nWhen the violins soar and the floodgates break wide\nI'll pour out every tear that I tried to hide\nThrough the final scene where the spotlights fall\nI'd play our story back, I'd surrender it all!\n(Supporting voice: Even as the credits fall)\n\n[Outro]\n(Gentle piano chords slowly dissolving into silence)\n[End]`
       },
       {
-        title: 'When the Screen Goes Dark',
+        title: 'Screen Goes Dark',
         mood: 'Heart-wrenching melodic climax, passionate vocal storytelling with rising orchestral tension',
         style: `grand cinematic movie ballad, grand acoustic piano, lush string ensemble, ${vocalTag}, rising tension line, powerful dynamic chorus, rich cinematic soundscape, 76 bpm`,
-        lyrics: `[Intro]\n(Gentle piano chime and deep sub-bass pulse)\n\n[Verse 1]\nThe theatre is empty, the applause died away\nLeaving only the shadows of words we couldn't say\nI stand in the aisle where we whispered goodnight\nStill searching for you in the fading stage light\n\n[Pre-Chorus]\nAnd the cue in the script comes around once again\nA rising crescendo of beauty and pain\nI reach for the ending before we depart\nFeeling the tremor ignite in my heart\n\n[Chorus]\nWhen the screen goes dark and the credits roll by\nI still see your reflection against the night sky\nEvery promise we shattered, every teardrop we cried\nLives forever inside where the melodies hide\nI will sing in the dark till the morning breaks free\nYou will always remain the whole story to me\n(Supporting voice: The whole story to me)\n\n[Verse 2]\nA photograph folded inside of my coat\nA tear-stained reminder of letters you wrote\nThey say time is a healer, but time is a thief\nStealing the colors of love and belief\n\n[Bridge]\n(Orchestral French horns and sweeping violin arpeggios)\nLet the soundtrack play on, let the symphony weep\nThere are promises only the music can keep!\n\n[Chorus]\nWhen the screen goes dark and the credits roll by\nI still see your reflection against the night sky\nEvery promise we shattered, every teardrop we cried\nLives forever inside where the melodies hide\nI will sing in the dark till the morning breaks free\nYou will always remain the whole story to me\n\n[Outro]\n(Tender piano resolution)\nThe curtain falls, but you remain.\n[End]`
+        lyrics: `[Intro]\n(Gentle piano chime and deep sub-bass pulse)\n\n[Verse 1]\nThe theatre is empty, the applause died away\nLeaving only the shadows of words we couldn't say\nI stand in the aisle where we whispered goodnight\nStill searching for you in the fading stage light\n\n[Pre-Chorus]\nAnd the cue in the script comes around once again\nA rising crescendo of beauty and pain\nI reach for the ending before we depart\nFeeling the tremor ignite in my heart\n\n[Chorus]\nWhen the screen goes dark and the credits roll by\nI still see your reflection against the night sky\nEvery promise we shattered, every teardrop we cried\nLives forever inside where the melodies hide\nI will sing in the dark till the morning breaks free\nYou will always remain the whole story to me\n(Supporting voice: The whole story to me)\n\n[Verse 2]\nA photograph folded inside of my coat\nA tear-stained reminder of letters you wrote\nThey say time is a healer, but time is a thief\nStealing the colors of love and belief\n\n[Bridge]\n(Orchestral French horns and sweeping violin arpeggios)\nLet the soundtrack play on, let the symphony weep\nThere are promises only the music can keep!\n\n[Chorus]\nWhen the screen goes dark and the credits roll by\nI still see your reflection against the night sky\nEvery promise we shattered, every teardrop we cried\nLives forever inside where the melodies hide\nI will sing in the dark till the morning breaks free\nYou will always remain the whole story to me\n\n[Outro]\n(Tender piano resolution)\n[End]`
       },
       {
-        title: 'The Reel Before the Ending',
+        title: 'Closing Reel',
         mood: 'Nostalgic film-score ballad, ticking projection tempo evolving into a soaring vocal catharsis',
         style: `cinematic emotional OST ballad, felt upright piano, warm cello ostinato, soaring orchestra, ${vocalTag}, rising tension line, 75 bpm`,
-        lyrics: `[Intro]\n(Rhythmic felt piano pulse evoking an antique film projector)\n(Soft string swell in D minor)\n\n[Verse 1]\nTen thousand frames running past in the glow\nEvery second a memory I didn't want to let go\nYour laughter caught in thirty-five millimeter grain\nA silent rewind through the laughter and pain\n(Supporting voice: rewind through the pain)\n\n[Pre-Chorus]\nThe soundtrack is rising, the strings climb higher\nFeeding the embers of a fading desire\nThe tempo is tightening, the final cue nears\nWash away the doubts and the unspoken fears\n\n[Chorus]\nBefore the closing reel burns into white\nI'll sing your name through the hollow of night!\nEvery vow that we whispered when the camera was rolling\nEvery bell of goodbye that was quietly tolling\nIf the ending is written and carved into stone\nI will still love you like the screen was our home!\n(Supporting voice: The screen was our home)\n\n[Verse 2]\nWe skipped all the rehearsals, we jumped to the scene\nWhere lovers pretend they don't know what it means\nTo let go of hands when the director cries cut\nLeaving the doors to yesterday shut\n\n[Bridge]\n(Thunderous orchestral crescendo, soaring French horns and timpani)\nDon't let the music stop! Don't let the shadows freeze!\nListen to the promise carried on the evening breeze!\n\n[Chorus]\nBefore the closing reel burns into white\nI'll sing your name through the hollow of night!\nEvery vow that we whispered when the camera was rolling\nEvery bell of goodbye that was quietly tolling\nIf the ending is written and carved into stone\nI will still love you like the screen was our home!\n\n[Outro]\n(Felt piano chords gently slowing down)\nAnd scene.\n[End]`
+        lyrics: `[Intro]\n(Rhythmic felt piano pulse evoking an antique film projector)\n(Soft string swell in D minor)\n\n[Verse 1]\nTen thousand frames running past in the glow\nEvery second a memory I didn't want to let go\nYour laughter caught in thirty-five millimeter grain\nA silent rewind through the laughter and pain\n(Supporting voice: rewind through the pain)\n\n[Pre-Chorus]\nThe soundtrack is rising, the strings climb higher\nFeeding the embers of a fading desire\nThe tempo is tightening, the final cue nears\nWash away the doubts and the unspoken fears\n\n[Chorus]\nBefore the closing reel burns into white\nI'll sing your name through the hollow of night!\nEvery vow that we whispered when the camera was rolling\nEvery bell of goodbye that was quietly tolling\nIf the ending is written and carved into stone\nI will still love you like the screen was our home!\n(Supporting voice: The screen was our home)\n\n[Verse 2]\nWe skipped all the rehearsals, we jumped to the scene\nWhere lovers pretend they don't know what it means\nTo let go of hands when the director cries cut\nLeaving the doors to yesterday shut\n\n[Bridge]\n(Thunderous orchestral crescendo, soaring French horns and timpani)\nDon't let the music stop! Don't let the shadows freeze!\nListen to the promise carried on the evening breeze!\n\n[Chorus]\nBefore the closing reel burns into white\nI'll sing your name through the hollow of night!\nEvery vow that we whispered when the camera was rolling\nEvery bell of goodbye that was quietly tolling\nIf the ending is written and carved into stone\nI will still love you like the screen was our home!\n\n[Outro]\n(Felt piano chords gently slowing down)\n[End]`
       },
       {
-        title: 'Crescendo in the Dark',
+        title: 'First Frame',
         mood: 'Sincere vocal-led female performance, felt upright piano build into soaring lush strings',
         style: `cinematic emotional OST ballad, felt upright piano intro, soaring lush orchestra strings, ${vocalTag}, building crescendo, rising tension line, heartfelt emotional bridge, 74 bpm, film soundtrack aesthetic, dynamic vocal range`,
-        lyrics: `[Intro]\n(Felt upright piano chords with subtle room reverb)\n(Soft cello swell rising gently)\n\n[Verse 1]\nThe camera pans across an empty floor\nAnother memory standing at the door\nI hear your footsteps in the silent room\nA lingering melody piercing the gloom\n(Supporting voice: piercing the gloom)\n\n[Pre-Chorus]\nAnd the strings begin to climb with every breath\nA rising tension conquering life and death\nThe clock is counting down the final take\nThis is the promise that I'll never break\n\n[Chorus]\nWhen the orchestra swells and the spotlights fall\nI will sing of the love that survived it all!\nThrough every broken scene and dialogue unsaid\nThrough every tear the silver screen has bled\nI gave you my heart in the very first frame\nAnd even in the dark, I'll call your name!\n(Supporting voice: Call your name)\n\n[Bridge]\n(Massive orchestral crescendo, sweeping violins and french horns)\nDon't let the reel burn! Don't let the curtains close!\nBloom like the emotion nobody knows!\n\n[Chorus]\nWhen the orchestra swells and the spotlights fall\nI will sing of the love that survived it all!\nThrough every broken scene and dialogue unsaid\nThrough every tear the silver screen has bled\nI gave you my heart in the very first frame\nAnd even in the dark, I'll call your name!\n\n[Outro]\n(Felt upright piano chords fading gently to silence)\nFade to black.\n[End]`
+        lyrics: `[Intro]\n(Felt upright piano chords with subtle room reverb)\n(Soft cello swell rising gently)\n\n[Verse 1]\nThe camera pans across an empty floor\nAnother memory standing at the door\nI hear your footsteps in the silent room\nA lingering melody piercing the gloom\n(Supporting voice: piercing the gloom)\n\n[Pre-Chorus]\nAnd the strings begin to climb with every breath\nA rising tension conquering life and death\nThe clock is counting down the final take\nThis is the promise that I'll never break\n\n[Chorus]\nWhen the orchestra swells and the spotlights fall\nI will sing of the love that survived it all!\nThrough every broken scene and dialogue unsaid\nThrough every tear the silver screen has bled\nI gave you my heart in the very first frame\nAnd even in the dark, I'll call your name!\n(Supporting voice: Call your name)\n\n[Bridge]\n(Massive orchestral crescendo, sweeping violins and french horns)\nDon't let the reel burn! Don't let the curtains close!\nBloom like the emotion nobody knows!\n\n[Chorus]\nWhen the orchestra swells and the spotlights fall\nI will sing of the love that survived it all!\nThrough every broken scene and dialogue unsaid\nThrough every tear the silver screen has bled\nI gave you my heart in the very first frame\nAnd even in the dark, I'll call your name!\n\n[Outro]\n(Felt upright piano chords fading gently to silence)\n[End]`
       },
       {
-        title: 'Between the Golden Frames',
+        title: 'Golden Frames',
         mood: 'Lush golden-hour cinematic romance with heartfelt vocal delivery and rising string tension',
         style: `cinematic romantic OST ballad, upright piano, rich cello solo, ${vocalTag}, building crescendo, 73 bpm, film soundtrack aesthetic`,
-        lyrics: `[Intro]\n(Warm felt piano arpeggio bathed in vintage reverb)\n\n[Verse 1]\nGolden light cutting through dust in the air\nA quiet room that we used to share\nI hear your breath in the pause of the phrase\nLost in the amber of yesterday's days\n(Supporting voice: yesterday's days)\n\n[Pre-Chorus]\nAnd the harmonies climb like steps to the light\nPushing the darkness out of the night\nI feel every note that we left in between\nThe sweetest mistakes on the silver screen\n\n[Chorus]\nBetween the golden frames, your memory shines\nA masterpiece written between all the lines\nNo matter how far the horizons divide\nI keep your affection safe here inside!\nWhen the spotlight fades out and the music departs\nThis cinematic ballad will cradle our hearts!\n(Supporting voice: Cradle our hearts)\n\n[Bridge]\n(Sweeping orchestral build with crying violins)\nRewind the sun! Bring back the light!\nKeep our devotion alive through the night!\n\n[Chorus]\nBetween the golden frames, your memory shines\nA masterpiece written between all the lines\nNo matter how far the horizons divide\nI keep your affection safe here inside!\n\n[Outro]\n(Warm solo piano fading into golden light)\nGolden forever.\n[End]`
+        lyrics: `[Intro]\n(Warm felt piano arpeggio bathed in vintage reverb)\n\n[Verse 1]\nGolden light cutting through dust in the air\nA quiet room that we used to share\nI hear your breath in the pause of the phrase\nLost in the amber of yesterday's days\n(Supporting voice: yesterday's days)\n\n[Pre-Chorus]\nAnd the harmonies climb like steps to the light\nPushing the darkness out of the night\nI feel every note that we left in between\nThe sweetest mistakes on the silver screen\n\n[Chorus]\nBetween the golden frames, your memory shines\nA masterpiece written between all the lines\nNo matter how far the horizons divide\nI keep your affection safe here inside!\nWhen the spotlight fades out and the music departs\nThis cinematic ballad will cradle our hearts!\n(Supporting voice: Cradle our hearts)\n\n[Bridge]\n(Sweeping orchestral build with crying violins)\nRewind the sun! Bring back the light!\nKeep our devotion alive through the night!\n\n[Chorus]\nBetween the golden frames, your memory shines\nA masterpiece written between all the lines\nNo matter how far the horizons divide\nI keep your affection safe here inside!\n\n[Outro]\n(Warm solo piano fading into golden light)\n[End]`
       },
       {
-        title: 'Echoes on the Cutting Room Floor',
+        title: 'Stronger Than Trust',
         mood: 'Atmospheric and deeply poetic ballad with soaring vocal climaxes',
         style: `atmospheric cinematic ballad, felt piano, ${vocalTag}, soaring string swell, rising tension line, 70 bpm, heart-touching dynamics`,
-        lyrics: `[Intro]\n(Atmospheric ambient pad with high piano ostinato)\n\n[Verse 1]\nAll of the scenes that they never will show\nThe laughter we shared that nobody will know\nDiscarded and left on the cutting room floor\nLocked on the other side of an old door\n\n[Pre-Chorus]\nEvery discarded scrap holds a whisper of truth\nThe reckless devotion of yesterday's youth\nThe strings start to gather, the melody cries\nWatching our universe fall from the skies\n\n[Chorus]\nThese are the echoes they couldn't edit away\nThe words that will outlive the end of the day\nIf our picture is broken and buried in dust\nI will sing of the love that was stronger than trust!\n(Supporting voice: Stronger than trust)\n\n[Outro]\n(Single piano note ringing into quiet reverb)\nNever forgotten.\n[End]`
+        lyrics: `[Intro]\n(Atmospheric ambient pad with high piano ostinato)\n\n[Verse 1]\nAll of the scenes that they never will show\nThe laughter we shared that nobody will know\nDiscarded and left on the cutting room floor\nLocked on the other side of an old door\n\n[Pre-Chorus]\nEvery discarded scrap holds a whisper of truth\nThe reckless devotion of yesterday's youth\nThe strings start to gather, the melody cries\nWatching our universe fall from the skies\n\n[Chorus]\nThese are the lyrics they couldn't edit away\nThe words that will outlive the end of the day\nIf our picture is broken and buried in dust\nI will sing of the love that was stronger than trust!\n(Supporting voice: Stronger than trust)\n\n[Outro]\n(Single piano note ringing into quiet reverb)\n[End]`
       },
       {
-        title: 'Shadows on the Silver Screen',
+        title: 'Silver Screen',
         mood: 'Evocative and majestic film soundtrack ballad with powerful dynamic build',
         style: `majestic film score ballad, grand piano, crying cello, ${vocalTag}, soaring orchestral chorus, 74 bpm, emotional depth`,
-        lyrics: `[Intro]\n(Low cello drone with delicate high piano notes)\n\n[Verse 1]\nA silver shadow moving across the white wall\nWhispering secrets to the empty hall\nI remember the day that our soundtrack began\nTwo drifting souls with an impossible plan\n(Supporting voice: impossible plan)\n\n[Pre-Chorus]\nNow the tempo quickens with every heartbeat\nThe orchestra rises from under the seat\nA flood of emotion no script could contain\nTurning the sorrow to beauty again\n\n[Chorus]\nWe were shadows on the silver screen\nThe truest romance that the world had seen\nEven if the theater turns cold and bare\nI'll leave my devotion in the midnight air!\nSinging your name till the projectors break down\nThe only true heartbeat in this quiet town!\n(Supporting voice: This quiet town)\n\n[Bridge]\n(Massive string ensemble swell and ringing brass)\nBurn every reel, but you can't touch my soul!\nLoving you was the part where I found myself whole!\n\n[Chorus]\nWe were shadows on the silver screen\nThe truest romance that the world had seen\nEven if the theater turns cold and bare\nI'll leave my devotion in the midnight air!\n\n[Outro]\n(Gentle piano chords drifting into soft silence)\nStill shining.\n[End]`
+        lyrics: `[Intro]\n(Low cello drone with delicate high piano notes)\n\n[Verse 1]\nA silver shadow moving across the white wall\nWhispering secrets to the empty hall\nI remember the day that our soundtrack began\nTwo drifting souls with an impossible plan\n(Supporting voice: impossible plan)\n\n[Pre-Chorus]\nNow the tempo quickens with every heartbeat\nThe orchestra rises from under the seat\nA flood of emotion no script could contain\nTurning the sorrow to beauty again\n\n[Chorus]\nWe were dancing together on the silver screen\nThe truest romance that the world had seen\nEven if the theater turns cold and bare\nI'll leave my devotion in the midnight air!\nSinging your name till the projectors break down\nThe only true heartbeat in this quiet town!\n(Supporting voice: This quiet town)\n\n[Bridge]\n(Massive string ensemble swell and ringing brass)\nBurn every reel, but you can't touch my soul!\nLoving you was the part where I found myself whole!\n\n[Chorus]\nWe were dancing together on the silver screen\nThe truest romance that the world had seen\nEven if the theater turns cold and bare\nI'll leave my devotion in the midnight air!\n\n[Outro]\n(Gentle piano chords drifting into soft silence)\n[End]`
       },
       {
-        title: 'The Final Cue',
+        title: 'Carry You Home',
         mood: 'Tearful yet magnificent orchestral resolution',
         style: `poignant orchestral OST ballad, French horn subtle warm pad, crying cello, ${vocalTag}, rising tension line, 75 bpm`,
-        lyrics: `[Verse 1]\nThe conductor raises his hands to the light\nThis is the moment that closes the night\nNo more rewrites and no more delays\nThe final cue plays through the twilight haze\n\n[Chorus]\nThank you for giving my heart a reprise\nA song that will travel beyond the sunrise\nWherever you wander, wherever you roam\nThis cinematic ballad will carry you home!\n(Supporting voice: Carry you home)\n\n[Outro]\n(Orchestral swell fading to soft piano chord)\nSafe home.\n[End]`
+        lyrics: `[Verse 1]\nThe conductor raises his hands to the light\nThis is the moment that closes the night\nNo more rewrites and no more delays\nThe final cue plays through the twilight haze\n\n[Chorus]\nThank you for giving my heart a reprise\nA song that will travel beyond the sunrise\nWherever you wander, wherever you roam\nThis cinematic ballad will carry you home!\n(Supporting voice: Carry you home)\n\n[Outro]\n(Orchestral swell fading to soft piano chord)\n[End]`
       }
     ];
   } else if (specs.isCinematic) {
-    // Korean Cinematic Ballad (when SOP is Korean) - Single Korean Title Only!
+    // Korean Cinematic Ballad (when SOP is Korean) - Single Korean Title Only anchored in Chorus!
     templates = [
       {
-        title: '오래된 필름 속의 너',
+        title: '눈부신 영화',
         mood: '영화 도입부의 아련한 독백과 서서히 벅차오르는 감정선',
         style: `cinematic emotional OST ballad, felt upright piano intro, soaring lush orchestra strings, ${vocalTag}, building crescendo, heartfelt bridge, 74 bpm, Korean drama film soundtrack aesthetic`,
         lyrics: `[Intro]\n(빛바랜 영사실의 먼지처럼 울려 퍼지는 아련한 피아노 선율)\n\n[Verse 1]\n빛바랜 영사실 창가 너머로\n조용히 흩어지는 기억의 파편들\n너의 목소리가 귓가에 스칠 때면\n멈춰선 시간도 숨을 죽여\n(Supporting voice: 숨을 죽여)\n\n[Pre-Chorus]\n잊혀질 줄 알았던 그날의 대사들이\n가슴 깊은 곳에서 하나둘 떠올라\n어둠 속에 홀로 앉아 널 기다리던 밤\n\n[Chorus]\n너는 내게 가장 눈부신 영화였어\n끝나지 않을 이야기처럼 타오르던 순간\n수많은 장면 속에 널 안아줄 수 있다면\n마지막 씬에서도 난 너의 손을 놓지 않을게!\n\n[Outro]\n(부드러운 오케스트라 스트링 페이드아웃)\n[End]`
       },
       {
-        title: '스크린이 암전될 때',
+        title: '너의 장면',
         mood: '엔딩 크레딧이 올라갈 때의 짙은 여운과 애절한 현악 사운드',
         style: `dramatic cinematic ballad, emotional acoustic piano, sweeping orchestra, ${vocalTag}, heartfelt climax, 76 bpm`,
         lyrics: `[Intro]\n(잔잔한 피아노와 첼로의 독주)\n\n[Verse 1]\n텅 빈 극장에 홀로 남아\n지워지지 않는 네 이름을 되뇌어\n(Supporting voice: 네 이름을)\n\n[Pre-Chorus]\n올라가는 크레딧 너머로 흐려지는 불빛\n삼켜왔던 눈물이 빗물처럼 번져와\n\n[Chorus]\n스크린이 암전되고 불이 켜져도\n내 마음속 너의 장면은 영원히 상영돼\n모든 대사가 끝난 무대 위에 서서\n너에게 건네지 못한 말을 노래할게\n\n[Outro]\n(피아노 아르페지오 페이드)\n[End]`
       },
       {
-        title: '영사실 창가의 빗소리',
+        title: '쏟아지는 빗속',
         mood: '비 내리는 영사실에서 바라보는 아련한 추억과 오케스트라의 격정',
         style: `melancholic movie OST, felt piano, crying cello, rain ambience, ${vocalTag}, 72 bpm`,
         lyrics: `[Intro]\n(창문을 두드리는 빗소리와 차분한 펠트 피아노)\n\n[Verse 1]\n유리창을 타고 흘러내리는 빗물 사이로\n네가 떠나던 그날의 장면이 겹쳐 보여\n\n[Chorus]\n쏟아지는 빗속에서 너를 부르면\n이 노래가 너의 마음에 닿을 수 있을까\n\n[Outro]\n(빗소리와 피아노 페이드아웃)`
       },
       {
-        title: '엔딩 크레딧 너머의 기억',
+        title: '엔딩 크레딧',
         mood: '영화가 끝난 후에도 멈추지 않는 깊은 감동과 여운',
         style: `grand orchestral film ballad, full strings, warm acoustic piano, ${vocalTag}, 75 bpm`,
         lyrics: `[Intro]\n(웅장하면서도 쓸쓸한 스트링 서주)\n\n[Verse 1]\n마지막 장면이 끝나고 암전이 찾아올 때\n내 맘에 남은 너의 대사는 영원히 살아있어\n\n[Chorus]\n엔딩 크레딧이 모두 올라가도\n우리의 사랑은 끝나지 않는 영화처럼 계속돼\n\n[Outro]\n(현악 합주 페이드)`
@@ -1612,7 +1873,7 @@ function generateClientSopPlaylist(
   } else if (specs.isKoreanHipHopRnb || specs.isKorEngMixed) {
     templates = [
       {
-        title: '어스름',
+        title: '너의 잔향',
         mood: '황혼이 내려앉는 도시의 어스름과 늦은 밤 감각적인 칠(Chill)한 감성',
         metaInfo: {
           vocal: '20대 중반 여성 보컬, husky yet silky texture, slightly raspy soft vocal, sandy texture',
@@ -1688,7 +1949,7 @@ Tell me why the shadows feel so deep
 I'll remember you in this dusk forever`
       },
       {
-        title: '공허',
+        title: '네모난 빈칸',
         mood: '채워지지 않는 일상의 공허함과 늦은 밤 몽환적인 칠(Chill)한 감성',
         metaInfo: {
           vocal: 'early 20s male vocal, colorless ethereal translucent breathy tone, androgynous falsetto',
@@ -1765,7 +2026,7 @@ Can somebody tell me why it hurts so slow?
 Still singing this midnight lullaby`
       },
       {
-        title: '새벽 세 시',
+        title: '달빛 아래',
         mood: '은밀한 관계의 텐션과 늦은 밤 드라이브의 몽환적인 그루브',
         metaInfo: {
           vocal: 'mid 20s male vocal, slurred drunken melodrama, syrupy thick nasal tone, heavy sticky voice',
@@ -1842,6 +2103,43 @@ Catching this feeling, nowhere to hide
 Our unforgettable late night drive`
       }
     ];
+  } else if (isSoulFunk70s) {
+    const rawSop = theme.sop || '';
+    const bpmMatch = rawSop.match(/(\d{2,3})\s*(?:~|-|\/)?\s*(\d{2,3})?\s*bpm/i);
+    const soulBpm = bpmMatch ? `${bpmMatch[1]} BPM` : '98 BPM';
+    const soulVocal =
+      vocal === 'female' ? 'Warm soulful 1970s female vocal, expressive gospel-kissed midrange, tight pitch-true hook phrasing' :
+      vocal === 'male' ? 'Smooth 1970s vintage soul male vocal, rich chest voice, warm effortless falsetto lift' :
+      vocal === 'none' ? 'Instrumental vintage soul funk groove, no vocals' : 'Warm soulful 1970s lead vocal with tight three-part backing harmonies';
+
+    templates = [
+      {
+        title: 'Spin the Record',
+        mood: '1970s warm Motown & Philadelphia soul funk pocket, rich Precision bass and joyful vintage analog groove',
+        metaInfo: {
+          vocal: soulVocal,
+          genre: '1970s Vintage Soul Funk, Classic R&B',
+          mood: 'Warm Soulful Groove, Golden Analog Joy',
+          bpm: soulBpm,
+          targetLength: '3:14'
+        },
+        style: `1970s vintage soul funk, authentic Motown and Philadelphia soul studio warmth, ${soulBpm}, warm flatwound Precision electric bass pocket groove locked with punchy acoustic kick and tight fat dry snare backbeat, crisp shaker and light vintage hi-hats, clean muted Fender Stratocaster rhythm chops and funky Hohner Clavinet riffs, warm analog tape saturation, ${soulVocal}, soulful vocal harmonies in chorus, golden-age analog console mix, punchy low-end headroom, natural stereo warmth, -harsh metal distortion, -modern trap 808, -synthetic EDM drop`,
+        lyrics: `${specs.forbidsIntroOutro ? '' : '[Intro: Warm Precision bassline locked with clean wah guitar chops and tight pocket snare]\n\n'}[Verse 1: Smooth soulful lead vocal over tight drums and warm electric piano]\nGold sunlight pouring through the corner pane\nWashing away the dust and yesterday's rain\nDropped the needle right onto the groove tonight\nSuddenly everything is feeling right\n\n[Pre-Chorus: Rising three-part backing harmonies, crisp brass stabs enter]\nNo need to hurry when the pocket feels strong\nEvery heartbeat humming right along\n\n[Chorus: Expressive pitch-true vocal hook, punchy horns and funky Clavinet lift]\nSpin the record, let the good times roll\nGot a heavy rhythm warming up my soul\nMove a little closer while the lights burn low\nRight here in the music where we always glow\nSpin the record, feel the golden beat\nFrom my open heart down to my dancing feet\n\n[Verse 2: Conversational soulful phrasing, melodic bass turnaround]\nLaughing easy till the midnight fades away\nSaving every tender word we meant to say\nTight on the rhythm, never missing a step\nKeeping every promise that our music kept\n\n[Bridge: Stripped Rhodes and warm fingerpicked guitar, heartfelt intimate belt]\nTurn the lights down low and let the horns reply\nWe got too much magic left to let it pass us by\n\n[Final Chorus: Full soulful band groove, bright brass accents and uplifting stacked harmonies]\nSpin the record, let the good times roll\nGot a heavy rhythm warming up my soul\nMove a little closer while the lights burn low\nRight here in the music where we always glow${specs.forbidsIntroOutro ? '' : '\n\n[Outro: Warm bass turnaround and horn section chord fade]\n[End]'}`
+      },
+      {
+        title: 'Right on Time',
+        mood: 'Golden 70s soul romance with crisp chicken-scratch guitar and warm brass punctuation',
+        metaInfo: {
+          vocal: soulVocal,
+          genre: '1970s Vintage Soul Funk',
+          mood: 'Uplifting Soulful Warmth & Steady Groove',
+          bpm: soulBpm,
+          targetLength: '3:10'
+        },
+        style: `1970s classic vintage soul funk, golden analog tape recording vibe, ${soulBpm}, deep melodic Precision bassline with crisp octave bounce, tight acoustic drum kit with fat snare pocket and dry kick, shimmering tambourine and balanced hi-hats, clean Stratocaster funk chops alternating with warm Fender Rhodes chords, soulful horn punctuation, ${soulVocal}, clear pitch-accurate chorus melody, warm vintage tube compressor mix, wide analog stereo field, -heavy trap, -modern EDM, -muddy sub-bass`,
+        lyrics: `${specs.forbidsIntroOutro ? '' : '[Intro: Funky Stratocaster chops and warm Rhodes chords over locked acoustic drums]\n\n'}[Verse 1: Expressive soulful verse, tight pocket snare and bouncy Precision bass]\nCaught your silhouette across the crowded floor\nNever felt a spark quite like this before\nOne steady rhythm pulling both of us near\nEvery single melody is crystal clear\n\n[Pre-Chorus: Warm horn swell and rising backing vocal harmonies]\nCounting down the seconds till you look my way\nGot a whole lot of sweetness left to say\n\n[Chorus: Catchy uplifting vocal hook, tight horns and soulful stacked chorus]\nYou came right on time like a Saturday groove\nGot my whole world turning every time you move\nHold onto my hand and let the funk unfold\nGot a pure soul feeling sweeter than gold\nYou came right on time when I needed you most\nPlaying our favorite song from coast to coast\n\n[Verse 2: Smooth soulful delivery, playful Clavinet fills]\nEvery glance says more than any words could try\nDancing underneath a warm amber sky\nNothing feels forced when the groove locks tight\nHolding onto love until the morning light\n\n[Final Chorus: Maximum joyful brass and stacked vintage vocal harmonies]\nYou came right on time like a Saturday groove\nGot my whole world turning every time you move\nHold onto my hand and let the funk unfold\nGot a pure soul feeling sweeter than gold${specs.forbidsIntroOutro ? '' : '\n\n[Outro: Brass chord swell and Precision bass fade]\n[End]'}`
+      }
+    ];
   } else {
     const rawSop = theme.sop || '';
     const styleMatch = rawSop.match(/(?:Style(?:\s+of\s+Music)?(?:\s+Prompt)?(?:\s+지침)?\s*[:]\s*['"]?)([^'"\n\r]+)/i);
@@ -1854,7 +2152,7 @@ Our unforgettable late night drive`
 
     templates = [
       {
-        title: specs.isEnglishOnly ? 'Whispers in the Silence' : `${theme.name} - 1번 트랙`,
+        title: specs.isEnglishOnly ? 'Learns to Soar' : '가장 눈부신 선율',
         mood: `${theme.name}의 고유한 사운드 정체성과 감성`,
         metaInfo: {
           vocal: vocal === 'female' ? 'Female Lead Vocal' : vocal === 'male' ? 'Male Lead Vocal' : 'Vocal',
@@ -1864,10 +2162,10 @@ Our unforgettable late night drive`
           targetLength: '3:15'
         },
         style: customStyle,
-        lyrics: `[Intro]\n[Opening instrumental motif according to SOP]\n\n[Verse 1]\n[Tender vocal delivery, subtle acoustic accompaniment]\nMoving through the quiet light of dawn\nA melody that keeps on holding on\n\n[Chorus]\n[Memorable vocal hook, full dynamic resolution]\nDeep inside where music learns to soar\nThis is the song we have been waiting for!\n\n[Outro]\n[Gentle fade to silence]\n[End]`
+        lyrics: `[Intro: Opening instrumental motif according to SOP]\n\n[Verse 1: Tender vocal delivery, subtle acoustic accompaniment]\nMoving through the quiet light of dawn\nA melody that keeps on holding on\n\n[Chorus: Memorable vocal hook, full dynamic resolution]\nDeep inside where music learns to soar\nThis is the song we have been waiting for!\n\n[Outro: Gentle fade to silence]\n[End]`
       },
       {
-        title: specs.isEnglishOnly ? 'Echoes Across the Horizon' : `${theme.name} - 2번 트랙`,
+        title: specs.isEnglishOnly ? 'Into the Dawn' : '새벽 너머로',
         mood: `${theme.name}의 서정적인 감성과 멜로디`,
         metaInfo: {
           vocal: vocal === 'female' ? 'Female Lead Vocal' : vocal === 'male' ? 'Male Lead Vocal' : 'Vocal',
@@ -1877,7 +2175,7 @@ Our unforgettable late night drive`
           targetLength: '3:05'
         },
         style: customStyle,
-        lyrics: `[Intro]\n[Acoustic instrumental intro]\n\n[Verse 1]\n[Expressive vocal delivery]\nFootsteps along an open road\nCarrying all the love we know\n\n[Chorus]\n[Harmonic climax, rich instrumentation]\nAcross the skies, into the dawn\nA timeless melody playing on!\n\n[Outro]\n[Warm closing fade]\n[End]`
+        lyrics: `[Intro: Acoustic instrumental intro]\n\n[Verse 1: Expressive vocal delivery]\nFootsteps along an open road\nCarrying all the love we know\n\n[Chorus: Harmonic climax, rich instrumentation]\nAcross the skies, into the dawn\nA timeless melody playing on!\n\n[Outro: Warm closing fade]\n[End]`
       }
     ];
   }
@@ -1908,9 +2206,21 @@ Our unforgettable late night drive`
 
   const fallbackPlans = generateTrackInnovationPlans(theme, specs, effectiveCount, vocal);
   const fallbackStylePrompts = tracks.map((t) => t.stylePrompt);
-  const refinedTracks = tracks.map((t, idx) =>
-    refineTrackWithCraftAudit(t, fallbackPlans[idx] || fallbackPlans[0], fallbackStylePrompts)
-  );
+  const refinedTracks = tracks.map((t, idx) => {
+    const refined = refineTrackWithCraftAudit(t, fallbackPlans[idx] || fallbackPlans[0], fallbackStylePrompts);
+    const cleanLyrics = formatAndCleanLyrics(refined.fullLyrics || '', specs.isJapanese, !specs.forbidsIntroOutro);
+    const finalTitle = refineClientTitleFromChorus(
+      refined.title,
+      cleanLyrics,
+      specs.targetLang,
+      specs.isJapanese ? '新曲' : (specs.isKoreanTitle ? '새로운 트랙' : `Track ${idx + 1}`)
+    );
+    return {
+      ...refined,
+      title: finalTitle,
+      fullLyrics: cleanLyrics,
+    };
+  });
 
   const tracklistText = refinedTracks.map((t, idx) => {
     return `${(idx + 1).toString().padStart(2, '0')}. ${t.title}`;

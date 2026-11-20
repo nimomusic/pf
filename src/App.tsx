@@ -1069,6 +1069,7 @@ export default function App() {
         onClose={() => setShowResultModal(false)}
         data={resultData}
         lang={currentLang}
+        isAdmin={isAdmin}
       />
 
       <ExpiredPaymentModal

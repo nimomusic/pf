@@ -8,9 +8,10 @@ interface ResultModalProps {
   onClose: () => void;
   data: PlaylistResult | null;
   lang?: string;
+  isAdmin?: boolean;
 }
 
-export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data, lang = 'ko' }) => {
+export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data, lang = 'ko', isAdmin = false }) => {
   const t = getTranslation(lang);
   const [activeTab, setActiveTab] = useState<'tracks' | 'youtube' | 'all'>('tracks');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -52,7 +53,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
       full += `Title\n${t.title}\n\n`;
       full += `Style Prompt\n${t.stylePrompt}\n\n`;
       full += `Lyrics\n${t.fullLyrics}\n\n`;
-      if (t.craftAudit) {
+      if (isAdmin && t.craftAudit) {
         full += `[7항목 사운드 차별화 자가검증]\n`;
         t.craftAudit.criteria.forEach((c) => {
           full += `- ${c.item}: ${c.result} (${c.judgment})\n`;
@@ -371,8 +372,8 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                         </div>
                       </div>
 
-                      {/* 4. 7-Axis Musical Quality Pre-Output Audit Report */}
-                      {track.craftAudit && (
+                      {/* 4. 7-Axis Musical Quality Pre-Output Audit Report (Admin Only) */}
+                      {isAdmin && track.craftAudit && (
                         <div className="p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-200/80">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex flex-wrap items-center gap-2">
