@@ -14,7 +14,12 @@ import {
 import { ensureFirebaseInitialized, handleFirestoreError, OperationType } from '../firebase';
 import { Theme, PlaylistResult, VocalType, ProviderType } from '../types';
 import { buildCuratedYoutubePackage } from '../utils/youtubePackageBuilder';
-import { generateTrackInnovationPlans, refineTrackWithCraftAudit } from '../utils/musicalCraftEngine';
+import {
+  enforceTrackVocalGender,
+  generateTrackInnovationPlans,
+  refineTrackWithCraftAudit,
+  resolvePerTrackVocalGenders,
+} from '../utils/musicalCraftEngine';
 
 const THEMES_STORAGE_KEY = 'plymaster_custom_themes';
 const DELETED_THEMES_STORAGE_KEY = 'plymaster_deleted_theme_ids';
@@ -839,12 +844,29 @@ export async function generatePlaylist(params: {
 
   if (data.result && Array.isArray(data.result.tracks)) {
     const specs = parseClientSopSpecs(params.theme);
-    data.result.tracks = data.result.tracks.map((tr: any, idx: number) => ({
-      ...tr,
-      trackNumber: idx + 1,
-      title: cleanTitleSingleLanguage(tr.title, specs.targetLang, specs.isJapanese ? '新曲' : specs.isKoreanTitle ? '새로운 트랙' : (tr.title || `Track ${idx + 1}`)),
-      fullLyrics: formatAndCleanLyrics(tr.fullLyrics, specs.isJapanese, !specs.forbidsIntroOutro)
-    }));
+    const fallbackGenders = resolvePerTrackVocalGenders(params.vocal, data.result.tracks.length);
+    data.result.tracks = data.result.tracks.map((tr: any, idx: number) => {
+      const cleanedLyrics = formatAndCleanLyrics(tr.fullLyrics, specs.isJapanese, !specs.forbidsIntroOutro);
+      // Respect already-resolved gender per track when vocal === 'random'
+      let targetGender = fallbackGenders[idx] || 'female';
+      if (params.vocal === 'random') {
+        const sLower = String(tr.stylePrompt || '').toLowerCase();
+        const mLower = String(tr.metaInfo?.vocal || '').toLowerCase();
+        const hasFemale = /\bfemale\b|여성/i.test(`${sLower} ${mLower}`);
+        const hasMale = /(?<![a-z])male\b|남성/i.test(`${sLower} ${mLower}`);
+        if (hasMale && !hasFemale) targetGender = 'male';
+        else if (hasFemale && !hasMale) targetGender = 'female';
+      }
+      return enforceTrackVocalGender(
+        {
+          ...tr,
+          trackNumber: idx + 1,
+          title: cleanTitleSingleLanguage(tr.title, specs.targetLang, specs.isJapanese ? '新曲' : specs.isKoreanTitle ? '새로운 트랙' : (tr.title || `Track ${idx + 1}`)),
+          fullLyrics: cleanedLyrics,
+        },
+        targetGender
+      );
+    });
 
     const fallbackTracklist = data.result.tracks
       .map((t: any, idx: number) => `${String(idx + 1).padStart(2, '0')}. ${t.title}`)
@@ -1510,14 +1532,17 @@ function generateClientSopPlaylist(
   lyricConcept?: string
 ) {
   const specs = parseClientSopSpecs(theme);
+  const effectiveCount = Math.min(Math.max(trackCount || 1, 1), 10);
+  const fallbackPlans = generateTrackInnovationPlans(theme, specs, effectiveCount, vocal);
 
-  const vocalTag =
-    vocal === 'female' ? 'sincere expressive female vocal, emotional delivery' :
-    vocal === 'male' ? 'male heartfelt soulful vocal, warm tone' :
-    vocal === 'none' ? 'instrumental, no vocals' : 'expressive emotional vocal harmonies';
+  const vocalTagForGender = (g: 'male' | 'female' | 'none') =>
+    g === 'female' ? 'solo female lead vocal, female voice, sincere expressive delivery' :
+    g === 'male' ? 'solo male lead vocal, male voice, heartfelt soulful delivery, warm tone' :
+    'pure instrumental, instrumental only, no vocals';
+
+  const vocalTag = vocalTagForGender(fallbackPlans[0]?.vocalGender || (vocal === 'male' ? 'male' : vocal === 'none' ? 'none' : 'female'));
 
   const tracks: any[] = [];
-  const effectiveCount = Math.min(Math.max(trackCount || 1, 1), 10);
 
   let templates: Array<{ title: string; mood: string; style: string; lyrics: string; metaInfo?: any }> = [];
 
@@ -2184,6 +2209,7 @@ Our unforgettable late night drive`
   const randomOffset = getNonRepeatingClientOffset(templates.length);
 
   for (let i = 0; i < effectiveCount; i++) {
+    const plan = fallbackPlans[i] || fallbackPlans[0];
     const tmpl = templates[(i + randomOffset) % templates.length];
     const rawTitle = effectiveCount > templates.length && i >= templates.length
       ? `${tmpl.title} Part ${Math.floor(i / templates.length) + 1}`
@@ -2194,31 +2220,48 @@ Our unforgettable late night drive`
       ? `${tmpl.mood} · 컨셉: ${cleanConcept}`
       : tmpl.mood;
 
-    tracks.push({
-      trackNumber: i + 1,
-      title: cleanTitleSingleLanguage(rawTitle, specs.targetLang, specs.isJapanese ? '新曲' : (specs.isKoreanTitle ? '새로운 트랙' : `Track ${i + 1}`)),
-      mood: effectiveMood,
-      metaInfo: tmpl.metaInfo,
-      stylePrompt: tmpl.style,
-      fullLyrics: formatAndCleanLyrics(tmpl.lyrics, specs.isJapanese, !specs.forbidsIntroOutro)
-    });
+    let trackStyle = tmpl.style;
+    if (vocal === 'random' && i > 0 && fallbackPlans[0]?.vocalGender !== plan.vocalGender) {
+      const targetTag = vocalTagForGender(plan.vocalGender);
+      trackStyle = trackStyle.replace(vocalTag, targetTag);
+    }
+
+    tracks.push(
+      enforceTrackVocalGender(
+        {
+          trackNumber: i + 1,
+          title: cleanTitleSingleLanguage(rawTitle, specs.targetLang, specs.isJapanese ? '新曲' : (specs.isKoreanTitle ? '새로운 트랙' : `Track ${i + 1}`)),
+          mood: effectiveMood,
+          metaInfo: tmpl.metaInfo,
+          stylePrompt: trackStyle,
+          fullLyrics: formatAndCleanLyrics(tmpl.lyrics, specs.isJapanese, !specs.forbidsIntroOutro)
+        },
+        plan.vocalGender
+      )
+    );
   }
 
-  const fallbackPlans = generateTrackInnovationPlans(theme, specs, effectiveCount, vocal);
   const fallbackStylePrompts = tracks.map((t) => t.stylePrompt);
   const refinedTracks = tracks.map((t, idx) => {
-    const refined = refineTrackWithCraftAudit(t, fallbackPlans[idx] || fallbackPlans[0], fallbackStylePrompts);
+    const plan = fallbackPlans[idx] || fallbackPlans[0];
+    const refined = refineTrackWithCraftAudit(t, plan, fallbackStylePrompts);
     const cleanLyrics = formatAndCleanLyrics(refined.fullLyrics || '', specs.isJapanese, !specs.forbidsIntroOutro);
+    const lockedRefined = enforceTrackVocalGender(
+      {
+        ...refined,
+        fullLyrics: cleanLyrics,
+      },
+      plan.vocalGender
+    );
     const finalTitle = refineClientTitleFromChorus(
-      refined.title,
-      cleanLyrics,
+      lockedRefined.title,
+      lockedRefined.fullLyrics,
       specs.targetLang,
       specs.isJapanese ? '新曲' : (specs.isKoreanTitle ? '새로운 트랙' : `Track ${idx + 1}`)
     );
     return {
-      ...refined,
+      ...lockedRefined,
       title: finalTitle,
-      fullLyrics: cleanLyrics,
     };
   });
 

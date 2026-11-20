@@ -8,6 +8,7 @@ import seedThemes from './data/themes.json' with { type: 'json' };
 import { buildCuratedYoutubePackage } from './src/utils/youtubePackageBuilder.ts';
 import {
   buildRefinementPromptForAI,
+  enforceTrackVocalGender,
   evaluateTrackMusicalCraft,
   formatInnovationPromptSection,
   generateTrackInnovationPlans,
@@ -1318,6 +1319,62 @@ app.post(['/api/generate', '/generate'], async (req: Request, res: Response) => 
       return;
     }
 
+    const innovationPlans = generateTrackInnovationPlans(theme, sopSpecs, effectiveTrackCount, vocal);
+    const innovationPromptSection = formatInnovationPromptSection(innovationPlans);
+
+    const perTrackVocalSummary = innovationPlans
+      .map((p) =>
+        `Track ${p.trackNumber}: ${
+          p.vocalGender === 'male'
+            ? 'SOLO MALE LEAD VOCAL ("solo male lead vocal, male voice", Exclude: -female vocals)'
+            : p.vocalGender === 'female'
+            ? 'SOLO FEMALE LEAD VOCAL ("solo female lead vocal, female voice", Exclude: -male vocals)'
+            : 'PURE INSTRUMENTAL ("pure instrumental, no vocals", Exclude: -vocals, -singing)'
+        }`
+      )
+      .join('; ');
+
+    const vocalGenderMandate =
+      vocal === 'male'
+        ? `[CRITICAL VOCAL GENDER LOCK MANDATE: MALE VOCAL ONLY (남성 보컬 고정)]
+- USER EXPLICITLY SELECTED: MALE VOCAL (남성 보컬). This OVERRIDES ANY "female vocal" / "single female voice" / "여성 보컬" default or example inside the SOP!
+- EVERY track's "stylePrompt" MUST explicitly include "solo male lead vocal, male voice" (or male baritone/tenor) and Exclude "-female vocals, -female vocal".
+- STRICTLY FORBIDDEN: NEVER output "female", "soprano", "alto", "mezzo", "androgynous", or "duet" in any track's stylePrompt, metaInfo.vocal, or lyric bracket guides!
+- EVERY vocal section tag ([Verse 1: ...], [Chorus: ...], [Bridge: ...]) MUST specify male vocal delivery so Suno never switches vocal gender mid-song.`
+        : vocal === 'female'
+        ? `[CRITICAL VOCAL GENDER LOCK MANDATE: FEMALE VOCAL ONLY (여성 보컬 고정)]
+- USER EXPLICITLY SELECTED: FEMALE VOCAL (여성 보컬). This OVERRIDES ANY "male vocal" / "남성 보컬" default or example inside the SOP!
+- EVERY track's "stylePrompt" MUST explicitly include "solo female lead vocal, female voice" (or female soprano/alto) and Exclude "-male vocals, -male vocal".
+- STRICTLY FORBIDDEN: NEVER output "male vocal", "baritone", "tenor", "androgynous", or "duet" in any track's stylePrompt, metaInfo.vocal, or lyric bracket guides!
+- EVERY vocal section tag ([Verse 1: ...], [Chorus: ...], [Bridge: ...]) MUST specify female vocal delivery so Suno never switches vocal gender mid-song.`
+        : vocal === 'none'
+        ? `[CRITICAL VOCAL LOCK MANDATE: PURE INSTRUMENTAL ONLY (보컬 없음)]
+- USER EXPLICITLY SELECTED: NO VOCALS / INSTRUMENTAL ONLY. This OVERRIDES any sung-vocal descriptions in the SOP!
+- EVERY track's "stylePrompt" MUST explicitly include "pure instrumental, instrumental only, no vocals" and Exclude "-vocals, -singing, -lead vocal, -male vocals, -female vocals".
+- Set "metaInfo.vocal" to "Instrumental (No vocals)", and write instrumental arrangement section cues without sung vocal lines.`
+        : `[CRITICAL VOCAL GENDER LOCK MANDATE: PER-TRACK GENDER LOCK (곡별 성별 명확 고정)]
+- The user chose "Random Vocal", which means you MUST LOCK EACH INDIVIDUAL TRACK to ONE explicit vocal gender so Suno NEVER flips between male and female inside a song!
+- Exact per-track assignment from the Matrix: ${perTrackVocalSummary}
+- EVERY track's "stylePrompt" MUST explicitly include either "solo male lead vocal, male voice" (+ "-female vocals" in Exclude) OR "solo female lead vocal, female voice" (+ "-male vocals" in Exclude) matching its assignment above — NEVER omit gender or use ambiguous terms like "androgynous" or bare "lead vocal"!`;
+
+    const jpopVocalRuleText =
+      vocal === 'none'
+        ? 'Pure instrumental lead melody (electric piano / sax / guitar), no vocals, no singing'
+        : vocal === 'male'
+        ? 'Original Japanese solo male lead vocal, male voice, deep clear low-register tone, intimate low verse delivery, wide emotional chorus, restrained vibrato, no over-belting, polished vocal +2dB'
+        : vocal === 'female'
+        ? 'Original Japanese solo female lead vocal, female voice, deep clear low-register tone, intimate low verse delivery, wide emotional chorus, restrained vibrato, no over-belting, polished vocal +2dB'
+        : 'Exact per-track gender from LOCKED VOCAL GENDER ("Original Japanese solo male lead vocal, male voice" OR "Original Japanese solo female lead vocal, female voice"), deep clear low-register tone, intimate low verse delivery, wide emotional chorus, restrained vibrato, no over-belting, polished vocal +2dB';
+
+    const korEngVocalRuleText =
+      vocal === 'none'
+        ? 'Pure instrumental only, no vocals, no singing (lead Rhodes & ambient synth melody)'
+        : vocal === 'male'
+        ? 'mid 20s solo male lead vocal, male voice, husky yet silky or velvety baritone preset matching SOP, breathy singing-rap delivery, airy falsetto ad-libs, intimate close-mic capture, dry lead vocal mix, raw vocal texture, front-and-center presence, minimal backing layer'
+        : vocal === 'female'
+        ? 'early 20s solo female lead vocal, female voice, husky yet silky or crystalline preset matching SOP, breathy singing-rap delivery, airy falsetto ad-libs, intimate close-mic capture, dry lead vocal mix, raw vocal texture, front-and-center presence, minimal backing layer'
+        : 'Use the EXACT gender assigned per track in the Matrix ("mid 20s solo male lead vocal, male voice" OR "early 20s solo female lead vocal, female voice") + concrete Suno texture preset (NO "androgynous" ambiguity!), breathy singing-rap delivery, intimate close-mic capture, front-and-center presence';
+
     const targetLang = sopSpecs.targetLang;
     const isJapanese = sopSpecs.isJapanese;
     const isKorEng = sopSpecs.isKorEngMixed || sopSpecs.isKoreanHipHopRnb;
@@ -1340,9 +1397,9 @@ You MUST strictly follow these 5 field rules:
      (1) Genre & Vibe: electronic R&B J-pop, cinematic Japanese alt-pop, philosophical city ballad, intimate, urban, deep, elegant, lonely, quietly devastating, nocturnal city atmosphere
      (2) Tempo, Rhythm & Groove: Exact 90~96 BPM, minimal electronic drums, soft kick, laidback swinging groove, restrained R&B rhythm
      (3) Instrumentation: Mellow vintage electric piano, deep sub bass, glassy synth keys, clean guitar fragments, ambient room texture, foley SFX, space and air
-     (4) Vocal Texture & Performance: Original Japanese female lead, deep clear low-register tone, intimate low verse delivery, wide emotional chorus, restrained vibrato, no over-belting, polished vocal +2dB
+     (4) Vocal Texture & Performance: ${jpopVocalRuleText}
      (5) Spatial Mix & Mastering: Polished alt-pop mix, wide stereo panorama, bass clean, pristine dynamic headroom, hard stop ending
-     (6) Negative Exclusions: Exclude: -over-belting, -nasal vocal, -idol tone, -heavy autotune, -EDM, -trap, -muddy bass, -fadeout, -fast tempo, -harsh highs
+     (6) Negative Exclusions: Exclude: -over-belting, -nasal vocal, -idol tone, -heavy autotune, -EDM, -trap, -muddy bass, -fadeout, -fast tempo, -harsh highs${vocal === 'male' ? ', -female vocals' : vocal === 'female' ? ', -male vocals' : vocal === 'none' ? ', -vocals, -singing' : ', plus opposite gender exclusion'}
 
 3. CRITICAL SECTION TAG & NEWLINE RULES IN "fullLyrics":
    - EVERY section bracket tag MUST be on its own line followed by a newline (\\n), and NEVER repeat the section name inside the guide (write [Verse 1: Intimate low verse...], STRICTLY NEVER [Verse 1: Verse 1: ...]).
@@ -1383,7 +1440,7 @@ You MUST strictly follow these 5 field rules:
 - Active Theme: "${theme.name}" (${theme.category || 'Music'}). Follow ONLY this theme's SOP for genre, BPM, instrumentation, groove, mood, and vocal direction!
 - ABSOLUTE GENRE & LANGUAGE ISOLATION: NEVER bleed in J-POP, Japanese lyrics, Korean R&B/Trap Hip-Hop ("Atmospheric Korean R&B", "chill trap hip-hop", "808 trap snare"), or 1940s shellac unless explicitly written in "${theme.name}"'s SOP!
 - Track titles ("title") MUST be a catchy, natural 1–4 word English phrase or keyword **ACTUALLY SUNG VERBATIM INSIDE THAT TRACK'S [Chorus] LYRICS**! STRICTLY BANNED AI CLICHÉS: NEVER use generic abstract AI titles like "Empty Spaces", "Sweet Confession", "Silent Echoes", "Whispers in the Dark", "Fading Memories", "Midnight Reverie", "Fragments on...", or "Shadows of..."! NEVER use Korean, Japanese, or bilingual parentheses.
-- Style prompts ("stylePrompt"), section tags, and section guides MUST be 100% English (750 to 950 characters) reflecting the exact genre, BPM, instruments, and vocal setup (${vocalLabel}) required by "${theme.name}"'s SOP. Never repeat the section name inside brackets (write [Verse 1: warm groove], NEVER [Verse 1: Verse 1: ...]).
+- Style prompts ("stylePrompt"), section tags, and section guides MUST be 100% English (750 to 950 characters) reflecting the exact genre, BPM, instruments, and LOCKED vocal setup (${vocalLabel}: ${perTrackVocalSummary}). Override any default SOP vocal gender if the user selected Male/Female/Instrumental! Never repeat the section name inside brackets (write [Verse 1: warm groove], NEVER [Verse 1: Verse 1: ...]).
 - ALL lyrics in "fullLyrics" MUST be written in 100% pure English (ZERO Korean/Japanese words in sung lines!) across a complete 3-minute song structure (32 to 48 lines).
 ${sopSpecs.forbidsIntroOutro ? `- IMPORTANT TAG PROHIBITION: The SOP explicitly forbids [Intro] and [Outro] tags! Start directly with [Verse 1: ...] and finish on [Final Chorus: ...] or [Chorus: ...], with NO [Intro], NO [Outro], and NO [End] tags.` : ''}`
       : isKorEng
@@ -1401,9 +1458,9 @@ The user's SOP explicitly specifies Korean R&B / Hip-Hop with Korean-English Cod
      (1) Micro-Genre & Aesthetic: Atmospheric Korean R&B, chill trap hip-hop, trendy nocturnal aesthetic vibe, late-night bedroom lo-fi mood, dreamy and contemplative
      (2) Tempo, Rhythm & Groove: Exact BPM (e.g. 82 BPM), swinging half-time groove, lazy trap snare, rolling 32nd hi-hat triplets, laidback rimshots
      (3) Detailed Instruments & Sound Design: Vintage Rhodes electric piano with tremolo, detuned ambient analog synthesizer pads, deep gliding 808 sub-bass pulse, filtered vocal chop counter-melodies, subtle warm tape saturation and vinyl crackle
-     (4) Vocal Texture & Performance: Specific age/gender and exact Suno keywords from the chosen 20-preset list (e.g. "early 20s female vocal, husky yet silky, slightly raspy soft vocal, sandy texture, breathy singing-rap delivery, airy falsetto ad-libs, intimate close-mic capture, dry lead vocal mix, raw vocal texture, front-and-center presence, minimal backing layer")
+     (4) Vocal Texture & Performance: ${korEngVocalRuleText}
      (5) Spatial Mix & Mastering: Spacious stereo panorama, airy shimmering highs, warm tight low frequencies, modern clean playlist-ready master
-     (6) Exclusions: Exclude: -orchestra, -string section, -bright brass, -edm drop, -fast rock tempo, -flat emotionless delivery
+     (6) Exclusions: Exclude: -orchestra, -string section, -bright brass, -edm drop, -fast rock tempo, -flat emotionless delivery${vocal === 'male' ? ', -female vocals' : vocal === 'female' ? ', -male vocals' : vocal === 'none' ? ', -vocals, -singing' : ', plus opposite gender exclusion'}
 
 3. SECTION TAGS & GUIDES IN "fullLyrics":
    - Section headers and bracketed guides MUST BE IN ENGLISH (NEVER repeat the section name inside the guide—never write [Verse 1: Verse 1: ...]):
@@ -1432,7 +1489,7 @@ The user's SOP explicitly specifies Korean R&B / Hip-Hop with Korean-English Cod
    - Write natural Korean conversational lyrics with smooth English rhyme endings, English hook phrases, and trendy ad-libs (Yeah, Right, Uh-huh, Hm-hm).
    - NEVER output 100% English lyrics! Korean MUST be the primary language of the sung lyrics lines!`
       : `[CRITICAL THEME FIDELITY & LANGUAGE GUIDELINES: "${theme.name}"]
-- Active Theme: "${theme.name}" (${theme.category || 'Music'}). Strictly follow the [USER SOP SPECIFICATION] for genre, groove, BPM, instruments, vocal gender/tone (${vocalLabel}), and lyric language. NEVER substitute J-POP, Japanese, or unrelated genre templates unless explicitly written in "${theme.name}"'s SOP!
+- Active Theme: "${theme.name}" (${theme.category || 'Music'}). Strictly follow the [USER SOP SPECIFICATION] for genre, groove, BPM, instruments, LOCKED vocal gender (${vocalLabel}: ${perTrackVocalSummary}), and lyric language. NEVER substitute J-POP, Japanese, or unrelated genre templates unless explicitly written in "${theme.name}"'s SOP!
 - Track titles ("title") MUST be a catchy 1–4 word core phrase/keyword actually sung verbatim inside that track's [Chorus] lyrics in the exact SOP language (NEVER AI clichés like "Empty Spaces" or "Sweet Confession").
 - Style prompts MUST be comprehensive (750-950 characters) and written in 100% English for Suno/Udio.
 - Full lyrics MUST be a complete 3-minute song (at least 36-50 lines across at least 7 structural sections), with NEVER repeating section names like [Verse 1: Verse 1: ...].`;
@@ -1454,17 +1511,16 @@ The user explicitly specified the following lyric concept/storyline for ALL trac
 - Strictly respect the SOP's genre, language rules, vocal style, and acoustic criteria.${firstSightDisambiguation}`
       : '';
 
-    const innovationPlans = generateTrackInnovationPlans(theme, sopSpecs, effectiveTrackCount, vocal);
-    const innovationPromptSection = formatInnovationPromptSection(innovationPlans);
-
     const systemPrompt = `You are "Plymaster", a world-class AI executive music producer and Suno/Udio prompt engineer.
 
 ${languageRule}
 
+${vocalGenderMandate}
+
 ================================================================================
 CRITICAL MASTER DIRECTIVE: 100% STRICT ADHERENCE TO THE USER'S PROVIDED SOP
 ================================================================================
-The following SOP (Standard Operating Procedure) provided by the user is the ABSOLUTE, UNCOMPROMISING SPECIFICATION for this playlist project.
+The following SOP (Standard Operating Procedure) provided by the user is the ABSOLUTE, UNCOMPROMISING SPECIFICATION for this playlist project (EXCEPT when the user's selected Vocal Setup explicitly overrides default vocal gender as mandated above).
 Do NOT use generic fallback assumptions, do NOT abbreviate, and do NOT replace the SOP rules with generic pop clichés:
 
 [USER SOP SPECIFICATION START]
@@ -1475,7 +1531,7 @@ ${theme.sop || ''}
 - Theme Name: ${theme.name}
 - Theme Category: ${theme.category || 'Music'}
 - Target Track Count: EXACTLY ${effectiveTrackCount} track(s) (You MUST generate ALL ${effectiveTrackCount} distinct tracks numbered sequentially 1 to ${effectiveTrackCount}!)
-- Vocal Setup: ${vocalLabel}${cleanLyricConcept ? `\n- Lyric Concept (가사 컨셉): ${cleanLyricConcept}` : ''}
+- Locked Vocal Setup: ${vocalLabel} -> ${perTrackVocalSummary}${cleanLyricConcept ? `\n- Lyric Concept (가사 컨셉): ${cleanLyricConcept}` : ''}
 ${lyricConceptSection}
 ${innovationPromptSection}
 
@@ -1488,9 +1544,9 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 - NEVER return only 1 track when ${effectiveTrackCount} > 1, and NEVER skip trackNumber 1!
 
 1. [SOUND IDENTITY & ACOUSTIC CRITERIA]
-- Carefully inspect the [USER SOP SPECIFICATION] for "${theme.name}" (${theme.category || 'Music'}) — including its exact Sound Identity, Genre, Tempo/BPM, Vocal Setup (${vocalLabel}), Instrumentation, and Production Directives.
-- EVERY TRACK's 'stylePrompt' MUST EXCLUSIVELY EMBED AND REFLECT THE EXACT SOUND CRITERIA OF "${theme.name}"'S SOP:
-  * Follow the exact genre, groove, instruments, BPM, vocal gender/texture (${vocalLabel}), and mix aesthetic written in [USER SOP SPECIFICATION].
+- Carefully inspect the [USER SOP SPECIFICATION] for "${theme.name}" (${theme.category || 'Music'}) — including its exact Sound Identity, Genre, Tempo/BPM, Instrumentation, and Production Directives — and combine with the LOCKED Vocal Setup (${perTrackVocalSummary}).
+- EVERY TRACK's 'stylePrompt' MUST EXCLUSIVELY EMBED AND REFLECT THE EXACT SOUND CRITERIA OF "${theme.name}"'S SOP AND ITS LOCKED VOCAL GENDER:
+  * Follow the exact genre, groove, instruments, BPM, and mix aesthetic written in [USER SOP SPECIFICATION], and explicitly lock vocal gender to ${perTrackVocalSummary}!
 - CRITICAL ISOLATION RULE: NEVER inherit, copy, or mix in genres, languages, instruments, eras, J-POP/Japanese conventions, vintage crackles, or sound textures from any other theme! Use ONLY what belongs to "${theme.name}"'s SOP!
 
 2. [STYLE PROMPT SPECIFICATIONS (stylePrompt)]
@@ -1544,8 +1600,8 @@ STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
 - NEVER output bilingual parentheses like "Title (제목)" or "제목 (Title)".
 
 5. [META INFO (metaInfo)]
-- For each track, output values 100% faithful to "${theme.name}"'s SOP and Vocal Setup (${vocalLabel}):
-  - vocal: ${vocal === 'none' ? '"Instrumental (No vocals)"' : isJapanese ? `"original Japanese ${vocal === 'male' ? 'male' : 'female'} vocal matching SOP"` : isKorEng ? `"${vocal === 'male' ? 'male' : 'female'} vocal age and chosen texture matching SOP"` : `"${vocal === 'female' ? 'Female' : vocal === 'male' ? 'Male' : 'Lead'} vocal matching ${theme.name} SOP & ${vocalLabel}"`} (CRITICAL: strictly honor ${vocalLabel}; NEVER write "original Japanese male/female lead" unless the theme is genuinely J-POP!)
+- For each track, output values 100% faithful to "${theme.name}"'s SOP and LOCKED Vocal Setup (${vocalLabel}):
+  - vocal: ${vocal === 'none' ? '"Instrumental (No vocals)"' : vocal === 'male' ? (isJapanese ? '"Solo Male Vocal (20s Japanese male vocal, restrained intimate low-register tone)"' : '"Solo Male Vocal matching SOP texture"') : vocal === 'female' ? (isJapanese ? '"Solo Female Vocal (20s Japanese female vocal, restrained intimate low-register tone)"' : '"Solo Female Vocal matching SOP texture"') : '"Explicitly write Solo Male Vocal (...) or Solo Female Vocal (...) matching that track\'s LOCKED VOCAL GENDER in the Matrix"'} (CRITICAL: NEVER write "original Japanese male/female" unless J-POP, and NEVER omit the single locked gender!)
   - genre: ${isJapanese ? '"Electronic R&B J-pop, Cinematic Alt-pop"' : isKorEng ? '"Atmospheric R&B, Chill Trap Hip-Hop"' : `"Exact genre specified in ${theme.name} SOP"`}
   - mood: Core emotional role defined in current SOP
   - bpm: Exact BPM matching current SOP
@@ -1589,14 +1645,14 @@ CRITICAL: "tracks" MUST contain EXACTLY ${effectiveTrackCount} track objects ("t
       "trackNumber": 1,
       "title": ${isJapanese ? '"コーラスの歌詞から抜粋した短い日本語タイトル (例: 画面の向こう, 夜を泳ぐ)"' : isPureEnglish ? '"1-4 word catchy English hook phrase actually sung inside this track [Chorus] (NO AI clichés like Empty Spaces or Sweet Confession)"' : isKorEng ? '"코러스 가사 핵심 구절에서 뽑은 자연스러운 한국어 제목 (예: 너의 잔향, 네모난 빈칸)"' : '"1-4 word catchy hook phrase pulled verbatim from this track [Chorus] lyrics in SOP language"'},
       "metaInfo": {
-        "vocal": "Detailed vocal assignment matching SOP (age, gender, chosen texture preset keywords)",
+        "vocal": "Detailed vocal assignment matching LOCKED VOCAL GENDER (explicitly state Solo Male Vocal or Solo Female Vocal or Instrumental, age, texture)",
         "genre": "Genre strictly matching current SOP",
         "mood": "Core emotional role",
         "bpm": "e.g. 94 BPM",
         "targetLength": "e.g. 3:15"
       },
       "mood": "Core emotion keyword",
-      "stylePrompt": "Dense comma-separated 750 to 950 character 100% English Suno prompt embedding: (1) micro-genre & vibe, (2) tempo & groove (BPM), (3) detailed instrumentation & sound design, (4) vocal texture (age, gender, delivery), (5) spatial mix & mastering, (6) Exclude terms.",
+      "stylePrompt": "Dense comma-separated 750 to 950 character 100% English Suno prompt embedding: (1) micro-genre & vibe, (2) tempo & groove (BPM), (3) detailed instrumentation & sound design, (4) EXPLICIT LOCKED VOCAL GENDER (e.g. solo male lead vocal, male voice OR solo female lead vocal, female voice OR pure instrumental, no vocals) + age & delivery, (5) spatial mix & mastering, (6) Exclude terms (including opposite gender exclusion).",
       "fullLyrics": ${isJapanese ? '"[Intro: Mellow electric piano, soft ambient room tone]\\n\\n[Verse 1: Intimate low verse, soft kick and clean guitar fragments]\\n(6-8 Japanese sung lines with newline after each)\\n\\n[Pre-Chorus: Glassy synth keys entering]\\n(4 Japanese sung lines)\\n\\n[Chorus: Wide emotional delivery, restrained vibrato, full bass lift]\\n(6-8 Japanese sung lines)\\n\\n[Instrumental Interlude: Glassy synths, subtle guitar licks and ambient space]\\n\\n[Verse 2: Intimate storytelling]\\n(6-8 Japanese sung lines)\\n\\n[Bridge: Stripped back acoustic piano]\\n(4 Japanese sung lines)\\n\\n[Chorus: Maximum emotional release]\\n(6-8 Japanese sung lines)\\n\\n[Outro: Mellow electric piano fading gently into room silence]\\n\\n[End]"' : isPureEnglish ? '"Full 100% English lyrics of 36-50 lines with clean [Section: Guide] tags on own lines separated by blank lines, ending with a single [End]"' : isKorEng ? '"Full lyrics with clean [Section: Guide] tags on own lines followed by Korean-English code-switching sung lines (75% Korean + 25% English, 36-50 lines total)."' : '"Full lyrics with clean [Section: Guide] tags on own lines followed by sung lyrics in the SOP language."'}
     }
   ],
@@ -1611,17 +1667,28 @@ CRITICAL: "tracks" MUST contain EXACTLY ${effectiveTrackCount} track objects ("t
   }
 }`;
 
-    const standardSystemInstruction = `You are an expert AI music playlist producer and Suno prompt engineer for theme "${theme.name}" (${theme.category || 'Music'}). Follow the user SOP with 100% strict fidelity—NEVER mix in J-POP/Japanese or any other theme's genre/language unless explicitly required by this theme's SOP. CRITICAL MANDATORY RULES: (1) ALWAYS generate the EXACT number of tracks requested in Target Track Count (e.g., if ${effectiveTrackCount} tracks are requested, the "tracks" JSON array MUST contain all ${effectiveTrackCount} distinct tracks numbered 1 through ${effectiveTrackCount}, never just 1 track!). (2) Style prompts MUST be dense, comma-separated musical keywords and sound design tags matching "${theme.name}" (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries; DO NOT write narrative sentences like "This track embodies the essence of..."), while ALWAYS protecting catchy singable vocal melodies, pitch accuracy, and a steady groove pocket (NEVER write timing/tuning-destabilizing terms like "ahead-of-beat", "behind-the-beat", "breaking 4/4", "off-grid", "irregular rests", or "voice crack"). (3) Tag & Line Break Hygiene: Every section tag MUST use single square brackets [Section: Guide] (NEVER curly braces {}, NEVER nested parentheses [(...)], and NEVER repeat the section prefix inside the guide such as [Verse 1: Verse 1: ...]). Put every tag on its own line followed by \\n, separate sections with \\n\\n, NEVER split single words onto separate lines, NEVER repeat parenthesized guides underneath [Outro: ...] or [Instrumental Interlude: ...], and emit [End] AT MOST ONCE at the very end. (4) Instrumental Sections Hygiene: [Intro: ...], [Outro: ...], [Piano Solo: ...], and [Instrumental Interlude: ...] MUST CONTAIN ZERO SUNG LYRICS! (5) Strictly match the vocal gender/role (${vocalLabel}) and the exact lyric language of "${theme.name}"'s SOP (${isJapanese ? '100% Pure Japanese titles and lyrics, ZERO Korean' : isPureEnglish ? '100% Pure English titles and lyrics' : isKorEng ? 'Korean titles and Korean-English code-switching lyrics' : 'exact language specified in the SOP'}). Every song title MUST be a natural 1-4 word core phrase/keyword actually sung inside that track's [Chorus] lyrics — NEVER use AI clichés like "Empty Spaces", "Sweet Confession", "Silent Echoes", "Whispers in the Dark", or verbatim preset concept labels! (6) Strictly respect tag prohibitions such as omitting [Intro], [Outro], and [End] when forbidden in the SOP. (7) For the YouTube Upload Package ("youtube"), craft high-CTR curated Korean/English playlist titles ("𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | <hook + emoji> | <genre • space tags>", NEVER generic clichés like "~와 함께하는 신나는 하루 | 플레이리스트"), follow the exact 5-block YouTube description structure (2-line scene intro → 2-line use-cases & warm wish → "🎧 Tracklist" followed by blank lines with ZERO numbered songs or timestamps → "📌" sound focus & subscribe CTA → 8-9 space-separated hashtags; NEVER write AI clichés like "경험하세요/만끽하세요/빠져보세요"), output "tracklist" WITHOUT any (0:00) timestamps, EXACTLY 5 SEO hashtags in "hashtags", and make "thumbnailPrompt" a single unified 16:9 center-focused photorealistic editorial photography prompt of AT LEAST 2,200 characters matching the lyric language culture (${isJapanese ? 'Japanese setting & Japanese subject' : isPureEnglish ? 'Western setting & Western subject' : 'Korean setting & Korean subject'}), exact historical era/subculture (e.g. 1940s-1950s vintage, 1970s soul funk, West Coast freestyle rap, Christmas carols), and actual lyric mood, with STRICTLY ZERO text and NO split-screen.${cleanLyricConcept ? ` (8) MANDATORY LYRIC CONCEPT: ALL tracks, lyrics, and YouTube visuals MUST focus on the user concept: "${cleanLyricConcept}".${hasFirstSightConcept ? ' IMPORTANT: "첫눈에 반한 감정" strictly means LOVE AT FIRST SIGHT (instant spark on first eye contact), NEVER winter snow or "first snow"!' : ''}` : ''} Respond strictly in valid JSON.`;
+    const standardSystemInstruction = `You are an expert AI music playlist producer and Suno prompt engineer for theme "${theme.name}" (${theme.category || 'Music'}). Follow the user SOP with 100% strict fidelity—NEVER mix in J-POP/Japanese or any other theme's genre/language unless explicitly required by this theme's SOP. CRITICAL MANDATORY RULES: (1) ALWAYS generate the EXACT number of tracks requested in Target Track Count (e.g., if ${effectiveTrackCount} tracks are requested, the "tracks" JSON array MUST contain all ${effectiveTrackCount} distinct tracks numbered 1 through ${effectiveTrackCount}, never just 1 track!). (2) Style prompts MUST be dense, comma-separated musical keywords and sound design tags matching "${theme.name}" (750 to 950 characters, aim for 800-900 characters; NEVER output short 1-line or 150-250 character summaries; DO NOT write narrative sentences like "This track embodies the essence of..."), while ALWAYS protecting catchy singable vocal melodies, pitch accuracy, and a steady groove pocket (NEVER write timing/tuning-destabilizing terms like "ahead-of-beat", "behind-the-beat", "breaking 4/4", "off-grid", "irregular rests", or "voice crack"). (3) Tag & Line Break Hygiene: Every section tag MUST use single square brackets [Section: Guide] (NEVER curly braces {}, NEVER nested parentheses [(...)], and NEVER repeat the section prefix inside the guide such as [Verse 1: Verse 1: ...]). Put every tag on its own line followed by \\n, separate sections with \\n\\n, NEVER split single words onto separate lines, NEVER repeat parenthesized guides underneath [Outro: ...] or [Instrumental Interlude: ...], and emit [End] AT MOST ONCE at the very end. (4) Instrumental Sections Hygiene: [Intro: ...], [Outro: ...], [Piano Solo: ...], and [Instrumental Interlude: ...] MUST CONTAIN ZERO SUNG LYRICS! (5) STRICT VOCAL GENDER LOCK (${vocalLabel} -> ${perTrackVocalSummary}): User's vocal selection ALWAYS overrides any gender written in the SOP! EVERY track's stylePrompt, metaInfo.vocal, and section guides MUST explicitly lock to a single vocal gender ("solo male lead vocal, male voice" + "-female vocals", OR "solo female lead vocal, female voice" + "-male vocals", OR "pure instrumental, no vocals" + "-vocals, -singing")—NEVER omit gender or write "androgynous" or conflicting gender cues! Strictly match the exact lyric language of "${theme.name}"'s SOP (${isJapanese ? '100% Pure Japanese titles and lyrics, ZERO Korean' : isPureEnglish ? '100% Pure English titles and lyrics' : isKorEng ? 'Korean titles and Korean-English code-switching lyrics' : 'exact language specified in the SOP'}). Every song title MUST be a natural 1-4 word core phrase/keyword actually sung inside that track's [Chorus] lyrics — NEVER use AI clichés like "Empty Spaces", "Sweet Confession", "Silent Echoes", "Whispers in the Dark", or verbatim preset concept labels! (6) Strictly respect tag prohibitions such as omitting [Intro], [Outro], and [End] when forbidden in the SOP. (7) For the YouTube Upload Package ("youtube"), craft high-CTR curated Korean/English playlist titles ("𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 | <hook + emoji> | <genre • space tags>", NEVER generic clichés like "~와 함께하는 신나는 하루 | 플레이리스트"), follow the exact 5-block YouTube description structure (2-line scene intro → 2-line use-cases & warm wish → "🎧 Tracklist" followed by blank lines with ZERO numbered songs or timestamps → "📌" sound focus & subscribe CTA → 8-9 space-separated hashtags; NEVER write AI clichés like "경험하세요/만끽하세요/빠져보세요"), output "tracklist" WITHOUT any (0:00) timestamps, EXACTLY 5 SEO hashtags in "hashtags", and make "thumbnailPrompt" a single unified 16:9 center-focused photorealistic editorial photography prompt of AT LEAST 2,200 characters matching the lyric language culture (${isJapanese ? 'Japanese setting & Japanese subject' : isPureEnglish ? 'Western setting & Western subject' : 'Korean setting & Korean subject'}), exact historical era/subculture (e.g. 1940s-1950s vintage, 1970s soul funk, West Coast freestyle rap, Christmas carols), and actual lyric mood, with STRICTLY ZERO text and NO split-screen.${cleanLyricConcept ? ` (8) MANDATORY LYRIC CONCEPT: ALL tracks, lyrics, and YouTube visuals MUST focus on the user concept: "${cleanLyricConcept}".${hasFirstSightConcept ? ' IMPORTANT: "첫눈에 반한 감정" strictly means LOVE AT FIRST SIGHT (instant spark on first eye contact), NEVER winter snow or "first snow"!' : ''}` : ''} Respond strictly in valid JSON.`;
 
     // Shared post-processor: guarantees exact track count (with AI continuation if AI returned fewer),
     // sequential 1..N numbering, clean titles, clean lyrics, and synchronized YouTube tracklist.
     const buildContinuationPrompt = (missingCount: number, startNumber: number, existingTitles: string[]) => {
       const subsetPlans = innovationPlans.slice(startNumber - 1, startNumber - 1 + missingCount);
+      const subsetGenderLock = subsetPlans
+        .map((p) =>
+          `Track ${p.trackNumber}: ${
+            p.vocalGender === 'male'
+              ? 'SOLO MALE LEAD VOCAL ONLY ("solo male lead vocal, male voice", Exclude: -female vocals)'
+              : p.vocalGender === 'female'
+              ? 'SOLO FEMALE LEAD VOCAL ONLY ("solo female lead vocal, female voice", Exclude: -male vocals)'
+              : 'PURE INSTRUMENTAL ONLY ("pure instrumental, no vocals", Exclude: -vocals, -singing)'
+          }`
+        )
+        .join('; ');
       return `
 You previously generated ${startNumber - 1} track(s) for this playlist, but the user requested EXACTLY ${effectiveTrackCount} tracks.
-Generate the remaining ${missingCount} NEW, DISTINCT track(s) (trackNumber ${startNumber} to ${effectiveTrackCount}) following the exact same SOP, language rules, 750-950 character stylePrompt requirement, and full 3-minute lyrics structure.
+Generate the remaining ${missingCount} NEW, DISTINCT track(s) (trackNumber ${startNumber} to ${effectiveTrackCount}) following the exact same SOP, language rules, LOCKED VOCAL GENDER (${subsetGenderLock}), 750-950 character stylePrompt requirement, and full 3-minute lyrics structure.
 Every track's "title" MUST be a memorable 1–4 word core phrase/word actually sung verbatim in that track's [Chorus] (NO AI clichés like "Empty Spaces" or "Sweet Confession").
-NEVER repeat section names inside bracket guides (write [Verse 1: ...], NEVER [Verse 1: Verse 1: ...]), and ALWAYS protect pitch-true catchy melodies and steady locked groove pocket.
+NEVER repeat section names inside bracket guides (write [Verse 1: ...], NEVER [Verse 1: Verse 1: ...]), ALWAYS specify the track's locked vocal gender explicitly inside stylePrompt, metaInfo.vocal, and section guides, and ALWAYS protect pitch-true catchy melodies and steady locked groove pocket.
 Do NOT repeat these existing song titles: ${existingTitles.map(t => `"${t}"`).join(', ') || '(none)'}.${cleanLyricConcept ? `\nALL new tracks MUST also faithfully express the Lyric Concept: "${cleanLyricConcept}".${hasFirstSightConcept ? ' Remember: "첫눈에 반한 감정" means LOVE AT FIRST SIGHT, NEVER first snow/winter!' : ''}` : ''}
 ${formatInnovationPromptSection(subsetPlans)}
 
@@ -1679,16 +1746,23 @@ Respond ONLY with valid JSON:
         (sopSpecs.isKorEngMixed || sopSpecs.isKoreanHipHopRnb || sopSpecs.hasExplicitKoreanLyrics) ? 'korean' :
         'auto';
 
-      let normalizedTracks = rawTracks.map((tr: any, idx: number) => ({
-        ...tr,
-        trackNumber: idx + 1,
-        title: cleanTitleSingleLanguage(
-          tr?.title,
-          cleanTitleLang,
-          sopSpecs.isJapanese ? '新曲' : cleanTitleLang === 'korean' ? '새로운 트랙' : `Track ${idx + 1}`
-        ),
-        fullLyrics: formatAndCleanLyrics(tr?.fullLyrics || '', sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro)
-      }));
+      let normalizedTracks = rawTracks.map((tr: any, idx: number) => {
+        const plan = innovationPlans[idx] || innovationPlans[0];
+        const genderLocked = enforceTrackVocalGender(
+          {
+            ...tr,
+            trackNumber: idx + 1,
+            title: cleanTitleSingleLanguage(
+              tr?.title,
+              cleanTitleLang,
+              sopSpecs.isJapanese ? '新曲' : cleanTitleLang === 'korean' ? '새로운 트랙' : `Track ${idx + 1}`
+            ),
+            fullLyrics: formatAndCleanLyrics(tr?.fullLyrics || '', sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro)
+          },
+          plan.vocalGender
+        );
+        return genderLocked;
+      });
 
       // Pre-Output 7-Axis Musical Quality Audit & AI + Algorithmic Refinement Pass
       const allStylePrompts = normalizedTracks.map((t: any) => String(t?.stylePrompt || ''));
@@ -1755,15 +1829,22 @@ Respond ONLY with valid JSON:
       safeResult.tracks = normalizedTracks.map((tr: any, idx: number) => {
         const plan = innovationPlans[idx] || innovationPlans[0];
         const refined = refineTrackWithCraftAudit(tr, plan, postPrompts);
-        const cleanLyrics = formatAndCleanLyrics(refined.fullLyrics || '', sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro);
+        const cleanedLyrics = formatAndCleanLyrics(refined.fullLyrics || '', sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro);
+        const lockedFinal = enforceTrackVocalGender(
+          {
+            ...refined,
+            fullLyrics: cleanedLyrics,
+          },
+          plan.vocalGender
+        );
         let finalTitle = refineTitleFromChorus(
-          refined.title,
-          cleanLyrics,
+          lockedFinal.title,
+          lockedFinal.fullLyrics,
           cleanTitleLang,
           sopSpecs.isJapanese ? '新曲' : cleanTitleLang === 'korean' ? '새로운 트랙' : `Track ${idx + 1}`
         );
         if (usedTitles.has(finalTitle.toLowerCase())) {
-          const chorusLines = extractChorusSungLines(cleanLyrics);
+          const chorusLines = extractChorusSungLines(lockedFinal.fullLyrics);
           for (let lineOffset = 1; lineOffset < chorusLines.length; lineOffset++) {
             const altTitle = extractChorusHookPhrase(chorusLines.slice(lineOffset), cleanTitleLang);
             if (altTitle && !usedTitles.has(altTitle.toLowerCase())) {
@@ -1774,9 +1855,8 @@ Respond ONLY with valid JSON:
         }
         usedTitles.add(finalTitle.toLowerCase());
         return {
-          ...refined,
+          ...lockedFinal,
           title: finalTitle,
-          fullLyrics: cleanLyrics,
         };
       });
 
@@ -2128,11 +2208,14 @@ function getNonRepeatingServerOffset(max: number): number {
 function generateCreativePlaylistData(theme: any, trackCount: number, vocal: string, lyricConcept: string = '') {
   const sopSpecs = parseSopSpecs(theme);
   const cleanConcept = (lyricConcept || '').trim();
+  const simPlans = generateTrackInnovationPlans(theme, sopSpecs, trackCount, vocal);
 
-  const vocalTag = 
-    vocal === 'female' ? 'sincere expressive female vocal, emotional delivery' :
-    vocal === 'male' ? 'male heartfelt soulful vocal, warm tone' :
-    vocal === 'none' ? 'instrumental, no vocals' : 'expressive emotional vocal harmonies';
+  const vocalTagForGender = (g: 'male' | 'female' | 'none') =>
+    g === 'female' ? 'solo female lead vocal, female voice, sincere expressive delivery' :
+    g === 'male' ? 'solo male lead vocal, male voice, heartfelt soulful delivery, warm tone' :
+    'pure instrumental, instrumental only, no vocals';
+
+  const vocalTag = vocalTagForGender(simPlans[0]?.vocalGender || (vocal === 'male' ? 'male' : vocal === 'none' ? 'none' : 'female'));
 
   let trackTemplates: Array<{ title: string; mood: string; style: string; lyrics: string; metaInfo?: any }> = [];
 
@@ -2841,6 +2924,7 @@ Our unforgettable late night drive`
 
   const tracks = [];
   for (let i = 0; i < trackCount; i++) {
+    const plan = simPlans[i] || simPlans[0];
     const template = trackTemplates[(i + randomOffset) % trackTemplates.length];
     const rawTitle = trackCount > trackTemplates.length && i >= trackTemplates.length
       ? `${template.title} Part ${Math.floor(i / trackTemplates.length) + 1}`
@@ -2850,32 +2934,50 @@ Our unforgettable late night drive`
       ? `${template.mood} · 가사 컨셉: ${cleanConcept}`
       : template.mood;
 
-    tracks.push({
-      trackNumber: i + 1,
-      title: cleanTitleSingleLanguage(rawTitle, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : `Track ${i + 1}`),
-      mood: effectiveMood,
-      metaInfo: template.metaInfo,
-      stylePrompt: template.style,
-      fullLyrics: formatAndCleanLyrics(template.lyrics, sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro)
-    });
+    // Ensure per-track vocal gender tag even when 'random' was chosen across multiple tracks
+    let trackStyle = template.style;
+    if (vocal === 'random' && i > 0 && simPlans[0]?.vocalGender !== plan.vocalGender) {
+      const targetTag = vocalTagForGender(plan.vocalGender);
+      trackStyle = trackStyle.replace(vocalTag, targetTag);
+    }
+
+    const baseTrack = enforceTrackVocalGender(
+      {
+        trackNumber: i + 1,
+        title: cleanTitleSingleLanguage(rawTitle, sopSpecs.targetLang, sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : `Track ${i + 1}`),
+        mood: effectiveMood,
+        metaInfo: template.metaInfo,
+        stylePrompt: trackStyle,
+        fullLyrics: formatAndCleanLyrics(template.lyrics, sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro)
+      },
+      plan.vocalGender
+    );
+
+    tracks.push(baseTrack);
   }
 
   // Pre-output 7-axis innovation & refinement pass in simulation mode too
-  const simPlans = generateTrackInnovationPlans(theme, sopSpecs, trackCount, vocal);
   const simStylePrompts = tracks.map((t) => t.stylePrompt);
   const refinedTracks = tracks.map((t, idx) => {
-    const refined = refineTrackWithCraftAudit(t, simPlans[idx] || simPlans[0], simStylePrompts);
+    const plan = simPlans[idx] || simPlans[0];
+    const refined = refineTrackWithCraftAudit(t, plan, simStylePrompts);
     const cleanLyrics = formatAndCleanLyrics(refined.fullLyrics || '', sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro);
+    const lockedRefined = enforceTrackVocalGender(
+      {
+        ...refined,
+        fullLyrics: cleanLyrics,
+      },
+      plan.vocalGender
+    );
     const finalTitle = refineTitleFromChorus(
-      refined.title,
-      cleanLyrics,
+      lockedRefined.title,
+      lockedRefined.fullLyrics,
       sopSpecs.targetLang,
       sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : `Track ${idx + 1}`
     );
     return {
-      ...refined,
+      ...lockedRefined,
       title: finalTitle,
-      fullLyrics: cleanLyrics,
     };
   });
 

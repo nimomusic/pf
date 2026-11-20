@@ -31,8 +31,11 @@ export interface SopArrangementConstraints {
   explicitExcludeTokens: string[];
 }
 
+export type ResolvedVocalGender = 'male' | 'female' | 'none';
+
 export interface InnovationPlan {
   trackNumber: number;
+  vocalGender: ResolvedVocalGender;
   archetype: MusicArchetype;
   archetypeLabel: string;
   arrangementMode: ArrangementMode;
@@ -819,6 +822,22 @@ export function detectMusicArchetype(
   return 'general_custom';
 }
 
+export function resolvePerTrackVocalGenders(
+  vocal: VocalType | string = 'random',
+  trackCount: number = 1,
+  seedOffset?: number
+): ResolvedVocalGender[] {
+  const count = Math.max(1, trackCount);
+  if (vocal === 'male') return Array.from({ length: count }, () => 'male');
+  if (vocal === 'female') return Array.from({ length: count }, () => 'female');
+  if (vocal === 'none') return Array.from({ length: count }, () => 'none');
+
+  // For 'random', lock each individual track deterministically/balanced to a single gender
+  // so Suno never switches vocal gender mid-song within a track.
+  const startParity = typeof seedOffset === 'number' ? Math.abs(seedOffset) % 2 : Math.floor(Math.random() * 2);
+  return Array.from({ length: count }, (_, i) => ((startParity + i) % 2 === 0 ? 'male' : 'female'));
+}
+
 export function generateTrackInnovationPlans(
   theme: Partial<Theme>,
   sopSpecs: any,
@@ -830,6 +849,7 @@ export function generateTrackInnovationPlans(
   const constraints = parseSopArrangementConstraints(theme, archetype);
   const pool = ARCHETYPE_POOLS[archetype];
   const baseSeed = typeof seedOffset === 'number' ? seedOffset : Math.floor(Math.random() * 97);
+  const resolvedGenders = resolvePerTrackVocalGenders(vocal, trackCount, baseSeed);
 
   // Extract explicit BPM range from SOP if provided so we strictly stay inside SOP BPM!
   const sopText = `${theme.sop || ''}`;
@@ -838,6 +858,8 @@ export function generateTrackInnovationPlans(
 
   const plans: InnovationPlan[] = [];
   for (let i = 0; i < trackCount; i++) {
+    const vocalGender = resolvedGenders[i] || 'female';
+
     let bpmSuggestion = pool.bpmPool[(baseSeed + i) % pool.bpmPool.length];
     if (bpmRangeMatch) {
       const minBpm = parseInt(bpmRangeMatch[1], 10);
@@ -941,18 +963,44 @@ export function generateTrackInnovationPlans(
     const hihat = hihatPoolToUse[(baseSeed + i * 3 + 2) % hihatPoolToUse.length];
     const interaction = interactionPoolToUse[(baseSeed + i * 1 + 2) % interactionPoolToUse.length];
     const harmony = pool.harmonyOptions[(baseSeed + i * 2) % pool.harmonyOptions.length];
-    const vocalPhrasing =
-      vocal === 'none'
+    const rawVocalPhrasing =
+      vocalGender === 'none'
         ? {
             ko: '보컬 없는 인스트루멘털 리드 멜로디의 자연스러운 호흡 및 선율 변주',
-            suno: 'expressive instrumental lead melody with clear lyrical phrasing (no vocals)',
+            suno: 'expressive instrumental lead melody with clear lyrical phrasing, pure instrumental, no vocals',
           }
         : pool.vocalPhrasingOptions[(baseSeed + i * 3 + 1) % pool.vocalPhrasingOptions.length];
+    const genderKoPrefix =
+      vocalGender === 'male' ? '[남성 보컬] ' : vocalGender === 'female' ? '[여성 보컬] ' : '';
+    const genderSunoPrefix =
+      vocalGender === 'male'
+        ? 'solo male lead vocal, '
+        : vocalGender === 'female'
+        ? 'solo female lead vocal, '
+        : '';
+    const vocalPhrasing = {
+      ko: `${genderKoPrefix}${rawVocalPhrasing.ko}`,
+      suno: `${genderSunoPrefix}${rawVocalPhrasing.suno}`,
+    };
     const dynamic = pool.dynamicOptions[(baseSeed + i) % pool.dynamicOptions.length];
     const keyColor = pool.keyColors[(baseSeed + i * 2) % pool.keyColors.length];
 
+    const verseGenderHint =
+      vocalGender === 'male'
+        ? 'solo male lead vocal'
+        : vocalGender === 'female'
+        ? 'solo female lead vocal'
+        : 'instrumental lead melody';
+    const chorusGenderHint =
+      vocalGender === 'male'
+        ? 'full male lead vocal'
+        : vocalGender === 'female'
+        ? 'full female lead vocal'
+        : 'full instrumental arrangement';
+
     plans.push({
       trackNumber: i + 1,
+      vocalGender,
       archetype,
       archetypeLabel: pool.label,
       arrangementMode,
@@ -977,9 +1025,9 @@ export function generateTrackInnovationPlans(
       vocalPhrasingSuno: vocalPhrasing.suno,
       dynamicKo: dynamic.ko,
       dynamicSuno: dynamic.suno,
-      verseGuideHint: `${vocalPhrasing.suno.split(',')[0]}, ${bass.suno.split(',')[0]}`,
-      chorusGuideHint: `catchy memorable hook, ${interaction.suno.split(',')[0]}`,
-      bridgeGuideHint: `stripped arrangement, ${harmony.suno.split(',')[0]}`,
+      verseGuideHint: `${verseGenderHint}, ${rawVocalPhrasing.suno.split(',')[0]}, ${bass.suno.split(',')[0]}`,
+      chorusGuideHint: `${chorusGenderHint}, catchy memorable hook, ${interaction.suno.split(',')[0]}`,
+      bridgeGuideHint: `${verseGenderHint}, stripped arrangement, ${harmony.suno.split(',')[0]}`,
     });
   }
 
@@ -998,8 +1046,15 @@ export function formatInnovationPromptSection(plans: InnovationPlan[]): string {
     const hihatTitle = p.hasHihat
       ? 'Hi-Hat & Percussion Texture'
       : 'Clean Breathing Space (NO hi-hat)';
+    const lockedGenderLine =
+      p.vocalGender === 'male'
+        ? 'SOLO MALE LEAD VOCAL ONLY (MUST explicitly write "solo male lead vocal, male voice" in stylePrompt & section guides + "-female vocals" in Exclude; ZERO female voice cues)'
+        : p.vocalGender === 'female'
+        ? 'SOLO FEMALE LEAD VOCAL ONLY (MUST explicitly write "solo female lead vocal, female voice" in stylePrompt & section guides + "-male vocals" in Exclude; ZERO male voice cues)'
+        : 'PURE INSTRUMENTAL ONLY (MUST write "instrumental only, no vocals" + "-vocals, -singing"; ZERO sung lyrics)';
 
     return `Track ${p.trackNumber} Musical Character [${p.arrangementLabel}] (${p.bpmSuggestion}, Key Color: ${p.keyColor}):
+  - LOCKED VOCAL GENDER: ${lockedGenderLine}
   - ${bassTitle}: ${p.bassSuno}
   - ${drumTitle}: ${p.drumSuno}
   - ${hihatTitle}: ${p.hihatSuno}
@@ -1025,7 +1080,7 @@ export function formatInnovationPromptSection(plans: InnovationPlan[]): string {
 ================================================================================
 THEME-FAITHFUL MELODIC & GROOVE VARIETY MATRIX (테마 맞춤 멜로디·보컬 안정화 사운드 설계)
 ================================================================================
-Give each track distinct musical color while strictly protecting rhythmic stability, pitch accuracy, and a memorable singable melody (NEVER use jarring timing terms like "ahead-of-beat", "behind-the-beat", "breaking 4/4", "off-grid", "irregular", or "voice crack" that cause Suno to sing out of tune or off time!):
+Give each track distinct musical color while strictly locking each track's assigned vocal gender and protecting rhythmic stability, pitch accuracy, and a memorable singable melody (NEVER use jarring timing terms like "ahead-of-beat", "behind-the-beat", "breaking 4/4", "off-grid", "irregular", or "voice crack" that cause Suno to sing out of tune or off time!):
 ${exclusionReminders.length > 0 ? '\n' + exclusionReminders.map((r) => `- ${r}`).join('\n') + '\n' : ''}
 ${blocks.join('\n\n')}`;
 }
@@ -1243,7 +1298,8 @@ function fitStylePromptLength(
   addedParts: string[],
   excludeClause: string,
   minLen = 760,
-  maxLen = 945
+  maxLen = 945,
+  isInstrumental = false
 ): string {
   const cleanSegs = (s: string) =>
     s
@@ -1259,7 +1315,8 @@ function fitStylePromptLength(
 
   for (const ep of extraParts) {
     const joinedSoFar = combinedParts.join(', ');
-    if (excludeClause ? `${joinedSoFar}, ${excludeClause}`.length : joinedSoFar.length >= maxLen) {
+    const currentLen = excludeClause ? `${joinedSoFar}, ${excludeClause}`.length : joinedSoFar.length;
+    if (currentLen >= maxLen) {
       break;
     }
     const candidate = `${joinedSoFar}, ${ep}`;
@@ -1276,14 +1333,23 @@ function fitStylePromptLength(
   let workingBody = combinedParts.join(', ');
   let result = joinWithExclude(workingBody);
 
-  const enrichmentPool = [
-    'catchy memorable melody',
-    'clear pitch-true lead vocal',
-    'warm analog studio depth',
-    'balanced mid-range clarity',
-    'natural stereo panorama',
-    'polished streaming-ready master',
-  ];
+  const enrichmentPool = isInstrumental
+    ? [
+        'catchy memorable instrumental melody',
+        'expressive acoustic instrument phrasing',
+        'warm analog studio depth',
+        'balanced mid-range clarity',
+        'natural stereo panorama',
+        'polished streaming-ready master',
+      ]
+    : [
+        'catchy memorable melody',
+        'clear pitch-true lead vocal',
+        'warm analog studio depth',
+        'balanced mid-range clarity',
+        'natural stereo panorama',
+        'polished streaming-ready master',
+      ];
   let idx = 0;
   while (result.length < minLen && idx < enrichmentPool.length) {
     if (!workingBody.toLowerCase().includes(enrichmentPool[idx])) {
@@ -1297,11 +1363,16 @@ function fitStylePromptLength(
     idx++;
   }
 
-  // Only trim from the END (extra additions), keeping core SOP parts intact!
+  // Only trim from the END (extra additions), keeping core SOP & vocal gender parts intact!
   if (result.length > maxLen) {
     const parts = cleanSegs(workingBody);
     while (joinWithExclude(parts.join(', ')).length > maxLen && parts.length > 5) {
-      parts.pop();
+      const last = parts[parts.length - 1];
+      if (/\b(female|male|no vocals|instrumental only)\b/i.test(last) && parts.length > 6) {
+        parts.splice(parts.length - 2, 1);
+      } else {
+        parts.pop();
+      }
     }
     result = joinWithExclude(parts.join(', '));
     if (result.length > maxLen && !cleanExclude) {
@@ -1310,6 +1381,314 @@ function fitStylePromptLength(
   }
 
   return result;
+}
+
+function splitStylePromptAndExclude(rawStyle: string): {
+  body: string;
+  excludePrefix: 'Exclude: ' | '';
+  excludeItems: string[];
+} {
+  const trimmed = (rawStyle || '').trim();
+  const excludeKeywordMatch = trimmed.match(/\bExclude\s*:\s*(.*)$/i);
+  if (excludeKeywordMatch && excludeKeywordMatch.index !== undefined) {
+    const body = trimmed.slice(0, excludeKeywordMatch.index).replace(/[,\s]+$/, '').trim();
+    const rawExcl = excludeKeywordMatch[1].trim();
+    const items = rawExcl
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((t) => (t.startsWith('-') ? t : `-${t}`));
+    return { body, excludePrefix: 'Exclude: ', excludeItems: items };
+  }
+
+  const dashTailMatch = trimmed.match(/((?:,\s*-[a-z0-9][a-z0-9\s-]*)+)$/i);
+  if (dashTailMatch && dashTailMatch.index !== undefined) {
+    const body = trimmed.slice(0, dashTailMatch.index).replace(/[,\s]+$/, '').trim();
+    const items = dashTailMatch[1]
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    return { body, excludePrefix: '', excludeItems: items };
+  }
+
+  return { body: trimmed, excludePrefix: 'Exclude: ', excludeItems: [] };
+}
+
+function sanitizePositiveTextToGender(text: string, vocalGender: ResolvedVocalGender): string {
+  if (!text) return text;
+  let out = text;
+
+  if (vocalGender === 'male') {
+    out = out
+      .replace(/\bfemale\s+lead\s+vocal(?:s)?\b/gi, 'solo male lead vocal')
+      .replace(/\bfemale\s+lead\b/gi, 'solo male lead')
+      .replace(/\bfemale\s+vocal(?:s)?\b/gi, 'solo male vocal')
+      .replace(/\bfemale\s+voice\b/gi, 'male voice')
+      .replace(/\bfemale-?led\b/gi, 'male-led')
+      .replace(/\bfemale\b/gi, 'male')
+      .replace(/\bwoman(?:'s)?\s+voice\b/gi, "man's voice")
+      .replace(/\bwoman\b/gi, 'man')
+      .replace(/\bgirl(?:'s)?\s+voice\b/gi, 'male voice')
+      .replace(/\bher\s+voice\b/gi, 'his voice')
+      .replace(/\bmezzo(?:-?soprano)?\b/gi, 'warm baritone')
+      .replace(/\bsoprano\b/gi, 'clear tenor')
+      .replace(/\balto\b/gi, 'warm tenor')
+      .replace(/\bandrogynous\b/gi, 'clear warm')
+      .replace(/\bduet\b/gi, 'solo')
+      .replace(/\bsolo\s+solo\b/gi, 'solo')
+      .replace(/(?<![a-z])male\s+male\b/gi, 'male');
+  } else if (vocalGender === 'female') {
+    out = out
+      .replace(/(?<![a-z])male\s+lead\s+vocal(?:s)?\b/gi, 'solo female lead vocal')
+      .replace(/(?<![a-z])male\s+lead\b/gi, 'solo female lead')
+      .replace(/(?<![a-z])male\s+vocal(?:s)?\b/gi, 'solo female vocal')
+      .replace(/(?<![a-z])male\s+voice\b/gi, 'female voice')
+      .replace(/(?<![a-z])male-?led\b/gi, 'female-led')
+      .replace(/(?<![a-z])male\b/gi, 'female')
+      .replace(/\bman(?:'s)?\s+voice\b/gi, "woman's voice")
+      .replace(/\bboyish\b/gi, 'youthful')
+      .replace(/\bhis\s+voice\b/gi, 'her voice')
+      .replace(/\bbaritone\b/gi, 'warm alto')
+      .replace(/\btenor\b/gi, 'clear soprano')
+      .replace(/\bcrooner\b/gi, 'vintage vocalist')
+      .replace(/\bandrogynous\b/gi, 'ethereal')
+      .replace(/\bduet\b/gi, 'solo')
+      .replace(/\bsolo\s+solo\b/gi, 'solo')
+      .replace(/\bfemale\s+female\b/gi, 'female');
+  } else if (vocalGender === 'none') {
+    const segs = out
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .filter((seg) => {
+        if (/\b(no\s*vocals?|instrumental(?:\s+only)?|pure\s+instrumental)\b/i.test(seg)) return true;
+        return !/\b(vocal|vocals|vocalist|singing|sing-?rap|falsetto|soprano|alto|baritone|tenor|crooner|belting|chest\s*voice|head\s*voice|close-?mic|breath\s*control|spoken-?sung|ad-?libs?|female|(?<![a-z])male)\b/i.test(seg);
+      });
+    out = segs.join(', ');
+  }
+
+  return out.replace(/\s{2,}/g, ' ').replace(/,\s*,+/g, ', ').replace(/^[,\s]+|[,\s]+$/g, '');
+}
+
+export function enforceVocalGenderInStylePrompt(
+  stylePrompt: string,
+  vocalGender: ResolvedVocalGender,
+  maxLen: number = 975
+): string {
+  const { body, excludePrefix, excludeItems } = splitStylePromptAndExclude(stylePrompt);
+  let cleanBody = sanitizePositiveTextToGender(body, vocalGender);
+
+  if (vocalGender === 'male') {
+    const hasExplicitMaleAnchor = /(?<![a-z])male\s+(?:lead\s+)?(?:vocal|vocals|voice|singer|rap|baritone|tenor)\b/i.test(cleanBody);
+    const hasSoloMaleLead = /\bsolo\s+male\s+(?:lead\s+)?vocal\b/i.test(cleanBody);
+    if (!hasExplicitMaleAnchor) {
+      cleanBody = cleanBody ? `${cleanBody}, solo male lead vocal, male voice` : 'solo male lead vocal, male voice';
+    } else if (!hasSoloMaleLead && !/\bsolo\s+male\b/i.test(cleanBody)) {
+      cleanBody = cleanBody ? `${cleanBody}, solo male lead vocal` : 'solo male lead vocal';
+    }
+  } else if (vocalGender === 'female') {
+    const hasExplicitFemaleAnchor = /\bfemale\s+(?:lead\s+)?(?:vocal|vocals|voice|singer|rap|soprano|alto|mezzo)\b/i.test(cleanBody);
+    const hasSoloFemaleLead = /\bsolo\s+female\s+(?:lead\s+)?vocal\b/i.test(cleanBody);
+    if (!hasExplicitFemaleAnchor) {
+      cleanBody = cleanBody ? `${cleanBody}, solo female lead vocal, female voice` : 'solo female lead vocal, female voice';
+    } else if (!hasSoloFemaleLead && !/\bsolo\s+female\b/i.test(cleanBody)) {
+      cleanBody = cleanBody ? `${cleanBody}, solo female lead vocal` : 'solo female lead vocal';
+    }
+  } else {
+    const hasInstrAnchor = /\b(?:pure\s+instrumental|instrumental\s+only|no\s+vocals?)\b/i.test(cleanBody);
+    if (!hasInstrAnchor) {
+      cleanBody = cleanBody ? `${cleanBody}, pure instrumental, instrumental only, no vocals` : 'pure instrumental, instrumental only, no vocals';
+    }
+  }
+
+  // Deduplicate and sanitize Exclude items
+  const cleanedExclude: string[] = [];
+  const seenExcl = new Set<string>();
+  for (const rawItem of excludeItems) {
+    const norm = rawItem.trim().toLowerCase();
+    if (!norm) continue;
+    if (vocalGender === 'male' && (/^-?(?:male|vocals?|singing|lead\s+vocal)$/i.test(norm) || /^-(?<![a-z])male\s+vocal/i.test(norm))) {
+      continue;
+    }
+    if (vocalGender === 'female' && /^-?(?:female|female\s+vocals?|vocals?|singing|lead\s+vocal)$/i.test(norm)) {
+      continue;
+    }
+    if (!seenExcl.has(norm)) {
+      seenExcl.add(norm);
+      cleanedExclude.push(rawItem.trim());
+    }
+  }
+
+  const requiredExcludes =
+    vocalGender === 'male'
+      ? ['-female vocals', '-female vocal']
+      : vocalGender === 'female'
+      ? ['-male vocals', '-male vocal']
+      : ['-vocals', '-singing', '-lead vocal', '-male vocals', '-female vocals'];
+
+  for (const req of requiredExcludes) {
+    const hasAlready = cleanedExclude.some((item) => item.toLowerCase() === req.toLowerCase());
+    if (!hasAlready) {
+      cleanedExclude.push(req);
+    }
+  }
+
+  const excludeStr = cleanedExclude.length > 0 ? `${excludePrefix}${cleanedExclude.join(', ')}` : '';
+  const buildFull = (b: string) =>
+    excludeStr ? `${b.replace(/[,\s]+$/, '')}, ${excludeStr}` : b.replace(/[,\s]+$/, '');
+
+  let combined = buildFull(cleanBody);
+  if (combined.length > maxLen) {
+    const segs = cleanBody.split(',').map((s) => s.trim()).filter(Boolean);
+    while (buildFull(segs.join(', ')).length > maxLen && segs.length > 4) {
+      // Remove longest non-critical filler segment near the middle/end while keeping vocal gender & BPM
+      let dropIdx = -1;
+      for (let i = segs.length - 1; i >= 1; i--) {
+        if (!/\b(female|male|vocal|voice|no vocals|instrumental|bpm)\b/i.test(segs[i])) {
+          dropIdx = i;
+          break;
+        }
+      }
+      if (dropIdx === -1) break;
+      segs.splice(dropIdx, 1);
+    }
+    combined = buildFull(segs.join(', '));
+  }
+
+  return combined;
+}
+
+export function enforceVocalGenderInMetaVocal(
+  metaVocal: string | undefined,
+  vocalGender: ResolvedVocalGender
+): string {
+  if (vocalGender === 'none') {
+    return 'Instrumental (No vocals)';
+  }
+  const raw = (metaVocal || '').trim();
+  if (vocalGender === 'male') {
+    if (!raw) return 'Solo Male Lead Vocal';
+    let cleaned = raw
+      .replace(/여성\s*보컬/g, '남성 보컬')
+      .replace(/여자\s*보컬/g, '남성 보컬')
+      .replace(/여성/g, '남성')
+      .replace(/\bfemale\b/gi, 'male')
+      .replace(/\bsoprano\b/gi, 'tenor')
+      .replace(/\bmezzo(?:-?soprano)?\b/gi, 'baritone')
+      .replace(/\balto\b/gi, 'tenor')
+      .replace(/\bandrogynous\b/gi, 'clear');
+    if (!/(?<![a-z])male\b|남성/i.test(cleaned)) {
+      cleaned = `Solo Male Vocal · ${cleaned}`;
+    }
+    return cleaned;
+  }
+
+  if (!raw) return 'Solo Female Lead Vocal';
+  let cleaned = raw
+    .replace(/남성\s*보컬/g, '여성 보컬')
+    .replace(/남자\s*보컬/g, '여성 보컬')
+    .replace(/남성/g, '여성')
+    .replace(/(?<![a-z])male\b/gi, 'female')
+    .replace(/\bbaritone\b/gi, 'alto')
+    .replace(/\btenor\b/gi, 'soprano')
+    .replace(/\bandrogynous\b/gi, 'ethereal');
+  if (!/\bfemale\b|여성/i.test(cleaned)) {
+    cleaned = `Solo Female Vocal · ${cleaned}`;
+  }
+  return cleaned;
+}
+
+export function enforceVocalGenderInLyricsTags(
+  fullLyrics: string,
+  vocalGender: ResolvedVocalGender
+): string {
+  if (!fullLyrics) return '';
+
+  const sanitizeGuideText = (guide: string): string => {
+    if (vocalGender === 'male') {
+      return guide
+        .replace(/\bfemale\s+lead\s+vocal\b/gi, 'male lead vocal')
+        .replace(/\bfemale\s+vocal\b/gi, 'male vocal')
+        .replace(/\bfemale\b/gi, 'male')
+        .replace(/\bsoprano\b/gi, 'tenor')
+        .replace(/\balto\b/gi, 'tenor')
+        .replace(/\bmezzo(?:-?soprano)?\b/gi, 'baritone')
+        .replace(/\bandrogynous\b/gi, 'clear');
+    }
+    if (vocalGender === 'female') {
+      return guide
+        .replace(/(?<![a-z])male\s+lead\s+vocal\b/gi, 'female lead vocal')
+        .replace(/(?<![a-z])male\s+vocal\b/gi, 'female vocal')
+        .replace(/(?<![a-z])male\b/gi, 'female')
+        .replace(/\bbaritone\b/gi, 'alto')
+        .replace(/\btenor\b/gi, 'soprano')
+        .replace(/\bandrogynous\b/gi, 'ethereal');
+    }
+    return guide
+      .replace(/\b(?:solo\s+)?(?:female|male)\s+(?:lead\s+)?vocal(?:s)?\b/gi, 'instrumental lead melody')
+      .replace(/\b(?:lead\s+)?vocal(?:s)?\b/gi, 'instrumental melody')
+      .replace(/\bsinging(?:-?rap)?\b/gi, 'instrumental phrase')
+      .replace(/\bfalsetto\b/gi, 'harmonic swell');
+  };
+
+  let out = fullLyrics.replace(/\[([^\]\n\r]+)\]/g, (_full, inner: string) => {
+    const trimmedInner = inner.trim();
+    const colonIdx = trimmedInner.indexOf(':');
+    if (colonIdx === -1) {
+      if (vocalGender === 'male' && /^(?:verse\s*\d+|pre-?chorus|chorus|final\s+chorus|bridge)$/i.test(trimmedInner)) {
+        return `[${trimmedInner}: solo male lead vocal]`;
+      }
+      if (vocalGender === 'female' && /^(?:verse\s*\d+|pre-?chorus|chorus|final\s+chorus|bridge)$/i.test(trimmedInner)) {
+        return `[${trimmedInner}: solo female lead vocal]`;
+      }
+      return `[${trimmedInner}]`;
+    }
+
+    const header = trimmedInner.slice(0, colonIdx).trim();
+    let desc = sanitizeGuideText(trimmedInner.slice(colonIdx + 1).trim());
+
+    const isVocalHeader = /^(?:verse|pre-?chorus|final\s+chorus|chorus|bridge|hook)/i.test(header);
+    if (isVocalHeader && desc) {
+      if (vocalGender === 'male' && !/(?<![a-z])male\b/i.test(desc)) {
+        desc = `male vocal, ${desc}`;
+      } else if (vocalGender === 'female' && !/\bfemale\b/i.test(desc)) {
+        desc = `female vocal, ${desc}`;
+      }
+    }
+    return desc ? `[${header}: ${desc}]` : `[${header}]`;
+  });
+
+  // Also fix parenthesized voice directions like "(Lead female vocal belt ...)" or "(Supporting voice: ...)"
+  out = out.replace(/^\(([^()\n\r]+)\)$/gm, (line, content: string) => {
+    if (vocalGender === 'none' && /\b(supporting voice|lead .*vocal|vocal belt|singing)\b/i.test(content)) {
+      return `(${sanitizeGuideText(content)})`;
+    }
+    if (/\b(vocal|female|male|voice|belt|singing|falsetto|soprano|alto|tenor|baritone)\b/i.test(content)) {
+      return `(${sanitizeGuideText(content)})`;
+    }
+    return line;
+  });
+
+  return out;
+}
+
+export function enforceTrackVocalGender<T extends Partial<TrackItem>>(
+  track: T,
+  vocalGender: ResolvedVocalGender
+): T {
+  const nextStylePrompt = enforceVocalGenderInStylePrompt(track.stylePrompt || '', vocalGender);
+  const nextMetaVocal = enforceVocalGenderInMetaVocal(track.metaInfo?.vocal, vocalGender);
+  const nextLyrics = enforceVocalGenderInLyricsTags(track.fullLyrics || '', vocalGender);
+
+  return {
+    ...track,
+    stylePrompt: nextStylePrompt,
+    fullLyrics: nextLyrics,
+    metaInfo: {
+      ...(track.metaInfo || {}),
+      vocal: nextMetaVocal,
+    },
+  };
 }
 
 function stripSectionPrefix(sectionName: string, rawGuide: string): string {
@@ -1334,19 +1713,20 @@ export function refineTrackWithCraftAudit(
   plan: InnovationPlan,
   siblingPrompts: string[] = []
 ): TrackItem {
-  const initialAudit = evaluateTrackMusicalCraft(track, plan, siblingPrompts);
+  const genderLockedTrack = enforceTrackVocalGender(track, plan.vocalGender);
+  const initialAudit = evaluateTrackMusicalCraft(genderLockedTrack, plan, siblingPrompts);
   const needsRefinement = initialAudit.criteria.some((c) => c.result === '미흡');
 
-  if (!needsRefinement && (track.stylePrompt || '').length >= 700) {
+  if (!needsRefinement && (genderLockedTrack.stylePrompt || '').length >= 700) {
     return {
-      ...track,
+      ...genderLockedTrack,
       craftAudit: initialAudit,
     };
   }
 
-  const { usesBass, usesDrums } = resolveEffectiveTrackInstrumentation(track, plan);
+  const { usesBass, usesDrums } = resolveEffectiveTrackInstrumentation(genderLockedTrack, plan);
 
-  let rawStyle = (track.stylePrompt || '').trim();
+  let rawStyle = (genderLockedTrack.stylePrompt || '').trim();
   let excludeClause = '';
   const excludeMatch = rawStyle.match(/(Exclude\s*:.*)$/i) || rawStyle.match(/((?:,\s*-[a-z0-9][a-z0-9\s-]*)+)$/i);
   if (excludeMatch && excludeMatch.index !== undefined) {
@@ -1395,21 +1775,30 @@ export function refineTrackWithCraftAudit(
     additions.push(plan.bpmSuggestion);
   }
 
-  const finalStylePrompt = fitStylePromptLength(rawStyle, additions, excludeClause, 760, 945);
+  const fittedStylePrompt = fitStylePromptLength(
+    rawStyle,
+    additions,
+    excludeClause,
+    760,
+    945,
+    plan.vocalGender === 'none'
+  );
+  const finalStylePrompt = enforceVocalGenderInStylePrompt(fittedStylePrompt, plan.vocalGender);
 
   // Only add a gentle bracket guide if [Verse 1] or [Chorus] has NO guide at all;
   // NEVER overwrite or bloat existing SOP bracket guides with clunky rhythm formulas!
-  let enhancedLyrics = track.fullLyrics || '';
+  let enhancedLyrics = genderLockedTrack.fullLyrics || '';
   if (enhancedLyrics) {
     const cleanVerseHint = stripSectionPrefix('Verse 1', plan.verseGuideHint);
     const cleanChorusHint = stripSectionPrefix('Chorus', plan.chorusGuideHint);
     enhancedLyrics = enhancedLyrics
       .replace(/^\[Verse 1\]$/m, `[Verse 1: ${cleanVerseHint}]`)
       .replace(/^\[Chorus\]$/m, `[Chorus: ${cleanChorusHint}]`);
+    enhancedLyrics = enforceVocalGenderInLyricsTags(enhancedLyrics, plan.vocalGender);
   }
 
   const updatedTrack: TrackItem = {
-    ...track,
+    ...genderLockedTrack,
     stylePrompt: finalStylePrompt,
     fullLyrics: enhancedLyrics,
   };
@@ -1442,12 +1831,19 @@ export function buildRefinementPromptForAI(
       const drumTarget = usesDrums
         ? plan.drumSuno
         : DRUMLESS_PULSE_POOL[plan.trackNumber % DRUMLESS_PULSE_POOL.length].suno;
+      const lockedVocalText =
+        plan.vocalGender === 'male'
+          ? 'SOLO MALE LEAD VOCAL ONLY (keep "solo male lead vocal, male voice" + "-female vocals"; NEVER emit female cues!)'
+          : plan.vocalGender === 'female'
+          ? 'SOLO FEMALE LEAD VOCAL ONLY (keep "solo female lead vocal, female voice" + "-male vocals"; NEVER emit male cues!)'
+          : 'PURE INSTRUMENTAL ONLY (no vocals, -vocals, -singing)';
 
       return `Track ${track.trackNumber} ("${track.title}") [${audit.arrangementLabel || plan.arrangementLabel}]:
 Current stylePrompt: "${track.stylePrompt}"
 Audit Gaps:
 ${weakCriteria}
 Musical Enrichment Targets (strictly keep vocal pitch-true, rhythm pocket locked, and 760–940 chars total):
+  - LOCKED VOCAL GENDER: ${lockedVocalText}
   - Low-Register / Bass: ${bassTarget}
   - Groove / Accompaniment Flow: ${drumTarget}
   - Catchy Melody & Harmony: ${plan.harmonySuno}
@@ -1461,9 +1857,10 @@ The following track(s) need clearer instrumentation or melodic focus for "${them
 ${details}
 
 CRITICAL RULES:
-1. NEVER add off-beat/timing-breaking keywords ("ahead-of-beat", "behind-the-beat", "breaking 4/4", "off-grid", "irregular rests", "voice crack"). Keep vocals pitch-accurate, smooth, and groove-locked!
-2. NEVER add bass or drums to stripped/bassless/drumless tracks, and NEVER add instruments forbidden by the theme's SOP.
-3. For "verseGuide" and "chorusGuide": output ONLY the concise English description AFTER the colon (STRICTLY NEVER include "Verse 1:", "Chorus:", or square brackets "[" / "]" inside the value!).
+1. STRICTLY PRESERVE EACH TRACK'S LOCKED VOCAL GENDER ("solo male lead vocal" vs "solo female lead vocal" vs "instrumental only") in both stylePrompt and verseGuide/chorusGuide! NEVER omit gender or switch to the opposite gender!
+2. NEVER add off-beat/timing-breaking keywords ("ahead-of-beat", "behind-the-beat", "breaking 4/4", "off-grid", "irregular rests", "voice crack"). Keep vocals pitch-accurate, smooth, and groove-locked!
+3. NEVER add bass or drums to stripped/bassless/drumless tracks, and NEVER add instruments forbidden by the theme's SOP.
+4. For "verseGuide" and "chorusGuide": output ONLY the concise English description AFTER the colon (STRICTLY NEVER include "Verse 1:", "Chorus:", or square brackets "[" / "]" inside the value!).
 Respond ONLY with valid JSON:
 {
   "refinedTracks": [
