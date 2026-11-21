@@ -49,10 +49,10 @@ export const LicenseGate: React.FC<LicenseGateProps> = ({
       } else if (result.isExpired) {
         onExpired(result.dueDate, cleanKey);
       } else {
-        setErrorMessage(result.message || '유효하지 않은 라이선스 키입니다.');
+        setErrorMessage(result.message || t.invalidLicenseKey);
       }
     } catch (err: any) {
-      setErrorMessage('라이선스 검증 서버 통신 중 오류가 발생했습니다.');
+      setErrorMessage(t.licenseServerError);
     } finally {
       setIsLoading(false);
     }

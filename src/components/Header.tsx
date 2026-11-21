@@ -41,7 +41,14 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
             {licenseInfo && (
               <span className="text-slate-600 font-medium hidden sm:inline-flex items-center gap-1">
-                <strong className={isAdmin ? 'text-purple-700 font-bold' : 'text-emerald-600 font-semibold'}>{licenseInfo.tier || (isAdmin ? '관리자' : '일반')}</strong> ({licenseInfo.userName || '회원'})
+                <strong className={isAdmin ? 'text-purple-700 font-bold' : 'text-emerald-600 font-semibold'}>
+                  {isAdmin
+                    ? t.adminLabel
+                    : licenseInfo.tier === '일반 회원' || !licenseInfo.tier
+                    ? t.generalMemberLabel
+                    : licenseInfo.tier}
+                </strong>{' '}
+                ({licenseInfo.userName === '인증 사용자' || !licenseInfo.userName ? t.memberFallback : licenseInfo.userName})
               </span>
             )}
           </div>
@@ -62,7 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenModelSettings}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 font-medium border border-slate-200 shadow-xs hover:border-slate-300 transition-colors cursor-pointer"
-              title="AI 모델 및 API 키 설정"
+              title={t.modelSettingsTitle}
             >
               <Settings className="w-3.5 h-3.5 text-slate-600" />
               <span className="hidden sm:inline">{t.modelSettings}</span>

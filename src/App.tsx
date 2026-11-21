@@ -25,7 +25,7 @@ import { ModelSettingsModal } from './components/ModelSettingsModal';
 import { ThemeManagerModal } from './components/ThemeManagerModal';
 import { ResultModal } from './components/ResultModal';
 import { ExpiredPaymentModal } from './components/ExpiredPaymentModal';
-import { getTranslation } from './i18n/translations';
+import { getTranslation, SubtopicId } from './i18n/translations';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ensureFirebaseInitialized } from './firebase';
 import { Theme, VocalType, ProviderType, PlaylistResult, StepId } from './types';
@@ -85,6 +85,23 @@ const LYRIC_SUBTOPIC_PRESETS = [
   }
 ] as const;
 
+type StatusState = {
+  kind:
+    | 'waiting'
+    | 'plan_sim'
+    | 'plan_ai'
+    | 'create'
+    | 'produce'
+    | 'complete'
+    | 'aborted'
+    | 'stopped'
+    | 'error';
+  themeName?: string;
+  providerName?: string;
+  count?: number;
+  errorText?: string;
+};
+
 export default function App() {
   // G20 Language State
   const [currentLang, setCurrentLang] = useState<string>(() => localStorage.getItem('plymaster_lang') || 'ko');
@@ -136,7 +153,7 @@ export default function App() {
   const [currentStep, setCurrentStep] = useState<StepId>('plan');
   const [stepIndex, setStepIndex] = useState<number>(0); // 0: PLAN, 1: CREATE, 2: PRODUCE, 3: COMPLETE
   const [progressPercent, setProgressPercent] = useState<number>(0);
-  const [statusMessage, setStatusMessage] = useState<string>('대기 중...');
+  const [statusState, setStatusState] = useState<StatusState>({ kind: 'waiting' });
   const [resultData, setResultData] = useState<PlaylistResult | null>(null);
   const [apiErrorMessage, setApiErrorMessage] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -298,7 +315,7 @@ export default function App() {
   // Start Generation
   const handleStart = async (isSimulation = false) => {
     if (!selectedTheme) {
-      alert('테마를 먼저 선택해 주세요.');
+      alert(t.selectThemeFirst);
       return;
     }
 
@@ -317,10 +334,10 @@ export default function App() {
     setProgressPercent(5);
     setStepIndex(0);
     setCurrentStep('plan');
-    setStatusMessage(
+    setStatusState(
       isSimulation
-        ? `01 PLAN: '${selectedTheme.name}' 테마 SOP 분석 및 시뮬레이션 기획 수립 중...`
-        : `01 PLAN: '${selectedTheme.name}' 테마 SOP 분석 및 ${provider.toUpperCase()} AI 기획 수립 중...`
+        ? { kind: 'plan_sim', themeName: selectedTheme.name }
+        : { kind: 'plan_ai', themeName: selectedTheme.name, providerName: provider.toUpperCase() }
     );
 
     const abortController = new AbortController();
@@ -334,11 +351,14 @@ export default function App() {
       setProgressPercent(28);
       setStepIndex(1);
       setCurrentStep('create');
-      setStatusMessage(`02 CREATE: 트랙별 무드, Suno/Udio 스타일 프롬프트 및 완성형 가사 작성 중... (총 ${effectiveTrackCount}곡)`);
+      setStatusState({ kind: 'create', count: effectiveTrackCount });
 
       const selectedSubtopicObj = LYRIC_SUBTOPIC_PRESETS.find((item) => item.id === selectedSubtopicId);
       const subtopicConceptText = selectedSubtopicObj
         ? `${selectedSubtopicObj.title}: ${selectedSubtopicObj.description}`
+        : '';
+      const localizedSubtopicTitle = selectedSubtopicObj
+        ? t.subtopics[selectedSubtopicObj.id as SubtopicId]?.title || selectedSubtopicObj.title
         : '';
       const typedConcept = lyricConcept.trim();
       const combinedConcept =
@@ -346,6 +366,11 @@ export default function App() {
           ? `${typedConcept} (${subtopicConceptText})`
           : typedConcept || subtopicConceptText;
       const activeLyricConcept = useLyricConcept && combinedConcept ? combinedConcept : '';
+      const displayConcept =
+        typedConcept && localizedSubtopicTitle
+          ? `${typedConcept} (${localizedSubtopicTitle})`
+          : typedConcept || localizedSubtopicTitle;
+      const displayLyricConcept = useLyricConcept && displayConcept ? displayConcept : '';
 
       // Call API
       const apiResult = await generatePlaylist({
@@ -366,7 +391,7 @@ export default function App() {
       setProgressPercent(75);
       setStepIndex(2);
       setCurrentStep('produce');
-      setStatusMessage(`03 PRODUCE: 유튜브 SEO 타이틀, 영상 설명문, 썸네일 & 배경 프롬프트 패키징 중...`);
+      setStatusState({ kind: 'produce' });
 
       await new Promise((resolve) => setTimeout(resolve, 600));
       if (abortController.signal.aborted) return;
@@ -375,12 +400,12 @@ export default function App() {
       setProgressPercent(100);
       setStepIndex(3);
       setCurrentStep('complete');
-      setStatusMessage(`04 COMPLETE: 기획 및 제작 완료! 결과 팝업을 엽니다.`);
+      setStatusState({ kind: 'complete' });
 
       const finalData: PlaylistResult = {
         themeId: selectedTheme.id,
         themeName: selectedTheme.name,
-        lyricConcept: activeLyricConcept || undefined,
+        lyricConcept: displayLyricConcept || undefined,
         modelUsed: apiResult.modelUsed,
         vocal,
         generatedAt: new Date().toISOString(),
@@ -404,11 +429,11 @@ export default function App() {
 
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        setStatusMessage('작업이 사용자에 의해 중지되었습니다.');
+        setStatusState({ kind: 'aborted' });
       } else {
         console.error('Generation error:', err);
-        const errorMsg = err.message || '요청 처리에 실패했습니다.';
-        setStatusMessage(`오류 발생: ${errorMsg}`);
+        const errorMsg = err.message || t.requestFailed;
+        setStatusState({ kind: 'error', errorText: errorMsg });
         setApiErrorMessage(errorMsg);
       }
       setIsRunning(false);
@@ -422,7 +447,7 @@ export default function App() {
       abortControllerRef.current = null;
     }
     setIsRunning(false);
-    setStatusMessage('작업이 중지되었습니다.');
+    setStatusState({ kind: 'stopped' });
     setProgressPercent(0);
     setStepIndex(0);
     setCurrentStep('plan');
@@ -474,6 +499,38 @@ export default function App() {
   const currentModelDisplayName = isAutoModel
     ? `${provider.toUpperCase()} - ${PROVIDER_AUTO_MODELS[provider]} (${t.autoTokenOptimized})`
     : `${provider.toUpperCase()} - ${model}`;
+
+  const renderedStatusMessage = (() => {
+    switch (statusState.kind) {
+      case 'waiting':
+        return t.waiting;
+      case 'plan_sim':
+        return t.statusPlanSim.replace('{theme}', statusState.themeName || '');
+      case 'plan_ai':
+        return t.statusPlanAi
+          .replace('{theme}', statusState.themeName || '')
+          .replace('{provider}', statusState.providerName || '');
+      case 'create':
+        return t.statusCreate.replace('{count}', String(statusState.count ?? 1));
+      case 'produce':
+        return t.statusProduce;
+      case 'complete':
+        return t.statusComplete;
+      case 'aborted':
+        return t.statusAborted;
+      case 'stopped':
+        return t.statusStopped;
+      case 'error':
+        return t.statusErrorPrefix.replace('{error}', statusState.errorText || t.requestFailed);
+    }
+  })();
+
+  const localizedApiKeyPlaceholder =
+    provider === 'gemini'
+      ? '****************************************************************************************************'
+      : provider === 'claude'
+      ? t.apiKeyPlaceholderClaude
+      : t.apiKeyPlaceholderGpt;
 
   return (
     <div className="min-h-screen bg-[#f3f4f6] text-slate-800 flex flex-col font-sans">
@@ -535,18 +592,14 @@ export default function App() {
                   setApiKeys(newKeys);
                   localStorage.setItem('plymaster_api_keys', JSON.stringify(newKeys));
                 }}
-                placeholder={
-                  provider === 'gemini'
-                    ? '****************************************************************************************************'
-                    : PROVIDER_LABELS[provider].placeholder
-                }
+                placeholder={localizedApiKeyPlaceholder}
                 className="w-full pl-3.5 pr-10 py-2.5 bg-slate-50/60 rounded-xl border border-slate-200 font-mono text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
               />
               <button
                 type="button"
                 onClick={() => setShowApiKeyText(!showApiKeyText)}
                 className="absolute right-3 text-slate-400 hover:text-slate-600 cursor-pointer"
-                title={showApiKeyText ? '키 숨기기' : '키 보기'}
+                title={showApiKeyText ? t.hideKey : t.showKey}
               >
                 {showApiKeyText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -734,16 +787,17 @@ export default function App() {
                 {/* 가사 컨셉 소주제 드랍다운 (10종) */}
                 <div className="mt-2.5 flex items-center gap-2.5">
                   <span className="text-xs font-semibold text-slate-500 shrink-0 pl-7">
-                    소주제 선택:
+                    {t.subtopicLabel}:
                   </span>
                   <div ref={subtopicDropdownRef} className="relative flex-1 min-w-0">
                     <button
                       type="button"
                       onClick={() => setIsSubtopicDropdownOpen((prev) => !prev)}
-                      title={(() => {
-                        const found = LYRIC_SUBTOPIC_PRESETS.find((item) => item.id === selectedSubtopicId);
-                        return found ? found.description : undefined;
-                      })()}
+                      title={
+                        selectedSubtopicId
+                          ? t.subtopics[selectedSubtopicId as SubtopicId]?.description
+                          : undefined
+                      }
                       className={`w-full px-3.5 py-2 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
                         selectedSubtopicId && useLyricConcept
                           ? 'border-blue-400 bg-white text-slate-900 font-medium shadow-2xs'
@@ -751,10 +805,9 @@ export default function App() {
                       }`}
                     >
                       <span className="text-sm truncate pr-2">
-                        {(() => {
-                          const found = LYRIC_SUBTOPIC_PRESETS.find((item) => item.id === selectedSubtopicId);
-                          return found ? found.title : '소주제 10가지 중 선택 (선택 사항)';
-                        })()}
+                        {selectedSubtopicId
+                          ? t.subtopics[selectedSubtopicId as SubtopicId]?.title || t.subtopicPlaceholder
+                          : t.subtopicPlaceholder}
                       </span>
                       <ChevronDown
                         className={`w-4 h-4 text-slate-500 shrink-0 transition-transform ${
@@ -778,10 +831,11 @@ export default function App() {
                             !selectedSubtopicId ? 'bg-slate-50 text-slate-800 font-semibold' : 'text-slate-500'
                           }`}
                         >
-                          선택 안함 (직접 입력만 사용)
+                          {t.subtopicNone}
                         </button>
                         {LYRIC_SUBTOPIC_PRESETS.map((item) => {
                           const isSel = selectedSubtopicId === item.id;
+                          const localizedSubtopic = t.subtopics[item.id as SubtopicId];
                           return (
                             <button
                               key={item.id}
@@ -795,9 +849,11 @@ export default function App() {
                                 isSel ? 'bg-blue-50/70 text-blue-700' : 'text-slate-700'
                               }`}
                             >
-                              <div className="text-xs sm:text-sm font-semibold">{item.title}</div>
+                              <div className="text-xs sm:text-sm font-semibold">
+                                {localizedSubtopic?.title || item.title}
+                              </div>
                               <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                                {item.description}
+                                {localizedSubtopic?.description || item.description}
                               </div>
                             </button>
                           );
@@ -816,7 +872,7 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    aria-label="곡 수 감소"
+                    aria-label={t.decreaseTrackCount}
                     disabled={trackCount <= 1}
                     onClick={() => {
                       const next = Math.max(1, trackCount - 1);
@@ -871,7 +927,7 @@ export default function App() {
                   />
                   <button
                     type="button"
-                    aria-label="곡 수 증가"
+                    aria-label={t.increaseTrackCount}
                     disabled={trackCount >= 10}
                     onClick={() => {
                       const next = Math.min(10, trackCount + 1);
@@ -929,7 +985,7 @@ export default function App() {
                 <div className="flex items-start gap-2.5">
                   <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                   <div className="flex-1 text-xs">
-                    <strong className="font-bold text-rose-900 block mb-1">AI 모델 연동 오류 안내</strong>
+                    <strong className="font-bold text-rose-900 block mb-1">{t.apiErrorTitle}</strong>
                     <p className="whitespace-pre-wrap text-rose-700 leading-relaxed mb-3">{apiErrorMessage}</p>
                     <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-rose-200/80">
                       <button
@@ -937,14 +993,14 @@ export default function App() {
                         onClick={() => setShowModelSettings(true)}
                         className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors cursor-pointer shadow-2xs"
                       >
-                        API 키 및 모델 설정 열기
+                        {t.openModelSettingsBtn}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleStart(true)}
                         className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs border border-slate-300 transition-colors cursor-pointer shadow-2xs"
                       >
-                        시뮬레이션 모드로 테스트 생성 (SOP 기반)
+                        {t.runSimulationBtn}
                       </button>
                     </div>
                   </div>
@@ -970,7 +1026,7 @@ export default function App() {
                 {isRunning ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>작업 진행 중...</span>
+                    <span>{t.workingInProgress}</span>
                   </>
                 ) : (
                   <>
@@ -1074,7 +1130,7 @@ export default function App() {
                       <div className="w-2.5 h-2.5 rounded-full bg-slate-400 mt-1 shrink-0" />
                     )}
                     <div className="text-xs text-slate-700 font-medium leading-relaxed">
-                      {statusMessage === '대기 중...' ? t.waiting : statusMessage}
+                      {renderedStatusMessage}
                     </div>
                   </div>
                 </div>
@@ -1090,7 +1146,7 @@ export default function App() {
                   className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Sparkles className="w-4 h-4 text-blue-600" />
-                  <span>이전 생성 결과 팝업 다시 열기</span>
+                  <span>{t.reopenResultPopup}</span>
                 </button>
               </div>
             )}
@@ -1114,6 +1170,7 @@ export default function App() {
         isAutoModel={isAutoModel}
         apiKeys={apiKeys}
         onSave={handleSaveModelSettings}
+        lang={currentLang}
       />
 
       <ThemeManagerModal

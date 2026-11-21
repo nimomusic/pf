@@ -102,7 +102,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                     {t.completedModalTitle}
                   </h2>
                   <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-blue-100 text-blue-700 whitespace-nowrap shrink-0">
-                    {data.tracks.length}곡 완성
+                    {t.tracksCompletedBadge.replace('{count}', String(data.tracks.length))}
                   </span>
                   <span className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-slate-200/80 text-slate-700 whitespace-nowrap max-w-[160px] sm:max-w-none truncate">
                     {data.modelUsed}
@@ -128,7 +128,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
               </button>
               <button
                 onClick={onClose}
-                aria-label="닫기"
+                aria-label={t.close}
                 className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer shrink-0"
               >
                 <X className="w-5 h-5" />
@@ -138,16 +138,16 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
 
           <div className="text-[11px] sm:text-xs text-slate-600 font-medium flex flex-wrap items-center gap-1.5 sm:gap-2 pl-0 sm:pl-[52px]">
             <span className="leading-snug">
-              선택 테마: <strong className="text-blue-900">{data.themeName}</strong>
+              {t.selectedThemeLabel}: <strong className="text-blue-900">{data.themeName}</strong>
             </span>
             {data.lyricConcept && (
               <span className="text-[11px] bg-blue-100/80 text-blue-900 font-semibold px-2 py-0.5 rounded-md border border-blue-200 leading-snug break-words max-w-full">
-                가사 컨셉: {data.lyricConcept}
+                {t.lyricConceptLabel}: {data.lyricConcept}
               </span>
             )}
             {data.modelUsed.includes('시뮬레이션') && (
               <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded whitespace-nowrap">
-                로컬 시뮬레이션 모드
+                {t.localSimulationMode}
               </span>
             )}
           </div>
@@ -164,7 +164,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
             }`}
           >
             <Music2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 shrink-0" />
-            <span className="sm:hidden truncate">{lang === 'ko' ? '트랙' : 'Tracks'} ({data.tracks.length})</span>
+            <span className="sm:hidden truncate">{t.tracksTabShort} ({data.tracks.length})</span>
             <span className="hidden sm:inline">{t.tracksTab} ({data.tracks.length})</span>
           </button>
           <button
@@ -176,7 +176,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
             }`}
           >
             <Youtube className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-500 shrink-0" />
-            <span className="sm:hidden truncate">{lang === 'ko' ? '유튜브 패키지' : 'YouTube'}</span>
+            <span className="sm:hidden truncate">{t.youtubeTabShort}</span>
             <span className="hidden sm:inline">{t.youtubeTab}</span>
           </button>
           <button
@@ -188,7 +188,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
             }`}
           >
             <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 shrink-0" />
-            <span className="sm:hidden truncate">{lang === 'ko' ? '전체 보기' : 'All'}</span>
+            <span className="sm:hidden truncate">{t.allInOneTabShort}</span>
             <span className="hidden sm:inline">{t.allInOneTab}</span>
           </button>
         </div>
@@ -236,13 +236,13 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                           <Copy className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         )}
                         <span>
-                          {copiedKey === `track_all_${track.trackNumber}` ? '복사됨!' : '트랙 전체 복사'}
+                          {copiedKey === `track_all_${track.trackNumber}` ? t.copied : t.copyTrackAll}
                         </span>
                       </button>
                     </div>
 
                     <div className="p-3.5 sm:p-5 space-y-3 sm:space-y-4 text-xs">
-                      {/* Meta Info (if present in SOP) */}
+                      {/* Meta Info */}
                       {track.metaInfo && (
                         <div className="p-3 sm:p-3.5 bg-indigo-50/70 rounded-xl border border-indigo-200/80 flex flex-wrap items-center gap-1.5 sm:gap-2">
                           <span className="font-extrabold text-indigo-950 text-[11px] sm:text-xs mr-1 whitespace-nowrap">Meta Info:</span>
@@ -274,13 +274,14 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                         </div>
                       )}
 
-                      {/* 1. 곡 제목 (Song Title) */}
+                      {/* 1. Song Title */}
                       <div className="p-3 sm:p-4 bg-slate-50/80 rounded-xl border border-slate-200">
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <span className="font-extrabold text-slate-800 tracking-tight text-xs flex items-center gap-1.5 min-w-0">
                             <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0"></span>
                             <span className="truncate">
-                              곡 제목 <span className="hidden sm:inline font-semibold text-slate-500">(Song Title)</span>
+                              {t.songTitleLabel}{' '}
+                              {lang === 'ko' && <span className="hidden sm:inline font-semibold text-slate-500">(Song Title)</span>}
                             </span>
                           </span>
                           <button
@@ -295,12 +296,12 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                             {copiedKey === `title_${track.trackNumber}` ? (
                               <>
                                 <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                <span>복사완료!</span>
+                                <span>{t.copyCompleted}</span>
                               </>
                             ) : (
                               <>
                                 <Copy className="w-3.5 h-3.5 shrink-0" />
-                                <span>제목 복사</span>
+                                <span>{t.copyTitle}</span>
                               </>
                             )}
                           </button>
@@ -310,13 +311,14 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                         </div>
                       </div>
 
-                      {/* 2. 스타일 프롬프트 (Style Prompt for Suno/Udio) */}
+                      {/* 2. Style Prompt */}
                       <div className="p-3 sm:p-4 bg-blue-50/50 rounded-xl border border-blue-200/80">
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <span className="font-extrabold text-blue-950 tracking-tight text-xs flex items-center gap-1.5 min-w-0">
                             <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0"></span>
                             <span className="truncate">
-                              스타일 프롬프트 <span className="hidden sm:inline font-semibold text-blue-700/80">(Style Prompt - Suno / Udio)</span>
+                              {t.stylePromptLabel}{' '}
+                              <span className="hidden sm:inline font-semibold text-blue-700/80">(Suno / Udio)</span>
                             </span>
                           </span>
                           <button
@@ -331,12 +333,12 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                             {copiedKey === `style_${track.trackNumber}` ? (
                               <>
                                 <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                <span>복사완료!</span>
+                                <span>{t.copyCompleted}</span>
                               </>
                             ) : (
                               <>
                                 <Copy className="w-3.5 h-3.5 shrink-0" />
-                                <span>프롬프트 복사</span>
+                                <span>{t.copyPrompt}</span>
                               </>
                             )}
                           </button>
@@ -346,13 +348,14 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                         </div>
                       </div>
 
-                      {/* 3. 가사 (Full Lyrics) */}
+                      {/* 3. Full Lyrics */}
                       <div className="p-3 sm:p-4 bg-slate-50/80 rounded-xl border border-slate-200">
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <span className="font-extrabold text-slate-800 tracking-tight text-xs flex items-center gap-1.5 min-w-0">
                             <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0"></span>
                             <span className="truncate">
-                              가사 <span className="hidden sm:inline font-semibold text-slate-500">(Full Lyrics)</span>
+                              {t.lyricsLabel}{' '}
+                              {lang === 'ko' && <span className="hidden sm:inline font-semibold text-slate-500">(Full Lyrics)</span>}
                             </span>
                           </span>
                           <button
@@ -367,12 +370,12 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                             {copiedKey === `lyrics_${track.trackNumber}` ? (
                               <>
                                 <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                <span>복사완료!</span>
+                                <span>{t.copyCompleted}</span>
                               </>
                             ) : (
                               <>
                                 <Copy className="w-3.5 h-3.5 shrink-0" />
-                                <span>가사 복사</span>
+                                <span>{t.copyLyrics}</span>
                               </>
                             )}
                           </button>
@@ -397,13 +400,13 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
 
             const buildYoutubeAllText = () => {
               const parts = [
-                `[영상 제목 - 한국어]\n${titleKo}`,
-                titleEn ? `[영상 제목 - English]\n${titleEn}` : '',
-                `[영상 설명 - 한국어]\n${descKo}`,
-                descEn ? `[영상 설명 - English]\n${descEn}` : '',
-                `[트랙리스트]\n${data.youtube.tracklist}`,
-                `[해시태그]\n${data.youtube.hashtags}`,
-                `[썸네일 프롬프트]\n${data.youtube.thumbnailPrompt}`,
+                `[YouTube Title - KO]\n${titleKo}`,
+                titleEn ? `[YouTube Title - EN]\n${titleEn}` : '',
+                `[Description - KO]\n${descKo}`,
+                descEn ? `[Description - EN]\n${descEn}` : '',
+                `[Tracklist]\n${data.youtube.tracklist}`,
+                `[Hashtags]\n${data.youtube.hashtags}`,
+                `[Thumbnail Prompt]\n${data.youtube.thumbnailPrompt}`,
               ].filter(Boolean);
               return parts.join('\n\n');
             };
@@ -414,10 +417,10 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                   <div className="min-w-0">
                     <h3 className="font-extrabold text-rose-900 text-xs sm:text-sm flex items-center gap-2">
                       <Youtube className="w-4 h-4 sm:w-5 sm:h-5 text-rose-600 shrink-0" />
-                      <span>유튜브 플레이리스트 업로드 원스톱 패키지</span>
+                      <span>{t.ytPackageTitle}</span>
                     </h3>
                     <p className="text-[11px] sm:text-xs text-rose-700 mt-1 leading-relaxed">
-                      한국어/영어 듀얼 제목·설명문, 트랙리스트, SEO 해시태그 5종 및 실사 사진급 2,000자+ 썸네일 프롬프트
+                      {t.ytPackageDesc}
                     </p>
                   </div>
                   <button
@@ -425,28 +428,31 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                     className="w-full sm:w-auto justify-center shrink-0 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                   >
                     {copiedKey === 'youtube_all' ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
-                    <span>{copiedKey === 'youtube_all' ? '패키지 전체 복사됨' : '유튜브 패키지 일괄 복사'}</span>
+                    <span>{copiedKey === 'youtube_all' ? t.ytPackageCopied : t.copyYoutubeAll}</span>
                   </button>
                 </div>
 
-                {/* 1. Video Title (Korean & English) */}
+                {/* 1. Video Title */}
                 <div className="p-3.5 sm:p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
-                      <span>영상 제목 <span className="hidden sm:inline">(YouTube Title — 한국어 / English)</span></span>
+                      <span>
+                        {t.ytVideoTitleLabel}{' '}
+                        <span className="hidden sm:inline">(KO / EN)</span>
+                      </span>
                     </span>
                   </div>
 
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">🇰🇷 한국어 버전</span>
+                      <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">🇰🇷 {t.ytKoreanVersion}</span>
                       <button
                         onClick={() => handleCopy(titleKo, 'yt_title_ko')}
                         className="text-[11px] sm:text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer whitespace-nowrap shrink-0"
                       >
                         {copiedKey === 'yt_title_ko' ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
-                        <span>{copiedKey === 'yt_title_ko' ? '복사됨' : '한국어 제목 복사'}</span>
+                        <span>{copiedKey === 'yt_title_ko' ? t.copied : t.ytCopyTitleKo}</span>
                       </button>
                     </div>
                     <div className="font-bold text-slate-900 text-xs sm:text-base bg-slate-50 p-2.5 sm:p-3 rounded-lg border border-slate-100 select-all break-words leading-snug">
@@ -457,13 +463,13 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                   {titleEn && (
                     <div className="space-y-1.5 pt-1 border-t border-slate-100">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">🇺🇸 English Version</span>
+                        <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">🇺🇸 {t.ytEnglishVersion}</span>
                         <button
                           onClick={() => handleCopy(titleEn, 'yt_title_en')}
                           className="text-[11px] sm:text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer whitespace-nowrap shrink-0"
                         >
                           {copiedKey === 'yt_title_en' ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
-                          <span>{copiedKey === 'yt_title_en' ? '복사됨' : '영문 제목 복사'}</span>
+                          <span>{copiedKey === 'yt_title_en' ? t.copied : t.ytCopyTitleEn}</span>
                         </button>
                       </div>
                       <div className="font-bold text-slate-800 text-xs sm:text-base bg-slate-50 p-2.5 sm:p-3 rounded-lg border border-slate-100 select-all break-words leading-snug">
@@ -473,24 +479,27 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                   )}
                 </div>
 
-                {/* 2. Video Description (Korean & English) */}
+                {/* 2. Video Description */}
                 <div className="p-3.5 sm:p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
-                      <span>영상 설명 <span className="hidden sm:inline">(Description — 한국어 / English)</span></span>
+                      <span>
+                        {t.ytVideoDescLabel}{' '}
+                        <span className="hidden sm:inline">(KO / EN)</span>
+                      </span>
                     </span>
                   </div>
 
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">🇰🇷 한국어 버전</span>
+                      <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">🇰🇷 {t.ytKoreanVersion}</span>
                       <button
                         onClick={() => handleCopy(descKo, 'yt_desc_ko')}
                         className="text-[11px] sm:text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer whitespace-nowrap shrink-0"
                       >
                         {copiedKey === 'yt_desc_ko' ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
-                        <span>{copiedKey === 'yt_desc_ko' ? '복사됨' : '한국어 설명 복사'}</span>
+                        <span>{copiedKey === 'yt_desc_ko' ? t.copied : t.ytCopyDescKo}</span>
                       </button>
                     </div>
                     <div className="font-mono text-[11px] sm:text-xs text-slate-800 bg-slate-50 p-2.5 sm:p-3 rounded-lg border border-slate-100 whitespace-pre-wrap break-words leading-relaxed max-h-72 overflow-y-auto select-all">
@@ -501,13 +510,13 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                   {descEn && (
                     <div className="space-y-1.5 pt-2 border-t border-slate-100">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">🇺🇸 English Version</span>
+                        <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">🇺🇸 {t.ytEnglishVersion}</span>
                         <button
                           onClick={() => handleCopy(descEn, 'yt_desc_en')}
                           className="text-[11px] sm:text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer whitespace-nowrap shrink-0"
                         >
                           {copiedKey === 'yt_desc_en' ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
-                          <span>{copiedKey === 'yt_desc_en' ? '복사됨' : '영문 설명 복사'}</span>
+                          <span>{copiedKey === 'yt_desc_en' ? t.copied : t.ytCopyDescEn}</span>
                         </button>
                       </div>
                       <div className="font-mono text-[11px] sm:text-xs text-slate-800 bg-slate-50 p-2.5 sm:p-3 rounded-lg border border-slate-100 whitespace-pre-wrap break-words leading-relaxed max-h-72 overflow-y-auto select-all">
@@ -522,14 +531,14 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5 min-w-0">
                       <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
-                      <span className="truncate">트랙리스트 (Tracklist)</span>
+                      <span className="truncate">{t.ytTracklistLabel}</span>
                     </span>
                     <button
                       onClick={() => handleCopy(data.youtube.tracklist, 'yt_tracklist')}
                       className="text-[11px] sm:text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer whitespace-nowrap shrink-0"
                     >
                       {copiedKey === 'yt_tracklist' ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
-                      <span>{copiedKey === 'yt_tracklist' ? '복사됨' : '복사'}</span>
+                      <span>{copiedKey === 'yt_tracklist' ? t.copied : t.copy}</span>
                     </button>
                   </div>
                   <div className="font-mono text-[11px] sm:text-xs text-slate-800 bg-slate-50 p-2.5 sm:p-3 rounded-lg border border-slate-100 whitespace-pre-line break-words">
@@ -542,14 +551,14 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5 min-w-0">
                       <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
-                      <span className="truncate">해시태그 (5 Core SEO Hashtags)</span>
+                      <span className="truncate">{t.ytHashtagsLabel}</span>
                     </span>
                     <button
                       onClick={() => handleCopy(data.youtube.hashtags, 'yt_hashtags')}
                       className="text-[11px] sm:text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer whitespace-nowrap shrink-0"
                     >
                       {copiedKey === 'yt_hashtags' ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
-                      <span>{copiedKey === 'yt_hashtags' ? '복사됨' : '복사'}</span>
+                      <span>{copiedKey === 'yt_hashtags' ? t.copied : t.copy}</span>
                     </button>
                   </div>
                   <div className="font-semibold text-blue-700 text-[11px] sm:text-xs bg-slate-50 p-2.5 sm:p-3 rounded-lg border border-slate-100 select-all break-words leading-relaxed">
@@ -563,19 +572,20 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                     <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5 min-w-0">
                       <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0"></span>
                       <span>
-                        썸네일 프롬프트 <span className="hidden sm:inline text-slate-500 font-semibold">(16:9 Single Scene · No Text)</span>
+                        {t.ytThumbPromptLabel}{' '}
+                        <span className="hidden sm:inline text-slate-500 font-semibold">(16:9 Single Scene · No Text)</span>
                       </span>
                     </span>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-[10px] font-mono text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 whitespace-nowrap">
-                        {data.youtube.thumbnailPrompt.length.toLocaleString()}자
+                        {data.youtube.thumbnailPrompt.length.toLocaleString()} {t.charsUnit}
                       </span>
                       <button
                         onClick={() => handleCopy(data.youtube.thumbnailPrompt, 'yt_thumb')}
                         className="text-[11px] sm:text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-semibold cursor-pointer whitespace-nowrap"
                       >
                         {copiedKey === 'yt_thumb' ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
-                        <span>{copiedKey === 'yt_thumb' ? '복사됨' : '복사'}</span>
+                        <span>{copiedKey === 'yt_thumb' ? t.copied : t.copy}</span>
                       </button>
                     </div>
                   </div>
@@ -592,7 +602,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
             <div className="space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <span className="text-[11px] sm:text-xs text-slate-500 font-semibold leading-snug">
-                  원클릭 복사 또는 텍스트 파일 저장에 유용한 통합 형식입니다.
+                  {t.allInOneDesc}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
@@ -600,14 +610,14 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
                     className="flex-1 sm:flex-none justify-center px-3 py-2 sm:py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                   >
                     <Download className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    <span>TXT 파일 저장</span>
+                    <span>{t.saveTxtFile}</span>
                   </button>
                   <button
                     onClick={() => handleCopy(generateFullText(), 'raw_all')}
                     className="flex-1 sm:flex-none justify-center px-3 py-2 sm:py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                   >
                     {copiedKey === 'raw_all' ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
-                    <span>{copiedKey === 'raw_all' ? '전체 복사됨!' : '전체 텍스트 복사'}</span>
+                    <span>{copiedKey === 'raw_all' ? t.allCopiedText : t.copyAllText}</span>
                   </button>
                 </div>
               </div>
@@ -625,13 +635,13 @@ export const ResultModal: React.FC<ResultModalProps> = ({ isOpen, onClose, data,
         <div className="px-4 py-3 sm:px-6 sm:py-3.5 border-t border-slate-100 bg-slate-50 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 text-[11px] sm:text-xs text-slate-500">
           <div className="flex items-center gap-1.5 text-emerald-600 font-medium leading-snug">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <span>생성된 프롬프트와 가사는 Suno, Udio 및 유튜브에 즉시 사용 가능합니다.</span>
+            <span>{t.resultFooterNote}</span>
           </div>
           <button
             onClick={onClose}
             className="w-full sm:w-auto px-4 py-2 sm:py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-colors cursor-pointer whitespace-nowrap shrink-0 text-center"
           >
-            확인 및 창 닫기
+            {t.confirmAndClose}
           </button>
         </div>
       </div>

@@ -31,10 +31,11 @@ export const ExpiredPaymentModal: React.FC<ExpiredPaymentModalProps> = ({
             <CalendarX className="w-8 h-8 text-white" />
           </div>
           <h3 className="text-xl font-black tracking-tight">{t.expiredTitle}</h3>
-          <p className="text-xs text-rose-100 mt-1 font-medium">Plymaster Factory 라이선스 만료 안내</p>
+          <p className="text-xs text-rose-100 mt-1 font-medium">{t.expiredBannerSub}</p>
 
           <button
             onClick={onClose}
+            aria-label={t.close}
             className="absolute top-4 right-4 p-1.5 rounded-full bg-black/10 hover:bg-black/20 text-white transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -46,12 +47,12 @@ export const ExpiredPaymentModal: React.FC<ExpiredPaymentModalProps> = ({
           {/* Expiration Details Card */}
           <div className="p-4 bg-rose-50/80 rounded-2xl border border-rose-200/70 text-left space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-semibold">라이선스 (UUID):</span>
+              <span className="text-slate-500 font-semibold">{t.expiredLicenseUuidLabel}</span>
               <span className="font-mono font-bold text-slate-800">{licenseKey || 'N/A'}</span>
             </div>
             {dueDate && (
               <div className="flex items-center justify-between text-xs">
-                <span className="text-rose-700 font-bold">만료 일자 (Due Date):</span>
+                <span className="text-rose-700 font-bold">{t.expiredDueDateLabel}</span>
                 <span className="font-mono font-black text-rose-700 bg-white px-2 py-0.5 rounded border border-rose-200">
                   {dueDate}
                 </span>
@@ -60,8 +61,8 @@ export const ExpiredPaymentModal: React.FC<ExpiredPaymentModalProps> = ({
           </div>
 
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium">
-            사용 기간이 만료되어 스튜디오 접속이 제한되었습니다.<br />
-            아래 <strong>결제 사이트 바로가기</strong>에서 결제 후 새로운 사용 기간을 발급받아 이용해 주시기 바랍니다.
+            {t.expiredBodyLine1}<br />
+            {t.expiredBodyLine2}
           </p>
 
           {/* Payment CTA Link Button */}
@@ -72,11 +73,11 @@ export const ExpiredPaymentModal: React.FC<ExpiredPaymentModalProps> = ({
               rel="noopener noreferrer"
               className="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold text-sm rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 group cursor-pointer"
             >
-              <span>결제 사이트 바로가기</span>
+              <span>{t.expiredPaymentBtn}</span>
               <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </a>
             <p className="text-[11px] text-slate-400">
-              공식 결제 링크: <span className="font-mono text-blue-600 font-semibold">https://litt.ly/plymaster</span>
+              {t.expiredOfficialLinkLabel} <span className="font-mono text-blue-600 font-semibold">https://litt.ly/plymaster</span>
             </p>
           </div>
 
@@ -87,7 +88,7 @@ export const ExpiredPaymentModal: React.FC<ExpiredPaymentModalProps> = ({
               onClick={onClose}
               className="text-xs text-slate-500 hover:text-slate-800 font-semibold cursor-pointer py-1"
             >
-              다른 라이선스 키 입력하기
+              {t.expiredReenterKey}
             </button>
           </div>
         </div>
