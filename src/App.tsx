@@ -723,7 +723,7 @@ export default function App() {
                       }
                     }}
                     placeholder={t.lyricConceptPlaceholder}
-                    className={`flex-1 px-3.5 py-2 text-sm rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    className={`flex-1 min-w-0 px-3.5 py-2 text-sm rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       useLyricConcept
                         ? 'border-blue-400 bg-white text-slate-900 font-medium shadow-2xs'
                         : 'border-slate-300 bg-slate-50/70 text-slate-600'
