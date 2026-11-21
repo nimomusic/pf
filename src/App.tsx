@@ -14,7 +14,9 @@ import {
   FileSpreadsheet,
   AlertCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  Minus,
+  Plus
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { LicenseGate } from './components/LicenseGate';
@@ -115,6 +117,7 @@ export default function App() {
   const [isSubtopicDropdownOpen, setIsSubtopicDropdownOpen] = useState<boolean>(false);
   const subtopicDropdownRef = useRef<HTMLDivElement>(null);
   const [trackCount, setTrackCount] = useState<number>(1);
+  const [trackCountInput, setTrackCountInput] = useState<string>('1');
   const [vocal, setVocal] = useState<VocalType>('random');
 
   // AI Provider & Model State
@@ -301,6 +304,13 @@ export default function App() {
 
     if (isRunning) return;
 
+    const parsedTrackCount = parseInt(trackCountInput, 10);
+    const effectiveTrackCount = Number.isNaN(parsedTrackCount)
+      ? 1
+      : Math.min(10, Math.max(1, parsedTrackCount));
+    setTrackCount(effectiveTrackCount);
+    setTrackCountInput(String(effectiveTrackCount));
+
     setApiErrorMessage(null);
     setResultData(null);
     setIsRunning(true);
@@ -324,7 +334,7 @@ export default function App() {
       setProgressPercent(28);
       setStepIndex(1);
       setCurrentStep('create');
-      setStatusMessage(`02 CREATE: 트랙별 무드, Suno/Udio 스타일 프롬프트 및 완성형 가사 작성 중... (총 ${trackCount}곡)`);
+      setStatusMessage(`02 CREATE: 트랙별 무드, Suno/Udio 스타일 프롬프트 및 완성형 가사 작성 중... (총 ${effectiveTrackCount}곡)`);
 
       const selectedSubtopicObj = LYRIC_SUBTOPIC_PRESETS.find((item) => item.id === selectedSubtopicId);
       const subtopicConceptText = selectedSubtopicObj
@@ -340,7 +350,7 @@ export default function App() {
       // Call API
       const apiResult = await generatePlaylist({
         theme: selectedTheme,
-        trackCount,
+        trackCount: effectiveTrackCount,
         vocal,
         lyricConcept: activeLyricConcept || undefined,
         provider,
@@ -798,21 +808,82 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 2. 제작 곡 수 - Clean input as in screenshot without quick pills */}
+              {/* 2. 제작 곡 수 - Mobile-friendly stepper + editable numeric input (1~10) */}
               <div>
                 <label className="block text-base font-bold text-blue-600 mb-2">
                   {t.trackCountLabel}
                 </label>
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label="곡 수 감소"
+                    disabled={trackCount <= 1}
+                    onClick={() => {
+                      const next = Math.max(1, trackCount - 1);
+                      setTrackCount(next);
+                      setTrackCountInput(String(next));
+                    }}
+                    className="w-11 h-11 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 active:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
                   <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={trackCount}
-                    onChange={(e) => setTrackCount(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
-                    className="w-24 px-4 py-2.5 text-center font-bold text-base rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    aria-label={t.trackCountLabel}
+                    value={trackCountInput}
+                    onFocus={(e) => {
+                      const el = e.currentTarget;
+                      requestAnimationFrame(() => {
+                        if (document.activeElement === el) {
+                          el.select();
+                        }
+                      });
+                    }}
+                    onChange={(e) => {
+                      const digitsOnly = e.target.value.replace(/[^0-9]/g, '');
+                      if (digitsOnly === '') {
+                        setTrackCountInput('');
+                        setTrackCount(1);
+                        return;
+                      }
+                      const parsed = parseInt(digitsOnly, 10);
+                      if (parsed === 0) {
+                        setTrackCountInput('');
+                        setTrackCount(1);
+                        return;
+                      }
+                      const clamped = Math.min(10, Math.max(1, parsed));
+                      setTrackCount(clamped);
+                      setTrackCountInput(String(clamped));
+                    }}
+                    onBlur={() => {
+                      const parsed = parseInt(trackCountInput, 10);
+                      const normalized = Number.isNaN(parsed)
+                        ? 1
+                        : Math.min(10, Math.max(1, parsed));
+                      setTrackCount(normalized);
+                      setTrackCountInput(String(normalized));
+                    }}
+                    placeholder="1"
+                    className="w-20 px-3 py-2.5 text-center font-bold text-base rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                   />
-                  <span className="font-semibold text-slate-700 text-sm">{t.tracksUnit}</span>
+                  <button
+                    type="button"
+                    aria-label="곡 수 증가"
+                    disabled={trackCount >= 10}
+                    onClick={() => {
+                      const next = Math.min(10, trackCount + 1);
+                      setTrackCount(next);
+                      setTrackCountInput(String(next));
+                    }}
+                    className="w-11 h-11 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 active:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                  <span className="font-semibold text-slate-700 text-sm ml-1">{t.tracksUnit}</span>
+                  <span className="text-xs text-slate-400 font-medium">(1~10)</span>
                 </div>
               </div>
 
