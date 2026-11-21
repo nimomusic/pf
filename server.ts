@@ -7,15 +7,11 @@ import { GoogleGenAI } from '@google/genai';
 import seedThemes from './data/themes.json' with { type: 'json' };
 import { buildCuratedYoutubePackage } from './src/utils/youtubePackageBuilder.ts';
 import {
-  buildRefinementPromptForAI,
   detectSopEraMode,
   enforceContemporaryEraInStylePrompt,
   enforceTrackVocalGender,
-  evaluateTrackMusicalCraft,
-  formatInnovationPromptSection,
-  generateTrackInnovationPlans,
   getCurrentTemporalContext,
-  refineTrackWithCraftAudit,
+  resolvePerTrackVocalGenders,
   stripSopNegativeClauses,
 } from './src/utils/musicalCraftEngine.ts';
 
@@ -1350,15 +1346,14 @@ app.post(['/api/generate', '/generate'], async (req: Request, res: Response) => 
               : `No specific season was requested, so default environmental atmosphere and seasonal tags cleanly to today's **${temporalCtx.seasonEn} (${temporalCtx.seasonKo})** without inventing unrequested rain or snow.`
           }`;
 
-    const innovationPlans = generateTrackInnovationPlans(theme, sopSpecs, effectiveTrackCount, vocal);
-    const innovationPromptSection = formatInnovationPromptSection(innovationPlans);
+    const resolvedVocalGenders = resolvePerTrackVocalGenders(vocal, effectiveTrackCount);
 
-    const perTrackVocalSummary = innovationPlans
-      .map((p) =>
-        `Track ${p.trackNumber}: ${
-          p.vocalGender === 'male'
+    const perTrackVocalSummary = resolvedVocalGenders
+      .map((vg, idx) =>
+        `Track ${idx + 1}: ${
+          vg === 'male'
             ? 'SOLO MALE LEAD VOCAL ("solo male lead vocal, male voice", Exclude: -female vocals)'
-            : p.vocalGender === 'female'
+            : vg === 'female'
             ? 'SOLO FEMALE LEAD VOCAL ("solo female lead vocal, female voice", Exclude: -male vocals)'
             : 'PURE INSTRUMENTAL ("pure instrumental, no vocals", Exclude: -vocals, -singing)'
         }`
@@ -1566,7 +1561,6 @@ ${theme.sop || ''}
 - Target Track Count: EXACTLY ${effectiveTrackCount} track(s) (You MUST generate ALL ${effectiveTrackCount} distinct tracks numbered sequentially 1 to ${effectiveTrackCount}!)
 - Locked Vocal Setup: ${vocalLabel} -> ${perTrackVocalSummary}${cleanLyricConcept ? `\n- Lyric Concept (가사 컨셉): ${cleanLyricConcept}` : ''}
 ${lyricConceptSection}
-${innovationPromptSection}
 
 ================================================================================
 STRICT EXECUTION REQUIREMENTS FOR EACH OUTPUT FIELD:
@@ -1705,13 +1699,13 @@ CRITICAL: "tracks" MUST contain EXACTLY ${effectiveTrackCount} track objects ("t
     // Shared post-processor: guarantees exact track count (with AI continuation if AI returned fewer),
     // sequential 1..N numbering, clean titles, clean lyrics, and synchronized YouTube tracklist.
     const buildContinuationPrompt = (missingCount: number, startNumber: number, existingTitles: string[]) => {
-      const subsetPlans = innovationPlans.slice(startNumber - 1, startNumber - 1 + missingCount);
-      const subsetGenderLock = subsetPlans
-        .map((p) =>
-          `Track ${p.trackNumber}: ${
-            p.vocalGender === 'male'
+      const subsetGenders = resolvedVocalGenders.slice(startNumber - 1, startNumber - 1 + missingCount);
+      const subsetGenderLock = subsetGenders
+        .map((vg, offsetIdx) =>
+          `Track ${startNumber + offsetIdx}: ${
+            vg === 'male'
               ? 'SOLO MALE LEAD VOCAL ONLY ("solo male lead vocal, male voice", Exclude: -female vocals)'
-              : p.vocalGender === 'female'
+              : vg === 'female'
               ? 'SOLO FEMALE LEAD VOCAL ONLY ("solo female lead vocal, female voice", Exclude: -male vocals)'
               : 'PURE INSTRUMENTAL ONLY ("pure instrumental, no vocals", Exclude: -vocals, -singing)'
           }`
@@ -1723,7 +1717,6 @@ Generate the remaining ${missingCount} NEW, DISTINCT track(s) (trackNumber ${sta
 Every track's "title" MUST be a memorable 1–4 word core phrase/word actually sung verbatim in that track's [Chorus] (NO AI clichés like "Empty Spaces" or "Sweet Confession").
 NEVER repeat section names inside bracket guides (write [Verse 1: ...], NEVER [Verse 1: Verse 1: ...]), ALWAYS specify the track's locked vocal gender explicitly inside stylePrompt, metaInfo.vocal, and section guides, and ALWAYS protect pitch-true catchy melodies and steady locked groove pocket.
 Do NOT repeat these existing song titles: ${existingTitles.map(t => `"${t}"`).join(', ') || '(none)'}.${cleanLyricConcept ? `\nALL new tracks MUST also faithfully express the Lyric Concept: "${cleanLyricConcept}".${hasFirstSightConcept ? ' Remember: "첫눈에 반한 감정" means LOVE AT FIRST SIGHT, NEVER first snow/winter!' : ''}` : ''}
-${formatInnovationPromptSection(subsetPlans)}
 
 [USER SOP SPECIFICATION]
 ${theme.sop || ''}
@@ -1745,8 +1738,7 @@ Respond ONLY with valid JSON:
 
     const finalizeAndCompleteTracks = async (
       parsed: any,
-      requestAdditionalTracks: (contPrompt: string) => Promise<any[]>,
-      requestCraftRefinement?: (refPrompt: string) => Promise<any[]>
+      requestAdditionalTracks: (contPrompt: string) => Promise<any[]>
     ) => {
       const safeResult: any = parsed && typeof parsed === 'object' ? { ...parsed } : {};
       let rawTracks: any[] = Array.isArray(safeResult.tracks) ? [...safeResult.tracks] : [];
@@ -1779,12 +1771,14 @@ Respond ONLY with valid JSON:
         (sopSpecs.isKorEngMixed || sopSpecs.isKoreanHipHopRnb || sopSpecs.hasExplicitKoreanLyrics) ? 'korean' :
         'auto';
 
-      let normalizedTracks = rawTracks.map((tr: any, idx: number) => {
-        const plan = innovationPlans[idx] || innovationPlans[0];
+      const usedTitles = new Set<string>();
+      safeResult.tracks = rawTracks.map((tr: any, idx: number) => {
+        const targetGender = resolvedVocalGenders[idx] || resolvedVocalGenders[0] || 'female';
         const eraCleanedStyle = tr?.stylePrompt
           ? enforceContemporaryEraInStylePrompt(String(tr.stylePrompt), sopEraMode, temporalCtx.year, 945)
           : tr?.stylePrompt;
-        const genderLocked = enforceTrackVocalGender(
+        const cleanedLyrics = formatAndCleanLyrics(tr?.fullLyrics || '', sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro);
+        const lockedFinal = enforceTrackVocalGender(
           {
             ...tr,
             trackNumber: idx + 1,
@@ -1794,92 +1788,9 @@ Respond ONLY with valid JSON:
               sopSpecs.isJapanese ? '新曲' : cleanTitleLang === 'korean' ? '새로운 트랙' : `Track ${idx + 1}`
             ),
             ...(eraCleanedStyle ? { stylePrompt: eraCleanedStyle } : {}),
-            fullLyrics: formatAndCleanLyrics(tr?.fullLyrics || '', sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro)
-          },
-          plan.vocalGender
-        );
-        return genderLocked;
-      });
-
-      // Pre-Output 7-Axis Musical Quality Audit & AI + Algorithmic Refinement Pass
-      const allStylePrompts = normalizedTracks.map((t: any) => String(t?.stylePrompt || ''));
-      const weakItems: Array<{ track: any; plan: any; audit: any }> = [];
-      normalizedTracks.forEach((tr: any, idx: number) => {
-        const plan = innovationPlans[idx] || innovationPlans[0];
-        const audit = evaluateTrackMusicalCraft(tr, plan, allStylePrompts);
-        if (audit.criteria.some((c) => c.result === '미흡' || c.result === '보통')) {
-          weakItems.push({ track: tr, plan, audit });
-        }
-      });
-
-      if (weakItems.length > 0 && requestCraftRefinement) {
-        try {
-          const aiRefined = await requestCraftRefinement(
-            buildRefinementPromptForAI(weakItems.slice(0, 5), theme.name || 'Playlist')
-          );
-          if (Array.isArray(aiRefined) && aiRefined.length > 0) {
-            const refinedMap = new Map(aiRefined.map((r: any) => [Number(r?.trackNumber), r]));
-            normalizedTracks = normalizedTracks.map((tr: any) => {
-              const patch = refinedMap.get(tr.trackNumber);
-              if (!patch) return tr;
-              let updatedLyrics = tr.fullLyrics;
-              if (patch.verseGuide) {
-                const cleanVerseGuide = String(patch.verseGuide)
-                  .replace(/[\[\]{}]/g, '')
-                  .replace(/^(?:verse(?:\s*\d+)?)\s*[:\-]\s*/i, '')
-                  .trim();
-                if (cleanVerseGuide) {
-                  updatedLyrics = updatedLyrics.replace(
-                    /^\[Verse 1(?::\s*[^\]]+)?\]$/m,
-                    `[Verse 1: ${cleanVerseGuide}]`
-                  );
-                }
-              }
-              if (patch.chorusGuide) {
-                const cleanChorusGuide = String(patch.chorusGuide)
-                  .replace(/[\[\]{}]/g, '')
-                  .replace(/^(?:(?:final|last)\s+)?chorus\s*[:\-]\s*/i, '')
-                  .trim();
-                if (cleanChorusGuide) {
-                  updatedLyrics = updatedLyrics.replace(
-                    /^\[Chorus(?::\s*[^\]]+)?\]$/m,
-                    `[Chorus: ${cleanChorusGuide}]`
-                  );
-                }
-              }
-              const nextStylePrompt =
-                typeof patch.stylePrompt === 'string' && patch.stylePrompt.length >= 650
-                  ? patch.stylePrompt.trim()
-                  : tr.stylePrompt;
-              return {
-                ...tr,
-                stylePrompt: enforceContemporaryEraInStylePrompt(
-                  String(nextStylePrompt || ''),
-                  sopEraMode,
-                  temporalCtx.year,
-                  945
-                ),
-                fullLyrics: updatedLyrics,
-              };
-            });
-          }
-        } catch (refErr: any) {
-          console.warn('[Plymaster] AI craft refinement skipped, applying deterministic refinement:', refErr.message);
-        }
-      }
-
-      const postPrompts = normalizedTracks.map((t: any) => String(t?.stylePrompt || ''));
-      const usedTitles = new Set<string>();
-      safeResult.tracks = normalizedTracks.map((tr: any, idx: number) => {
-        const plan = innovationPlans[idx] || innovationPlans[0];
-        const refined = refineTrackWithCraftAudit(tr, plan, postPrompts);
-        const cleanedLyrics = formatAndCleanLyrics(refined.fullLyrics || '', sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro);
-        const lockedFinal = enforceTrackVocalGender(
-          {
-            ...refined,
             fullLyrics: cleanedLyrics,
           },
-          plan.vocalGender
+          targetGender
         );
         let finalTitle = refineTitleFromChorus(
           lockedFinal.title,
@@ -1989,14 +1900,6 @@ Respond ONLY with valid JSON:
             ]);
             const contJson = extractJsonFromText(contRes.text?.trim() || '{}');
             return Array.isArray(contJson?.tracks) ? contJson.tracks : [];
-          },
-          async (refPrompt) => {
-            const refRes = await Promise.race([
-              callGemini(refPrompt, 4096),
-              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Refinement timeout')), 25000))
-            ]);
-            const refJson = extractJsonFromText(refRes.text?.trim() || '{}');
-            return Array.isArray(refJson?.refinedTracks) ? refJson.refinedTracks : [];
           }
         );
 
@@ -2106,13 +2009,6 @@ Respond ONLY with valid JSON:
             const contData = await contRes.json();
             const contJson = extractJsonFromText(contData.choices?.[0]?.message?.content || '{}');
             return Array.isArray(contJson?.tracks) ? contJson.tracks : [];
-          },
-          async (refPrompt) => {
-            const refRes = await fetchGpt(activeEngine, refPrompt);
-            if (!refRes.ok) return [];
-            const refData = await refRes.json();
-            const refJson = extractJsonFromText(refData.choices?.[0]?.message?.content || '{}');
-            return Array.isArray(refJson?.refinedTracks) ? refJson.refinedTracks : [];
           }
         );
 
@@ -2196,13 +2092,6 @@ Respond ONLY with valid JSON:
             const contData = await contRes.json();
             const contJson = extractJsonFromText(contData.content?.[0]?.text || '{}');
             return Array.isArray(contJson?.tracks) ? contJson.tracks : [];
-          },
-          async (refPrompt) => {
-            const refRes = await callClaude(refPrompt, 4096);
-            if (!refRes.ok) return [];
-            const refData = await refRes.json();
-            const refJson = extractJsonFromText(refData.content?.[0]?.text || '{}');
-            return Array.isArray(refJson?.refinedTracks) ? refJson.refinedTracks : [];
           }
         );
 
@@ -2252,14 +2141,14 @@ function getNonRepeatingServerOffset(max: number): number {
 function generateCreativePlaylistData(theme: any, trackCount: number, vocal: string, lyricConcept: string = '') {
   const sopSpecs = parseSopSpecs(theme);
   const cleanConcept = (lyricConcept || '').trim();
-  const simPlans = generateTrackInnovationPlans(theme, sopSpecs, trackCount, vocal);
+  const simVocalGenders = resolvePerTrackVocalGenders(vocal, trackCount);
 
   const vocalTagForGender = (g: 'male' | 'female' | 'none') =>
     g === 'female' ? 'solo female lead vocal, female voice, sincere expressive delivery' :
     g === 'male' ? 'solo male lead vocal, male voice, heartfelt soulful delivery, warm tone' :
     'pure instrumental, instrumental only, no vocals';
 
-  const vocalTag = vocalTagForGender(simPlans[0]?.vocalGender || (vocal === 'male' ? 'male' : vocal === 'none' ? 'none' : 'female'));
+  const vocalTag = vocalTagForGender(simVocalGenders[0] || (vocal === 'male' ? 'male' : vocal === 'none' ? 'none' : 'female'));
 
   let trackTemplates: Array<{ title: string; mood: string; style: string; lyrics: string; metaInfo?: any }> = [];
 
@@ -2970,7 +2859,7 @@ Our unforgettable late night drive`
 
   const tracks = [];
   for (let i = 0; i < trackCount; i++) {
-    const plan = simPlans[i] || simPlans[0];
+    const targetGender = simVocalGenders[i] || simVocalGenders[0] || 'female';
     const template = trackTemplates[(i + randomOffset) % trackTemplates.length];
     const rawTitle = trackCount > trackTemplates.length && i >= trackTemplates.length
       ? `${template.title} Part ${Math.floor(i / trackTemplates.length) + 1}`
@@ -2982,8 +2871,8 @@ Our unforgettable late night drive`
 
     // Ensure per-track vocal gender tag and contemporary 2026 era enforcement
     let trackStyle = enforceContemporaryEraInStylePrompt(template.style, simEraMode, simTemporal.year, 945);
-    if (vocal === 'random' && i > 0 && simPlans[0]?.vocalGender !== plan.vocalGender) {
-      const targetTag = vocalTagForGender(plan.vocalGender);
+    if (vocal === 'random' && i > 0 && simVocalGenders[0] !== targetGender) {
+      const targetTag = vocalTagForGender(targetGender);
       trackStyle = trackStyle.replace(vocalTag, targetTag);
     }
 
@@ -2996,36 +2885,23 @@ Our unforgettable late night drive`
         stylePrompt: trackStyle,
         fullLyrics: formatAndCleanLyrics(template.lyrics, sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro)
       },
-      plan.vocalGender
+      targetGender
     );
 
-    tracks.push(baseTrack);
+    const finalTitle = refineTitleFromChorus(
+      baseTrack.title,
+      baseTrack.fullLyrics,
+      sopSpecs.targetLang,
+      sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : `Track ${i + 1}`
+    );
+
+    tracks.push({
+      ...baseTrack,
+      title: finalTitle,
+    });
   }
 
-  // Pre-output 7-axis innovation & refinement pass in simulation mode too
-  const simStylePrompts = tracks.map((t) => t.stylePrompt);
-  const refinedTracks = tracks.map((t, idx) => {
-    const plan = simPlans[idx] || simPlans[0];
-    const refined = refineTrackWithCraftAudit(t, plan, simStylePrompts);
-    const cleanLyrics = formatAndCleanLyrics(refined.fullLyrics || '', sopSpecs.isJapanese, !sopSpecs.forbidsIntroOutro);
-    const lockedRefined = enforceTrackVocalGender(
-      {
-        ...refined,
-        fullLyrics: cleanLyrics,
-      },
-      plan.vocalGender
-    );
-    const finalTitle = refineTitleFromChorus(
-      lockedRefined.title,
-      lockedRefined.fullLyrics,
-      sopSpecs.targetLang,
-      sopSpecs.isJapanese ? '新曲' : sopSpecs.isKoreanTitle ? '새로운 트랙' : `Track ${idx + 1}`
-    );
-    return {
-      ...lockedRefined,
-      title: finalTitle,
-    };
-  });
+  const refinedTracks = tracks;
 
   // Youtube upload package
   const tracklistText = refinedTracks.map((t, idx) => {
